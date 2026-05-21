@@ -1,0 +1,59 @@
+{
+  "name": "washes",
+  "version": "0.85.0",
+  "description": "An interactive watercolor simulation for the browser, built on Curtis et al.'s 1997 SIGGRAPH paper. Three-layer fluid + pigment + paper model with Kubelka-Munk compositing.",
+  "type": "module",
+  "main": "./src/washes.js",
+  "module": "./src/washes.js",
+  "types": "./src/washes.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/washes.d.ts",
+      "import": "./src/washes.js",
+      "default": "./src/washes.js"
+    }
+  },
+  "files": [
+    "src/washes.js",
+    "src/washes.d.ts",
+    "README.md",
+    "LICENSE",
+    "CITATION.cff"
+  ],
+  "keywords": [
+    "watercolor",
+    "simulation",
+    "fluid",
+    "canvas",
+    "kubelka-munk",
+    "generative",
+    "creative-coding",
+    "visualization",
+    "svg",
+    "animation"
+  ],
+  "author": "Stephanie",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/washes"
+  },
+  "homepage": "https://github.com/yourusername/washes#readme",
+  "bugs": {
+    "url": "https://github.com/yourusername/washes/issues"
+  },
+  "scripts": {
+    "test": "node tests/washes-test-harness.cjs src/washes.js all",
+    "test:anisotropy": "node tests/washes-test-harness.cjs src/washes.js anisotropy",
+    "test:trace": "node tests/washes-test-harness.cjs src/washes.js trace",
+    "test:hotspots": "node tests/washes-test-harness.cjs src/washes.js hotspots",
+    "test:cfl": "node tests/washes-test-harness.cjs src/washes.js cfl",
+    "test:mass-balance": "node tests/washes-test-harness.cjs src/washes.js mass-balance"
+  },
+  "sideEffects": [
+    "./src/washes.js"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
+}

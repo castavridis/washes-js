@@ -1,0 +1,147 @@
+
+=== Journal Entry 2026-05-10T20:29:06.289457+00:00 ===
+2026-05-10-20-29-05-watercolor-tool-iterations.txt
+[Iterative design session building a browser-based interactive watercolor simulation tool based on Curtis et al. SIGGRAPH 1997 paper. Contains multiple version snapshots (v0.1 through v0.4), simulation algorithm details, parameter tuning history, user feedback on specific visual artifacts, and code locations for future iteration.]
+
+
+
+
+=== Journal Entry 2026-05-10T21:19:44.343360+00:00 ===
+2026-05-10-21-19-43-watercolor-library-v06.txt
+[Iterative design session building a browser-based interactive watercolor simulation tool based on Curtis et al. SIGGRAPH 1997 paper. Contains multiple version snapshots (v0.1 through v0.6), simulation algorithm details, parameter tuning history, user feedback on specific visual artifacts, and code locations for future iteration. Currently mid-restructure into a library-style v0.6 shell.]
+
+
+
+
+=== Journal Entry 2026-05-11T03:51:13.440615+00:00 ===
+2026-05-11-03-51-11-watercolor-library-v09.txt
+[Iterative design session building a browser-based interactive watercolor simulation tool based on Curtis et al. SIGGRAPH 1997 paper. Contains multiple version snapshots (v0.6 through v0.9.5), simulation algorithm details, parameter tuning history, user feedback on specific visual artifacts, and code locations for future iteration. Most recent work: making SCALE a true quality knob with UI exposure via URL query param.]
+
+
+
+
+=== Journal Entry 2026-05-11T04:12:03.689322+00:00 ===
+2026-05-11-04-12-02-watercolor-library-v1.txt
+[Iterative design session building a browser-based interactive watercolor simulation tool based on Curtis et al. SIGGRAPH 1997 paper. Single HTML file artifact at /home/claude/watercolor.html, ~2470 lines. Contains version history through v1.0 (active region tracking), simulation algorithm details, parameter tuning rationale, user feedback on visual artifacts, and code locations for future iteration. Most recent work: v1.0 active rect tracking for major perf improvement plus SCALE=1.75 default. Mid-implementation of v1.0 — most changes done, summary/ship pending.]
+
+
+
+
+=== Journal Entry 2026-05-11T07:25:29.507526+00:00 ===
+2026-05-11-07-25-28-watercolor-library-v014.txt
+[Iterative design session building a browser-based interactive watercolor simulation tool based on Curtis et al. SIGGRAPH 1997 paper. Started from v0.9.7 baseline with most recent work being v0.14.1 with meandering tornado animation. Single HTML file artifact at /home/claude/watercolor.html, ~3970 lines. Library being built with weather/animation presets, time-of-day sky washes, masking fluid, PNG export, infocons. Mid-session — v0.14.1 just shipped meandering tornado, behavioral test verified meander works with both horizontal/vertical variance.]
+
+
+
+
+=== Journal Entry 2026-05-11T17:59:37.166394+00:00 ===
+2026-05-11-17-59-36-watercolor-v022-perf.txt
+[Iterative design session building a browser-based interactive watercolor simulation tool based on Curtis et al. SIGGRAPH 1997 paper. Most recent shipped version is v0.22.1, which combined paintLoad + waterLoad sliders. User just asked why performance feels worse — assistant ran a synthetic perf test that showed no regression at default loads, was about to investigate further when context was compacted. Single HTML file artifact at /home/claude/watercolor.html, ~7390 lines.]
+
+
+
+
+=== Journal Entry 2026-05-11T18:54:39.656786+00:00 ===
+2026-05-11-18-54-38-watercolor-v026-factory-refactor.txt
+[Long iterative design session building a browser-based interactive watercolor simulation tool based on Curtis et al. SIGGRAPH 1997. Tool has progressed from v0.1 through v0.26.2 with iframe-based multi-instance bridge. Currently mid-refactor: user pushed back on inflated time estimate for true factory pattern, assistant committed to building proper Watercolor.create() library. About to begin extraction of sim core from watercolor.html into watercolor-lib.js.]
+
+
+
+
+=== Journal Entry 2026-05-11T20:35:13.028605+00:00 ===
+2026-05-11-20-35-12-watercolor-v028-mobile-build.txt
+[Long iterative design session building a browser-based interactive watercolor simulation tool based on Curtis et al. SIGGRAPH 1997. Project evolved from single-file v0.1 through v0.26.2, then refactored into library (watercolor-lib.js) + thin UI wiring (v0.27), now mid-v0.28 build adding mobile mode + palm rejection.]
+
+
+
+
+=== Journal Entry 2026-05-12T03:12:00.355507+00:00 ===
+2026-05-12-03-11-59-watercolor-v033-cursor-fade.txt
+[Long iterative design session building a browser-based interactive watercolor simulation tool (Curtis et al. SIGGRAPH 1997). Project evolved v0.1 → v0.33 across many sessions. This session covers v0.27 library extraction through v0.33+ with mobile mode, palm rejection, brush dynamics API, SVG fixes, sketch mode, obliterate (water/pigment/paper modes), SVG easing curves, paper brush, fade-on-dry fix, docs nav z-index fix, auto-hide on scene change, and currently in-progress cursor preview restoration + fade-erases-canvas work.]
+
+
+
+
+=== Journal Entry 2026-05-12T04:44:51.360958+00:00 ===
+2026-05-12-04-44-50-watercolor-v039-gouache-docs.txt
+[Long iterative session continuing watercolor simulation development. Covers v0.34 through v0.39: cursor preview API fix, fade-erases-canvas, transparent pigment cursors, Multi-Watercolor demos v0.1-v0.4, quickstart docs integration, gouache mode with progressive vibrancy + density tuning, and final docs audit/update pass. Contains pigment K/S value tuning details, multi-instance API patterns, and toGrid bug discovery.]
+
+
+
+
+=== Journal Entry 2026-05-12T06:29:44.285458+00:00 ===
+2026-05-12-06-29-43-watercolor-v045-svg-fill.txt
+[Long iterative watercolor sim development session continuing from prior compactions. This compaction covers v0.40 docs sweep through v0.45 in-progress SVG fill-stamping. Contains: docs audit findings (toGrid bug in agents-recipes), SVG flipY default fix, per-element color mapping (triggerColors + approximateColor options), UI toggles for SVG color handling, and in-progress fill-shape stamping via isPointInFill. Key reference for SVG loader internals, color decomposition algorithm, and stroke-vs-fill paint resolution.]
+
+
+
+
+=== Journal Entry 2026-05-12T07:45:53.448574+00:00 ===
+2026-05-12-07-45-52-watercolor-v049-spring-fade.txt
+[Long iterative watercolor sim development session continuing from prior compactions. Covers v0.45 SVG fill stamping completion through v0.49 raster image painting and pigment-sum perf metric. In-progress task: implementing a spring-based fade function to replace exponential pigment decay.]
+
+
+
+
+=== Journal Entry 2026-05-12T17:26:59.600442+00:00 ===
+2026-05-12-17-26-58-watercolor-v056-workflow-iteration.txt
+[Long iterative watercolor/washes.js sim development session. Continuation from prior compactions covering v0.49 through v0.56-in-progress. Major milestones: paintImage API, spring fade, auto-gouache LERP with paper darkness, preset save/load, deluge splash preset, workflow UI redesign (right-docked panel with collapsible sections), brand rename to "Washes". Current in-progress task: v0.56 UI fixes from user feedback (remove auto-hide, style container inputs, reduce pigment swatches, double deluge max, review crosshair artifact in deluge).]
+
+
+
+
+=== Journal Entry 2026-05-13T00:40:54.696678+00:00 ===
+2026-05-13-00-40-53-washes-v064-deluge-cross-fix.txt
+[Long iterative dev session on browser watercolor sim "washes.js" (Curtis et al. 1997 SIGGRAPH). Covers versions v0.52 through v0.64+ in-progress. Most recent work: investigating why deluge "rays" mechanism failed to fix the cross-shaped pigment artifact at high velocity settings. Contains numerical analysis of donor-cell advection CFL violation, splash injection physics, slider responsiveness debugging, and Export PNG fix via Blob URLs. Currently mid-implementation of v0.65 to address the v0.61 rays mistake by making substep advection the default.]
+
+
+
+
+=== Journal Entry 2026-05-13T01:20:36.043227+00:00 ===
+2026-05-13-01-20-35-washes-v067-semilag-fix.txt
+[Long iterative dev session on browser watercolor sim "washes" (Curtis et al. 1997 SIGGRAPH). Covers v0.52 through v0.67. Most recent work: replaced donor-cell pigment advection with semi-Lagrangian backward-trace + bilinear interpolation to finally fix the cardinal cross artifact that persisted across 10 versions of trial-and-error patches.]
+
+
+
+
+=== Journal Entry 2026-05-13T02:07:11.833887+00:00 ===
+2026-05-13-02-07-11-washes-v072-cross-pinpoint-fix.txt
+[Long iterative dev session on browser watercolor sim "washes" (Curtis et al. 1997 SIGGRAPH). Covers v0.52 through v0.72. The thirteen-version saga of the cross artifact and its actual root cause (per-axis velocity clamp), plus the pinpoint artifact and its root cause (over-aggressive injection skip threshold). Final task in progress: adding Dig Deeper section with verified academic citations.]
+
+
+
+
+=== Journal Entry 2026-05-13T16:21:42.272944+00:00 ===
+2026-05-13-16-21-41-washes-v087-module-fix.txt
+[Long iterative dev session continuing the "washes" browser watercolor sim (Curtis et al. 1997). Covers v0.73-v0.87. Includes: documentation passes (Dig Deeper, For Maintainers, Origin, Similar Projects, References), test harness expansion (5 patterns), edge boundary modes (closed/open/gravity/radial), max velocity slider, npm package creation with TypeScript declarations, pigment hex SVG triggers, mask tint toggle, gouache auto default, brush size 2000, deluge cursor, wetness heatmap, type=module fix surfacing a latent fmtMs duplicate-declaration bug. User is designer-dev iterating for portfolio site using AI as coding partner.]
+
+
+
+
+=== Journal Entry 2026-05-14T06:24:23.088123+00:00 ===
+2026-05-14-06-24-22-washes-v089-quality-presets.txt
+[Long iterative dev session continuing the "washes" browser watercolor sim (Curtis et al. 1997). Covers v0.85-v0.89. Documentation pass, npm package creation with TypeScript, wetness heatmap + deluge cursor + full-width dryness bar (v0.86), type=module fix surfacing latent fmtMs duplicate-declaration bug (v0.87), closed-gravity edge mode + smoothstep edge fade (v0.88), quality presets + qualityHint + CSS gradient backgrounds (v0.89). User is designer-dev iterating for portfolio site using AI as coding partner.]
+
+
+
+
+=== Journal Entry 2026-05-14T08:21:32.964873+00:00 ===
+2026-05-14-08-21-32-washes-v093-portfolio-demo.txt
+[Long iterative dev session continuing the "washes" browser watercolor sim (Curtis et al. 1997). Covers v0.90 through v0.93 plus a standalone portfolio-demo HTML. Final pending state: debugging SVG visibility in the portfolio demo after user reported SVGs invisible and splash style 'splash' throwing error.]
+
+
+
+
+=== Journal Entry 2026-05-14T15:33:45.995572+00:00 ===
+2026-05-14-15-33-44-washes-v097-ink-pigment.txt
+[Long iterative dev session on browser watercolor sim "Washes" library. Covers v0.89 through v0.97 (in progress) plus a standalone portfolio-demo HTML. Contains lib API additions (quality presets, pause/resume, maskRect, unmaskRect, paintImage bounds, ink pigment), demo iteration with multiple bug fixes, and architectural decisions. Final pending: completing ink pigment integration in demo + shipping v0.97 package.]
+
+
+
+
+=== Journal Entry 2026-05-14T18:24:14.824498+00:00 ===
+2026-05-14-18-24-13-washes-v097-thumbnails.txt
+[Long iterative dev session on browser watercolor sim "Washes" library (v0.89-v0.97) plus standalone watercolor-thumbnails shader demo. Covers ink pigment, mask APIs, demo iteration, performance panel, and K-M shader thumbnails with deluge effect. Multiple bugs found and fixed iteratively. Final pending: thumbnails v2 needs build + ship.]
+
+
+

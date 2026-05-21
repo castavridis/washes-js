@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Watercolor — simple example</title>
+<style>
+  body {
+    margin: 0;
+    padding: 40px;
+    background: #1a1815;
+    color: #f0e8d8;
+    font-family: system-ui, sans-serif;
+  }
+
+  h1 { font-weight: 500; margin: 0 0 8px; }
+  p  { color: #a89c84; margin: 0 0 24px; max-width: 540px; }
+
+  /* The two canvas hosts. Any sized element works — the library
+     reads the bounding rect and sizes its canvas to fit. */
+  .canvases {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .stage {
+    width: 320px;
+    height: 320px;
+    position: relative;     /* the library's canvas is absolute-positioned */
+    background: #000;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  /* Tiny control row. */
+  button {
+    font: inherit;
+    color: #f0e8d8;
+    background: transparent;
+    border: 1px solid #555;
+    border-radius: 4px;
+    padding: 8px 14px;
+    margin-right: 8px;
+    cursor: pointer;
+  }
+  button:hover { border-color: #d4a373; }
+</style>
+</head>
+<body>
+
+<h1>Watercolor — simple example</h1>
+<p>
+  Two independent simulations from one library. Click the buttons to
+  drive both at once; click a canvas to splash just that one.
+</p>
+
+<div class="canvases">
+  <div class="stage" id="left"></div>
+  <div class="stage" id="right"></div>
+</div>
+
+<button id="splash-btn">Splash both</button>
+<button id="rewet-btn">Re-wet both</button>
+<button id="reset-btn">Reset both</button>
+
+<script src="watercolor-lib.js"></script>
+<script>
+  // Create two instances. Watercolor.create(el) is synchronous —
+  // by the time it returns, the canvas is mounted and the sim is running.
+  const left  = Watercolor.create(document.getElementById('left'));
+  const right = Watercolor.create(document.getElementById('right'));
+
+  // Configure each with a background and a visualization. The two
+  // instances have independent state, so they evolve separately.
+  left.setBackground('sunset').setVisualization('pulse');
+  right.setBackground('night').setVisualization('kaleidoscope');
+
+  // Per-canvas click: splash just that one with the Big Splash preset.
+  document.getElementById('left').addEventListener('click',
+    () => left.splash('bigSplash'));
+  document.getElementById('right').addEventListener('click',
+    () => right.splash('bigSplash'));
+
+  // Global buttons: drive both at once.
+  document.getElementById('splash-btn').addEventListener('click', () => {
+    left.splash('fineSpritz');
+    right.splash('fineSpritz');
+  });
+  document.getElementById('rewet-btn').addEventListener('click', () => {
+    left.rewet();
+    right.rewet();
+  });
+  document.getElementById('reset-btn').addEventListener('click', () => {
+    // Reset clears the canvas; the background/visualization config
+    // is sim state that gets wiped too, so re-apply if you want it back.
+    left.reset().setBackground('sunset').setVisualization('pulse');
+    right.reset().setBackground('night').setVisualization('kaleidoscope');
+  });
+</script>
+</body>
+</html>

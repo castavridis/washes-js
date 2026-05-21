@@ -1,0 +1,63 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Watercolor lib smoke test</title>
+<style>
+  body { background:#1a1815; color:#eee; font-family:sans-serif; padding:24px; }
+  .stage { width: 600px; height: 400px; background:#000; border: 1px solid #444; position: relative; margin: 16px 0; }
+  button { padding: 8px 14px; margin: 4px; background: #333; color:#eee; border:1px solid #555; cursor:pointer; }
+  #log { font-family: monospace; font-size: 12px; background:#222; padding: 8px; max-height: 200px; overflow-y: auto; }
+</style>
+</head>
+<body>
+  <h1>Watercolor lib smoke test</h1>
+  <div class="stage" id="stage"></div>
+  <div>
+    <button id="bg-sunset">Background: sunset</button>
+    <button id="bg-night">Background: night</button>
+    <button id="anim-rainy">Animation: rainy</button>
+    <button id="anim-tornado">Animation: tornado</button>
+    <button id="viz-kaleido">Viz: kaleidoscope</button>
+    <button id="splash">splash</button>
+    <button id="big-splash">bigSplash</button>
+    <button id="fine">fineSpritz</button>
+    <button id="reset">reset</button>
+  </div>
+  <pre id="log"></pre>
+
+<script src="watercolor-lib.js"></script>
+<script>
+const log = (msg) => {
+  const el = document.getElementById('log');
+  el.textContent += msg + '\n';
+  el.scrollTop = el.scrollHeight;
+};
+
+try {
+  log('Watercolor global: ' + (typeof window.Watercolor));
+  log('create fn: ' + (typeof window.Watercolor.create));
+
+  const stage = document.getElementById('stage');
+  log('Creating instance...');
+  const inst = Watercolor.create(stage);
+  log('Instance: ' + (inst ? 'created' : 'null'));
+  log('Instance keys: ' + Object.keys(inst).join(', '));
+  log('Grid: ' + inst.grid.width + 'x' + inst.grid.height);
+
+  document.getElementById('bg-sunset').onclick = () => { inst.setBackground('sunset'); log('setBackground sunset'); };
+  document.getElementById('bg-night').onclick  = () => { inst.setBackground('night');  log('setBackground night');  };
+  document.getElementById('anim-rainy').onclick = () => { inst.setAnimation('rainy'); log('setAnimation rainy'); };
+  document.getElementById('anim-tornado').onclick = () => { inst.setAnimation('tornado'); log('setAnimation tornado'); };
+  document.getElementById('viz-kaleido').onclick = () => { inst.setVisualization('kaleidoscope'); log('setVisualization kaleidoscope'); };
+  document.getElementById('splash').onclick = () => { inst.splash(); log('splash'); };
+  document.getElementById('big-splash').onclick = () => { inst.splash('bigSplash'); log('splash bigSplash'); };
+  document.getElementById('fine').onclick = () => { inst.splash('fineSpritz'); log('splash fineSpritz'); };
+  document.getElementById('reset').onclick = () => { inst.reset(); log('reset'); };
+} catch (e) {
+  log('ERROR: ' + e.message);
+  log(e.stack);
+}
+</script>
+</body>
+</html>
