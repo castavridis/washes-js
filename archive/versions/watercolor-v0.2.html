@@ -1,0 +1,1100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Computer-Generated Watercolor v0.2 — after Curtis et al. 1997</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Crimson+Pro:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f5efe2;
+    --paper-dark: #ebe3d2;
+    --ink: #2a2620;
+    --ink-soft: #6a6356;
+    --ink-faded: #a39885;
+    --accent: #8a4a3f;
+    --canvas-bg: #fbf7ed;
+    --shadow-soft: 0 1px 2px rgba(60, 40, 20, 0.04), 0 8px 24px rgba(60, 40, 20, 0.08);
+    --shadow-strong: 0 2px 4px rgba(60, 40, 20, 0.06), 0 16px 48px rgba(60, 40, 20, 0.12);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Crimson Pro', 'Georgia', serif;
+    font-weight: 400;
+    line-height: 1.5;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Subtle paper grain on the page itself */
+  body::before {
+    content: "";
+    position: fixed; inset: 0;
+    background-image:
+      radial-gradient(circle at 20% 30%, rgba(120, 90, 50, 0.025) 0%, transparent 40%),
+      radial-gradient(circle at 80% 70%, rgba(120, 90, 50, 0.02) 0%, transparent 40%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .page {
+    position: relative;
+    z-index: 1;
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 48px 24px 60px;
+  }
+
+  header {
+    margin-bottom: 36px;
+    text-align: left;
+    padding-bottom: 20px;
+    border-bottom: 1px solid rgba(42, 38, 32, 0.12);
+  }
+
+  .eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-faded);
+    margin-bottom: 14px;
+  }
+
+  h1 {
+    font-family: 'Cormorant Garamond', serif;
+    font-weight: 300;
+    font-size: 44px;
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+    margin-bottom: 10px;
+  }
+  h1 em { font-style: italic; color: var(--accent); font-weight: 400; }
+
+  .attribution {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-size: 15px;
+    color: var(--ink-soft);
+    font-weight: 300;
+  }
+
+  /* Stage = the canvas frame */
+  .stage-wrap {
+    margin: 0 auto 24px;
+    position: relative;
+  }
+
+  .stage {
+    position: relative;
+    background: var(--canvas-bg);
+    border-radius: 1px;
+    box-shadow: var(--shadow-strong);
+    overflow: hidden;
+    cursor: none;
+    /* Subtle deckled-edge irregularity using clip-path is fragile; use a soft mask instead */
+    width: 100%;
+    aspect-ratio: 3 / 2;
+  }
+  .stage::after {
+    /* Inner shadow to suggest paper depth */
+    content: "";
+    position: absolute; inset: 0;
+    box-shadow: inset 0 0 24px rgba(120, 90, 50, 0.08);
+    pointer-events: none;
+    z-index: 3;
+  }
+  #canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    image-rendering: auto;
+  }
+
+  .cursor-preview {
+    position: absolute;
+    pointer-events: none;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 2;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+    display: none;
+  }
+
+  /* Controls panel */
+  .controls {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 28px;
+    align-items: center;
+    padding: 18px 22px;
+    background: rgba(255, 252, 244, 0.7);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(42, 38, 32, 0.08);
+    border-radius: 2px;
+    box-shadow: var(--shadow-soft);
+  }
+
+  .pigments {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+  }
+  .pigment {
+    position: relative;
+    width: 56px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .pigment-swatch {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    box-shadow:
+      inset 0 -3px 8px rgba(0,0,0,0.18),
+      inset 0 2px 4px rgba(255,255,255,0.15),
+      0 1px 3px rgba(0,0,0,0.08);
+    transition: transform 0.15s ease;
+    position: relative;
+    overflow: hidden;
+  }
+  .pigment-swatch canvas { display: block; width: 100%; height: 100%; border-radius: 50%; }
+  .pigment:hover .pigment-swatch { transform: scale(1.06); }
+  .pigment.active .pigment-swatch {
+    box-shadow:
+      inset 0 -3px 8px rgba(0,0,0,0.18),
+      inset 0 2px 4px rgba(255,255,255,0.15),
+      0 0 0 2px var(--paper),
+      0 0 0 3.5px var(--ink);
+  }
+  .pigment-label {
+    margin-top: 8px;
+    font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.04em;
+    color: var(--ink-soft);
+    text-align: center;
+    line-height: 1.25;
+    text-transform: uppercase;
+  }
+  .pigment.active .pigment-label { color: var(--ink); }
+
+  .brush-control {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+  .brush-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+  .brush-label .value { color: var(--ink); font-weight: 500; }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 2px;
+    background: rgba(42, 38, 32, 0.18);
+    outline: none;
+    cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px; height: 14px;
+    background: var(--ink);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: transform 0.1s ease;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 14px; height: 14px;
+    background: var(--ink);
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+  }
+  input[type="range"]:hover::-webkit-slider-thumb { transform: scale(1.2); }
+
+  .btn-reset {
+    background: transparent;
+    border: 1px solid rgba(42, 38, 32, 0.2);
+    color: var(--ink-soft);
+    padding: 9px 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-radius: 1px;
+    transition: all 0.15s ease;
+  }
+  .btn-reset:hover {
+    background: var(--ink);
+    color: var(--paper);
+    border-color: var(--ink);
+  }
+
+  .hint {
+    margin-top: 16px;
+    text-align: center;
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-size: 14px;
+    color: var(--ink-faded);
+  }
+  kbd {
+    display: inline-block;
+    padding: 1px 6px;
+    background: rgba(42, 38, 32, 0.08);
+    border-radius: 2px;
+    font-family: 'JetBrains Mono', monospace;
+    font-style: normal;
+    font-size: 11px;
+    color: var(--ink);
+    margin: 0 1px;
+  }
+
+  /* Footnotes */
+  .notes {
+    margin-top: 56px;
+    padding-top: 28px;
+    border-top: 1px solid rgba(42, 38, 32, 0.12);
+    font-size: 14px;
+    line-height: 1.65;
+    color: var(--ink-soft);
+  }
+  .notes h2 {
+    font-family: 'Cormorant Garamond', serif;
+    font-weight: 400;
+    font-style: italic;
+    font-size: 20px;
+    color: var(--ink);
+    margin-bottom: 14px;
+  }
+  .notes p { margin-bottom: 12px; }
+  .notes p sup { color: var(--accent); font-weight: 500; font-family: 'JetBrains Mono', monospace; font-size: 9px; }
+  .refs {
+    font-family: 'Crimson Pro', serif;
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--ink-soft);
+    padding-left: 0;
+    list-style: none;
+    counter-reset: ref;
+  }
+  .refs li {
+    counter-increment: ref;
+    padding-left: 28px;
+    position: relative;
+    margin-bottom: 8px;
+  }
+  .refs li::before {
+    content: "[" counter(ref) "]";
+    position: absolute;
+    left: 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--accent);
+    top: 2px;
+  }
+  .refs em { font-style: italic; color: var(--ink); }
+
+  @media (max-width: 580px) {
+    .page { padding: 28px 16px 40px; }
+    h1 { font-size: 32px; }
+    .controls { grid-template-columns: 1fr; gap: 18px; }
+    .pigments { justify-content: center; }
+  }
+</style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <div class="eyebrow">SIGGRAPH 1997 · §4–5 · Interactive Demo · v0.2</div>
+      <h1>Computer-Generated <em>Watercolor</em></h1>
+      <div class="attribution">After Curtis, Anderson, Seims, Fleischer &amp; Salesin — three pigments, one wet sheet of paper.</div>
+    </header>
+
+    <div class="stage-wrap">
+      <div class="stage" id="stage">
+        <canvas id="canvas"></canvas>
+        <div class="cursor-preview" id="cursor"></div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="pigments" id="pigments"></div>
+
+      <div class="brush-control">
+        <div class="brush-label">
+          <span>Brush</span>
+          <span class="value"><span id="size-value">28</span> px</span>
+        </div>
+        <input type="range" id="size" min="8" max="64" value="28">
+      </div>
+
+      <button class="btn-reset" id="reset">Reset</button>
+    </div>
+
+    <div class="hint">
+      Click and drag to paint. <kbd>[</kbd> <kbd>]</kbd> to resize · The canvas is already wet, so paint <em>bleeds</em>.
+    </div>
+
+    <section class="notes">
+      <h2>What is being simulated</h2>
+      <p>
+        This tool implements the watercolor model from <sup>[1]</sup> at reduced resolution for real‑time
+        feedback. For each cell of a 240 × 160 grid we track water saturation, fluid velocity, suspended
+        pigment <em>g<sup>k</sup></em>, and deposited pigment <em>d<sup>k</sup></em> for three pigments
+        whose <em>K</em> and <em>S</em> coefficients are taken verbatim from Figure 5 of the paper:
+        Quinacridone Rose, Hansa Yellow, and Cerulean Blue.
+      </p>
+      <p>
+        Each frame runs the paper's main loop — move water, move pigment, transfer pigment, simulate
+        edge flow — using a simplified shallow‑water update inspired by the staggered‑grid scheme
+        of Foster &amp; Metaxas <sup>[2]</sup> and the divergence‑relaxation approach popularized by
+        Stam <sup>[3]</sup>. Pigment adsorption/desorption follows §4.5 of <sup>[1]</sup> directly,
+        with granulation γ modulated by a procedurally generated paper height field. Rendering uses
+        the Kubelka–Munk equations <sup>[4]</sup> — for every cell, the weighted <em>K</em> and
+        <em>S</em> of the deposited and suspended pigments are composited over white paper to produce
+        the final RGB color, which is what gives the overlapping washes their characteristic luminosity.
+      </p>
+      <p>
+        The three swatches above are not drawn from a fixed RGB palette — each is rendered with the
+        same KM compositor used on the canvas, so they show the pigments' actual appearance under the
+        simulation, including their differing transparency and undertones.
+      </p>
+      <h2 style="margin-top: 28px;">References</h2>
+      <ol class="refs">
+        <li>
+          Curtis, C. J., Anderson, S. E., Seims, J. E., Fleischer, K. W., &amp; Salesin, D. H. (1997).
+          <em>Computer-Generated Watercolor</em>. Proceedings of SIGGRAPH '97, pp. 421–430.
+        </li>
+        <li>
+          Foster, N., &amp; Metaxas, D. (1996). <em>Realistic Animation of Liquids</em>.
+          Graphics Interface '96, pp. 204–212. — Source of the staggered‑grid discretization that
+          Curtis et al. adopt for their shallow‑water solver (§4.3.1).
+        </li>
+        <li>
+          Stam, J. (1999). <em>Stable Fluids</em>. Proceedings of SIGGRAPH '99, pp. 121–128.
+          — Standard reference for real‑time fluid simulation; we borrow the implicit diffusion and
+          divergence‑projection ideas to keep the sim stable at interactive frame rates.
+        </li>
+        <li>
+          Kubelka, P. (1954). <em>New Contributions to the Optics of Intensely Light‑Scattering
+          Materials, Part II: Nonhomogeneous Layers</em>. Journal of the Optical Society of America,
+          44(4), 330–335. — The compositing model used for §5 of <sup>[1]</sup> and here for the
+          per‑pixel color computation.
+        </li>
+        <li>
+          Small, D. (1991). <em>Simulating Watercolor by Modeling Diffusion, Pigment, and Paper
+          Fibers</em>. Proceedings of SPIE '91. — The earlier cellular‑automaton predecessor
+          discussed in §1.1 of <sup>[1]</sup>.
+        </li>
+      </ol>
+    </section>
+  </div>
+
+<script>
+"use strict";
+
+// ============================================================
+// PIGMENT DATA — from Figure 5 of Curtis et al. 1997
+// K, S coefficients given per RGB channel; rho = density,
+// omega = staining power, gamma = granulation.
+// ============================================================
+const PIGMENTS = [
+  {
+    name: 'Quinacridone Rose',
+    K: [0.22, 1.47, 0.57],
+    S: [0.05, 0.003, 0.03],
+    density: 0.02, staining: 5.5, granulation: 0.81
+  },
+  {
+    name: 'Hansa Yellow',
+    K: [0.06, 0.21, 1.78],
+    S: [0.50, 0.88, 0.009],
+    density: 0.06, staining: 1.0, granulation: 0.08
+  },
+  {
+    name: 'Cerulean Blue',
+    K: [1.52, 0.32, 0.25],
+    S: [0.06, 0.26, 0.40],
+    density: 0.01, staining: 1.0, granulation: 0.31
+  }
+];
+
+let currentPigment = 0;
+let brushSize = 28; // diameter in display pixels
+
+// ============================================================
+// GRID
+// ============================================================
+const GW = 240, GH = 160;
+const N = GW * GH;
+const DISPLAY_W = 720, DISPLAY_H = 480;
+const SCALE = DISPLAY_W / GW;
+
+// ============================================================
+// STATE ARRAYS (flat Float32Arrays for speed)
+// ============================================================
+const wet      = new Float32Array(N); // water amount per cell, 0..1
+const wetBlur  = new Float32Array(N);
+const wetBlurTmp = new Float32Array(N);
+const u        = new Float32Array(N); // x-velocity
+const v        = new Float32Array(N); // y-velocity
+const u_new    = new Float32Array(N);
+const v_new    = new Float32Array(N);
+const pressure = new Float32Array(N);
+const paperH   = new Float32Array(N); // paper height field, 0..1
+
+// 3 pigments × 2 layers (suspended in water, deposited on paper)
+const g = [new Float32Array(N), new Float32Array(N), new Float32Array(N)];
+const d = [new Float32Array(N), new Float32Array(N), new Float32Array(N)];
+const g_tmp = [new Float32Array(N), new Float32Array(N), new Float32Array(N)];
+
+// ============================================================
+// PAPER GENERATION — multi-octave hash noise, scaled 0..1
+// ============================================================
+function hash2(x, y) {
+  const s = Math.sin(x * 12.9898 + y * 78.233 + 1.0) * 43758.5453;
+  return s - Math.floor(s);
+}
+function smoothNoise(x, y) {
+  const ix = Math.floor(x), iy = Math.floor(y);
+  const fx = x - ix,        fy = y - iy;
+  const a = hash2(ix,     iy);
+  const b = hash2(ix + 1, iy);
+  const c = hash2(ix,     iy + 1);
+  const d = hash2(ix + 1, iy + 1);
+  const ux = fx * fx * (3 - 2 * fx);
+  const uy = fy * fy * (3 - 2 * fy);
+  return a * (1 - ux) * (1 - uy)
+       + b * ux       * (1 - uy)
+       + c * (1 - ux) * uy
+       + d * ux       * uy;
+}
+// 1.0 = full noise range (~0.08 .. 0.97); 0.5 halves the variation around mean (~0.29 .. 0.73).
+// Lower values produce subtler granulation and less distinct low spots on the paper.
+const TEXTURE_AMPLITUDE = 0.5;
+
+function generatePaper() {
+  for (let y = 0; y < GH; y++) {
+    for (let x = 0; x < GW; x++) {
+      // freq=2.2 gives feature wavelengths ~1/10 of the previous (freq=0.22) setting.
+      let h = 0, amp = 0.5, freq = 2.2;
+      for (let o = 0; o < 4; o++) {
+        h += amp * smoothNoise(x * freq + 17, y * freq + 53);
+        amp *= 0.55;
+        freq *= 2.1;
+      }
+      // High-frequency fiber speckle
+      h += (hash2(x, y) - 0.5) * 0.04;
+      // Normalize roughly into 0..1
+      h = Math.max(0, Math.min(1, h));
+      // Compress range around the mean to reduce distinctness of low spots
+      h = 0.5 + (h - 0.5) * TEXTURE_AMPLITUDE;
+      paperH[y * GW + x] = h;
+    }
+  }
+}
+
+// ============================================================
+// BOX BLUR — separable, used for FlowOutward distance approximation
+// ============================================================
+function boxBlur(src, dst, radius) {
+  const inv = 1 / (2 * radius + 1);
+  // horizontal pass: src -> wetBlurTmp
+  for (let y = 0; y < GH; y++) {
+    let sum = 0;
+    for (let x = -radius; x <= radius; x++) {
+      sum += src[y * GW + Math.max(0, Math.min(GW - 1, x))];
+    }
+    for (let x = 0; x < GW; x++) {
+      wetBlurTmp[y * GW + x] = sum * inv;
+      const add = src[y * GW + Math.min(GW - 1, x + radius + 1)];
+      const sub = src[y * GW + Math.max(0, x - radius)];
+      sum += add - sub;
+    }
+  }
+  // vertical pass: wetBlurTmp -> dst
+  for (let x = 0; x < GW; x++) {
+    let sum = 0;
+    for (let y = -radius; y <= radius; y++) {
+      sum += wetBlurTmp[Math.max(0, Math.min(GH - 1, y)) * GW + x];
+    }
+    for (let y = 0; y < GH; y++) {
+      dst[y * GW + x] = sum * inv;
+      const add = wetBlurTmp[Math.min(GH - 1, y + radius + 1) * GW + x];
+      const sub = wetBlurTmp[Math.max(0, y - radius) * GW + x];
+      sum += add - sub;
+    }
+  }
+}
+
+// ============================================================
+// EDGE DARKENING (FlowOutward, §4.3.3)
+// p -= eta * (1 - M') * M, where M is the *binary* wet mask and M' its blur.
+// We blur a binarized version so that uniformly wet areas don't spuriously
+// drain pressure — only real boundaries between wet and dry should reduce p.
+const EDGE_KERNEL = 4;
+const EDGE_ETA = 0.035;
+// MAX_PIGMENT caps how much pigment any single cell can hold. The paper
+// caps both g and d at 1 inside §4.5 (TransferPigment), but paintAt,
+// advection convergence, and the evaporation dump-to-deposited all
+// previously bypassed that cap — letting endpoint cells accumulate
+// unbounded pigment, which then read as near-black after KM compositing.
+const MAX_PIGMENT = 1.0;
+const wetBinary = new Float32Array(N);
+function applyEdgeDarkening() {
+  for (let i = 0; i < N; i++) wetBinary[i] = wet[i] > 0.04 ? 1 : 0;
+  boxBlur(wetBinary, wetBlur, EDGE_KERNEL);
+  for (let i = 0; i < N; i++) {
+    if (wet[i] > 0.04) {
+      const deficit = 1 - wetBlur[i];          // 0 in interior, → 1 near boundary
+      if (deficit > 0) pressure[i] -= EDGE_ETA * deficit * wet[i];
+    }
+  }
+}
+
+// ============================================================
+// VELOCITY UPDATE (simplified shallow water, §4.3.1)
+// ============================================================
+const DT       = 0.42;
+const VISCOSITY = 0.10;
+const DRAG     = 0.014;
+const PAPER_TILT = 0.06;   // reduced from 0.32 — paper height is now pixel-fine,
+                           // so its gradient is essentially noise; keep its
+                           // contribution to velocity small to avoid jitter
+const VEL_CLAMP  = 1.0;
+
+function updateVelocity() {
+  for (let y = 1; y < GH - 1; y++) {
+    const yo = y * GW;
+    for (let x = 1; x < GW - 1; x++) {
+      const i = yo + x;
+      if (wet[i] < 0.04) { u_new[i] = 0; v_new[i] = 0; continue; }
+      // pressure gradient
+      const dpdx = pressure[i + 1] - pressure[i - 1];
+      const dpdy = pressure[i + GW] - pressure[i - GW];
+      // paper slope (gradient of height field)
+      const dhdx = paperH[i + 1] - paperH[i - 1];
+      const dhdy = paperH[i + GW] - paperH[i - GW];
+      // viscous diffusion (laplacian)
+      const lapU = u[i - 1] + u[i + 1] + u[i - GW] + u[i + GW] - 4 * u[i];
+      const lapV = v[i - 1] + v[i + 1] + v[i - GW] + v[i + GW] - 4 * v[i];
+
+      let nu = u[i] + DT * (-dpdx * 0.5 - dhdx * PAPER_TILT + VISCOSITY * lapU - DRAG * u[i]);
+      let nv = v[i] + DT * (-dpdy * 0.5 - dhdy * PAPER_TILT + VISCOSITY * lapV - DRAG * v[i]);
+      if (nu >  VEL_CLAMP) nu =  VEL_CLAMP; else if (nu < -VEL_CLAMP) nu = -VEL_CLAMP;
+      if (nv >  VEL_CLAMP) nv =  VEL_CLAMP; else if (nv < -VEL_CLAMP) nv = -VEL_CLAMP;
+      u_new[i] = nu; v_new[i] = nv;
+    }
+  }
+  u.set(u_new); v.set(v_new);
+  // pressure decays toward zero
+  for (let i = 0; i < N; i++) pressure[i] *= 0.94;
+}
+
+// ============================================================
+// MOVE PIGMENT (upwind advection + small diffusion)
+// ============================================================
+const PIGMENT_DIFFUSION = 0.045;
+
+function movePigment() {
+  for (let k = 0; k < 3; k++) g_tmp[k].set(g[k]);
+
+  for (let y = 1; y < GH - 1; y++) {
+    const yo = y * GW;
+    for (let x = 1; x < GW - 1; x++) {
+      const i = yo + x;
+      if (wet[i] < 0.04) continue;
+      const ux = u[i], vy = v[i];
+      const adt = DT * 0.7;
+
+      for (let k = 0; k < 3; k++) {
+        const gk = g[k][i];
+        if (gk < 0.0008) continue;
+        let outFlux = 0;
+        if (ux > 0) {
+          const f = ux * gk * adt;
+          g_tmp[k][i + 1] += f; outFlux += f;
+        } else if (ux < 0) {
+          const f = -ux * gk * adt;
+          g_tmp[k][i - 1] += f; outFlux += f;
+        }
+        if (vy > 0) {
+          const f = vy * gk * adt;
+          g_tmp[k][i + GW] += f; outFlux += f;
+        } else if (vy < 0) {
+          const f = -vy * gk * adt;
+          g_tmp[k][i - GW] += f; outFlux += f;
+        }
+        g_tmp[k][i] -= outFlux;
+      }
+    }
+  }
+  for (let k = 0; k < 3; k++) {
+    const arr = g[k];
+    const src = g_tmp[k];
+    for (let i = 0; i < N; i++) {
+      const vv = src[i];
+      arr[i] = vv > MAX_PIGMENT ? MAX_PIGMENT : vv;
+    }
+  }
+
+  // Isotropic diffusion (smooths sharp pixel artifacts, gives soft wet-in-wet feel)
+  for (let k = 0; k < 3; k++) {
+    const arr = g[k];
+    const tmp = g_tmp[k];
+    tmp.set(arr);
+    for (let y = 1; y < GH - 1; y++) {
+      const yo = y * GW;
+      for (let x = 1; x < GW - 1; x++) {
+        const i = yo + x;
+        if (wet[i] < 0.04) continue;
+        const lap = tmp[i - 1] + tmp[i + 1] + tmp[i - GW] + tmp[i + GW] - 4 * tmp[i];
+        arr[i] = tmp[i] + PIGMENT_DIFFUSION * lap;
+      }
+    }
+  }
+}
+
+// ============================================================
+// TRANSFER PIGMENT (§4.5) — adsorption / desorption with granulation γ
+// ============================================================
+function transferPigment() {
+  for (let k = 0; k < 3; k++) {
+    const pig = PIGMENTS[k];
+    const dens = pig.density;
+    const stain = pig.staining;
+    const gran = pig.granulation;
+    const gk = g[k], dk = d[k];
+    for (let i = 0; i < N; i++) {
+      if (wet[i] < 0.04) continue;
+      const h = paperH[i];
+      const gi = gk[i], di = dk[i];
+      let down = gi * (1 - h * gran) * dens;
+      let up   = di * (1 + (h - 1) * gran) * dens / stain;
+      if (down < 0) down = 0;
+      if (up   < 0) up   = 0;
+      if (di + down > 1) down = Math.max(0, 1 - di);
+      if (gi + up   > 1) up   = Math.max(0, 1 - gi);
+      dk[i] = di + down - up;
+      gk[i] = gi + up   - down;
+    }
+  }
+}
+
+// ============================================================
+// EVAPORATION — water slowly leaves the paper
+// When a cell goes dry, any suspended pigment locks in as deposited.
+// ============================================================
+function evaporate() {
+  for (let i = 0; i < N; i++) {
+    let w = wet[i] * 0.9988;
+    if (w < 0.025) {
+      // dump suspended -> deposited
+      for (let k = 0; k < 3; k++) {
+        let nd = d[k][i] + g[k][i];
+        if (nd > MAX_PIGMENT) nd = MAX_PIGMENT;
+        d[k][i] = nd;
+        g[k][i] = 0;
+      }
+      w = 0;
+      u[i] = 0; v[i] = 0;
+    }
+    wet[i] = w;
+  }
+}
+
+// ============================================================
+// SIM STEP
+// ============================================================
+function simStep() {
+  applyEdgeDarkening();
+  updateVelocity();
+  movePigment();
+  transferPigment();
+  evaporate();
+}
+
+// ============================================================
+// KUBELKA–MUNK COMPOSITING (§5)
+// Returns reflectance R of a layer of given thickness x with
+// weighted K and S, composited over a paper background of
+// reflectance Rbg, for a single wavelength channel.
+// ============================================================
+function kmReflect(K, S, x, Rbg) {
+  if (S < 1e-5) S = 1e-5;
+  const a = 1 + K / S;
+  const b = Math.sqrt(Math.max(0, a * a - 1));
+  let bSx = b * S * x;
+  if (bSx > 12) bSx = 12; // prevents sinh/cosh overflow; visually equivalent
+  const sh = Math.sinh(bSx);
+  const ch = Math.cosh(bSx);
+  const denom = a * sh + b * ch;
+  if (denom < 1e-9) return 0;
+  const Rlayer = sh / denom;
+  const Tlayer = b  / denom;
+  let R = Rlayer + (Tlayer * Tlayer * Rbg) / (1 - Rlayer * Rbg);
+  if (R < 0) R = 0; else if (R > 1) R = 1;
+  return R;
+}
+
+// ============================================================
+// RENDER — KM compositing per cell, then upscale to display canvas
+// ============================================================
+const renderCanvas = document.createElement('canvas');
+renderCanvas.width  = GW;
+renderCanvas.height = GH;
+const renderCtx = renderCanvas.getContext('2d');
+let imgData = renderCtx.createImageData(GW, GH);
+
+const canvas = document.getElementById('canvas');
+canvas.width  = DISPLAY_W;
+canvas.height = DISPLAY_H;
+const ctx = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = true;
+ctx.imageSmoothingQuality = 'high';
+
+// Paper base colors per channel (warm cream)
+const PAPER_R_BASE = 0.985;
+const PAPER_G_BASE = 0.965;
+const PAPER_B_BASE = 0.918;
+
+function render() {
+  const data = imgData.data;
+  const P0 = PIGMENTS[0], P1 = PIGMENTS[1], P2 = PIGMENTS[2];
+
+  for (let i = 0; i < N; i++) {
+    const x0 = g[0][i] + d[0][i];
+    const x1 = g[1][i] + d[1][i];
+    const x2 = g[2][i] + d[2][i];
+    const xt = x0 + x1 + x2;
+    const ph = paperH[i];
+
+    // Paper texture: subtle warm variation
+    const tex = (ph - 0.5) * 0.06;
+    const PR = PAPER_R_BASE + tex;
+    const PG = PAPER_G_BASE + tex;
+    const PB = PAPER_B_BASE + tex;
+
+    let R, G, B;
+
+    if (xt < 0.004) {
+      // Just paper (with possible dampness sheen)
+      const dampSheen = wet[i] * 0.018;
+      R = PR + dampSheen;
+      G = PG + dampSheen;
+      B = PB + dampSheen * 1.2;
+    } else {
+      const inv = 1 / xt;
+      const w0 = x0 * inv, w1 = x1 * inv, w2 = x2 * inv;
+      // Weighted K and S
+      const Kr = P0.K[0]*w0 + P1.K[0]*w1 + P2.K[0]*w2;
+      const Kg = P0.K[1]*w0 + P1.K[1]*w1 + P2.K[1]*w2;
+      const Kb = P0.K[2]*w0 + P1.K[2]*w1 + P2.K[2]*w2;
+      const Sr = P0.S[0]*w0 + P1.S[0]*w1 + P2.S[0]*w2;
+      const Sg = P0.S[1]*w0 + P1.S[1]*w1 + P2.S[1]*w2;
+      const Sb = P0.S[2]*w0 + P1.S[2]*w1 + P2.S[2]*w2;
+
+      const thickness = xt < 4 ? xt : 4;
+
+      R = kmReflect(Kr, Sr, thickness, PR);
+      G = kmReflect(Kg, Sg, thickness, PG);
+      B = kmReflect(Kb, Sb, thickness, PB);
+    }
+
+    const j = i * 4;
+    data[j]     = R * 255;
+    data[j + 1] = G * 255;
+    data[j + 2] = B * 255;
+    data[j + 3] = 255;
+  }
+
+  renderCtx.putImageData(imgData, 0, 0);
+  ctx.drawImage(renderCanvas, 0, 0, DISPLAY_W, DISPLAY_H);
+}
+
+// ============================================================
+// PAINT BRUSH
+// ============================================================
+function paintAt(gx, gy, gridRadius, pigmentIdx, strength) {
+  const r = gridRadius;
+  const r2 = r * r;
+  const minX = Math.max(0, Math.floor(gx - r));
+  const maxX = Math.min(GW - 1, Math.ceil(gx + r));
+  const minY = Math.max(0, Math.floor(gy - r));
+  const maxY = Math.min(GH - 1, Math.ceil(gy + r));
+  const arr = g[pigmentIdx];
+  for (let py = minY; py <= maxY; py++) {
+    for (let px = minX; px <= maxX; px++) {
+      const dx = px - gx, dy = py - gy;
+      const d2 = dx * dx + dy * dy;
+      if (d2 > r2) continue;
+      const i = py * GW + px;
+      const falloff = 1 - Math.sqrt(d2) / r;
+      const f2 = falloff * falloff;
+      let na = arr[i] + strength * f2;
+      if (na > MAX_PIGMENT) na = MAX_PIGMENT;
+      arr[i] = na;
+      const ww = wet[i] + 0.45 * falloff;
+      wet[i] = ww > 1 ? 1 : ww;
+      pressure[i] += 0.18 * f2;   // raised from 0.06 — gives paint dabs an
+                                  // immediate, strong pressure gradient so
+                                  // bleeding starts on the first frame
+    }
+  }
+}
+
+// ============================================================
+// INITIAL STATE — wet canvas + two splotches close but separate
+// ============================================================
+function placeInitialSplotch(cx, cy, radius, pigmentIdx) {
+  const r2 = radius * radius;
+  for (let py = Math.max(0, cy - radius); py <= Math.min(GH - 1, cy + radius); py++) {
+    for (let px = Math.max(0, cx - radius); px <= Math.min(GW - 1, cx + radius); px++) {
+      const dx = px - cx, dy = py - cy;
+      const dd = dx * dx + dy * dy;
+      if (dd > r2) continue;
+      const i = py * GW + px;
+      const falloff = 1 - Math.sqrt(dd) / radius;
+      const ff = falloff * falloff;
+      g[pigmentIdx][i] += 0.62 * ff;
+      wet[i] = Math.max(wet[i], 0.92);
+      pressure[i] += 0.08 * ff;
+    }
+  }
+}
+
+function resetSim() {
+  for (let i = 0; i < N; i++) {
+    // The whole canvas is uniformly wet — this is the "wet" canvas
+    wet[i] = 0.62;
+    u[i] = 0; v[i] = 0; pressure[i] = 0;
+    g[0][i] = g[1][i] = g[2][i] = 0;
+    d[0][i] = d[1][i] = d[2][i] = 0;
+  }
+  // Two splotches, close but separate. They will bleed together via
+  // pigment diffusion and edge-flow over the next few seconds.
+  const cy = Math.floor(GH * 0.45);
+  const r  = 16;
+  const cx1 = Math.floor(GW * 0.40);
+  const cx2 = Math.floor(GW * 0.60);
+  placeInitialSplotch(cx1, cy, r, 0); // Quinacridone Rose
+  placeInitialSplotch(cx2, cy, r, 2); // Cerulean Blue
+}
+
+// ============================================================
+// INPUT
+// ============================================================
+const stage  = document.getElementById('stage');
+const cursor = document.getElementById('cursor');
+
+let isPainting = false;
+let lastGX = 0, lastGY = 0;
+let pendingX = null, pendingY = null;
+
+function clientToCanvas(e) {
+  const rect = canvas.getBoundingClientRect();
+  const cx = (e.clientX - rect.left) / rect.width;
+  const cy = (e.clientY - rect.top)  / rect.height;
+  return {
+    rectX: e.clientX - rect.left,
+    rectY: e.clientY - rect.top,
+    rectW: rect.width,
+    rectH: rect.height,
+    gx: cx * GW,
+    gy: cy * GH
+  };
+}
+
+function updateCursor(rectX, rectY) {
+  cursor.style.left = rectX + 'px';
+  cursor.style.top  = rectY + 'px';
+}
+
+function applyCursorColor() {
+  const p = PIGMENTS[currentPigment];
+  // Render a representative color using KM with a thin layer for the cursor fill
+  const R = kmReflect(p.K[0], p.S[0], 0.6, PAPER_R_BASE);
+  const G = kmReflect(p.K[1], p.S[1], 0.6, PAPER_G_BASE);
+  const B = kmReflect(p.K[2], p.S[2], 0.6, PAPER_B_BASE);
+  const r = Math.round(R * 255), gg = Math.round(G * 255), b = Math.round(B * 255);
+  cursor.style.background = `rgba(${r},${gg},${b},0.35)`;
+  cursor.style.border = `1.5px solid rgba(${Math.round(r*0.55)},${Math.round(gg*0.55)},${Math.round(b*0.55)},0.85)`;
+}
+
+function applyCursorSize() {
+  cursor.style.width  = brushSize + 'px';
+  cursor.style.height = brushSize + 'px';
+}
+
+stage.addEventListener('pointerenter', () => { cursor.style.display = 'block'; });
+stage.addEventListener('pointerleave', () => { cursor.style.display = 'none'; isPainting = false; });
+
+stage.addEventListener('pointermove', (e) => {
+  const c = clientToCanvas(e);
+  updateCursor(c.rectX, c.rectY);
+  if (isPainting) { pendingX = c.gx; pendingY = c.gy; }
+});
+
+stage.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  stage.setPointerCapture(e.pointerId);
+  isPainting = true;
+  const c = clientToCanvas(e);
+  lastGX = c.gx; lastGY = c.gy;
+  pendingX = c.gx; pendingY = c.gy;
+  // Single tap dab
+  const rect = canvas.getBoundingClientRect();
+  const gridRadius = (brushSize / 2) * (GW / rect.width);
+  paintAt(c.gx, c.gy, gridRadius, currentPigment, 0.38);
+});
+
+window.addEventListener('pointerup', (e) => {
+  isPainting = false;
+  pendingX = null; pendingY = null;
+  try { stage.releasePointerCapture(e.pointerId); } catch (_) {}
+});
+
+// Apply pending paint inside the rAF loop for smooth strokes
+function applyPendingPaint() {
+  if (!isPainting || pendingX === null) return;
+  const rect = canvas.getBoundingClientRect();
+  const gridRadius = (brushSize / 2) * (GW / rect.width);
+  const dx = pendingX - lastGX, dy = pendingY - lastGY;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  const steps = Math.max(1, Math.ceil(dist / Math.max(1, gridRadius * 0.45)));
+  for (let s = 1; s <= steps; s++) {
+    const t = s / steps;
+    paintAt(lastGX + dx * t, lastGY + dy * t, gridRadius, currentPigment, 0.34);
+  }
+  lastGX = pendingX; lastGY = pendingY;
+  pendingX = null; pendingY = null;
+}
+
+// ============================================================
+// PIGMENT SWATCHES — rendered with the actual KM compositor
+// ============================================================
+function buildPigmentSwatches() {
+  const root = document.getElementById('pigments');
+  PIGMENTS.forEach((p, idx) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'pigment' + (idx === currentPigment ? ' active' : '');
+    wrap.title = p.name;
+    wrap.dataset.idx = idx;
+
+    const swatchDiv = document.createElement('div');
+    swatchDiv.className = 'pigment-swatch';
+
+    const sc = document.createElement('canvas');
+    sc.width = 56; sc.height = 56;
+    const sctx = sc.getContext('2d');
+    const sd = sctx.createImageData(56, 56);
+    // Render swatch using KM with varying thickness for a natural look
+    for (let y = 0; y < 56; y++) {
+      for (let x = 0; x < 56; x++) {
+        const dx = x - 28, dy = y - 28;
+        const d2 = dx*dx + dy*dy;
+        if (d2 > 28*28) {
+          const j = (y * 56 + x) * 4;
+          sd.data[j] = 0; sd.data[j+1] = 0; sd.data[j+2] = 0; sd.data[j+3] = 0;
+          continue;
+        }
+        // Thickness varies a bit across the swatch — thicker bottom, thinner top
+        const grad = 1 - (y / 56) * 0.4;
+        const speckle = 0.85 + 0.3 * smoothNoise(x * 0.3, y * 0.3);
+        const xk = 1.1 * grad * speckle;
+        const R = kmReflect(p.K[0], p.S[0], xk, PAPER_R_BASE);
+        const G = kmReflect(p.K[1], p.S[1], xk, PAPER_G_BASE);
+        const B = kmReflect(p.K[2], p.S[2], xk, PAPER_B_BASE);
+        const j = (y * 56 + x) * 4;
+        sd.data[j]     = R * 255;
+        sd.data[j + 1] = G * 255;
+        sd.data[j + 2] = B * 255;
+        sd.data[j + 3] = 255;
+      }
+    }
+    sctx.putImageData(sd, 0, 0);
+    swatchDiv.appendChild(sc);
+
+    const lbl = document.createElement('div');
+    lbl.className = 'pigment-label';
+    // Two-line label: short name
+    const parts = p.name.split(' ');
+    lbl.innerHTML = parts.join('<br>');
+
+    wrap.appendChild(swatchDiv);
+    wrap.appendChild(lbl);
+
+    wrap.addEventListener('click', () => {
+      currentPigment = idx;
+      document.querySelectorAll('.pigment').forEach(el => el.classList.remove('active'));
+      wrap.classList.add('active');
+      applyCursorColor();
+    });
+
+    root.appendChild(wrap);
+  });
+}
+
+// ============================================================
+// BRUSH SIZE CONTROLS
+// ============================================================
+const sizeInput = document.getElementById('size');
+const sizeValue = document.getElementById('size-value');
+function setBrushSize(s) {
+  brushSize = Math.max(8, Math.min(64, s));
+  sizeInput.value = brushSize;
+  sizeValue.textContent = brushSize;
+  applyCursorSize();
+}
+sizeInput.addEventListener('input', () => setBrushSize(parseInt(sizeInput.value, 10)));
+window.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.key === '[') setBrushSize(brushSize - 2);
+  else if (e.key === ']') setBrushSize(brushSize + 2);
+});
+
+// Reset button
+document.getElementById('reset').addEventListener('click', resetSim);
+
+// ============================================================
+// INIT + LOOP
+// ============================================================
+generatePaper();
+resetSim();
+buildPigmentSwatches();
+applyCursorColor();
+applyCursorSize();
+
+function loop() {
+  applyPendingPaint();
+  // Two sim sub-steps per frame for a livelier flow
+  simStep();
+  simStep();
+  render();
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>

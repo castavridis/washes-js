@@ -1,0 +1,2649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Watercolor v0.27 — UI on top of watercolor-lib.js, after Curtis et al. 1997</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Crimson+Pro:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f5efe2;
+    --canvas-bg: #fbf7ed;
+    --ink: #2a2620;
+    --ink-soft: #6a6356;
+    --ink-faded: #a39885;
+    --panel-bg: rgba(245, 239, 226, 0.78);
+    --panel-border: rgba(42, 38, 32, 0.10);
+    --panel-shadow: 0 6px 28px rgba(60, 40, 20, 0.10), 0 2px 4px rgba(60, 40, 20, 0.05);
+    --dryness-bg: rgba(42, 38, 32, 0.06);
+    --dryness-fg: rgba(42, 38, 32, 0.4);
+    --slider-track: rgba(42, 38, 32, 0.18);
+    --btn-border: rgba(42, 38, 32, 0.2);
+    --btn-border-hover: rgba(42, 38, 32, 0.4);
+    --tooltip-bg: rgba(42, 38, 32, 0.92);
+    --tooltip-text: #f5efe2;
+  }
+
+  [data-theme="dark"] {
+    --canvas-bg: #1a1816;
+    --ink: #e8e2d4;
+    --ink-soft: #b3a999;
+    --ink-faded: #6a6356;
+    --panel-bg: rgba(38, 34, 28, 0.80);
+    --panel-border: rgba(245, 239, 226, 0.08);
+    --panel-shadow: 0 6px 28px rgba(0, 0, 0, 0.45), 0 2px 4px rgba(0, 0, 0, 0.25);
+    --dryness-bg: rgba(245, 239, 226, 0.08);
+    --dryness-fg: rgba(245, 239, 226, 0.45);
+    --slider-track: rgba(245, 239, 226, 0.18);
+    --btn-border: rgba(245, 239, 226, 0.2);
+    --btn-border-hover: rgba(245, 239, 226, 0.4);
+    --tooltip-bg: rgba(245, 239, 226, 0.92);
+    --tooltip-text: #2a2620;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    width: 100%;
+    /* v0.21 — allow vertical scroll so the documentation section below
+       the canvas is reachable. The canvas section is still exactly
+       100vh, so the painting experience is unchanged for users who
+       don't scroll.
+       v0.21.1 — removed overflow-x: hidden from html/body. Any
+       overflow rule on the root scrolling element makes IT the scroll
+       container, which breaks position: sticky on every descendant.
+       Horizontal clipping is now handled per-section (.app-section has
+       overflow: hidden, and .docs uses overflow-x: clip) so neither
+       section can produce horizontal scroll while the page-level
+       scrolling stays attached to the viewport. */
+    min-height: 100vh;
+    background: var(--body-bg, var(--canvas-bg));
+    color: var(--ink);
+    font-family: 'Crimson Pro', 'Georgia', serif;
+    -webkit-font-smoothing: antialiased;
+    transition: background-color 0.25s ease;
+  }
+
+  /* v0.21 — the painting app lives inside this 100vh section. All the
+     fixed-positioned chrome (panel, bars, ui-toggle, perf-overlay,
+     cursor preview) is positioned relative to the viewport while in
+     view; scrolling past this section moves them out of view too,
+     since they're not actually `position: fixed` but `position:
+     absolute` inside an `position: relative` container. Same visual
+     effect when at the top of the page, correct scrolling everywhere
+     else. */
+  .app-section {
+    position: relative;
+    width: 100%;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* The painting surface itself. Extended 2.5vw/2.5vh past every edge
+     of the viewport so that simulation-boundary artifacts (edge-pinned
+     pigment, the band where bleed runs into grid edges) stay outside
+     the visible area. body overflow: hidden clips the extension. */
+  #canvas {
+    position: absolute;
+    inset: -2.5vh -2.5vw;
+    display: block;
+    cursor: none;
+    z-index: 1;
+  }
+
+  /* Custom brush cursor — fixed-positioned, follows pointer */
+  .cursor-preview {
+    position: absolute;
+    pointer-events: none;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 20;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+    display: none;
+  }
+
+  /* Dryness indicator — 2px bar at the very top of viewport */
+  .dryness {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--dryness-bg);
+    z-index: 5;
+    pointer-events: none;
+  }
+  .dryness-fill {
+    height: 100%;
+    width: 0%;
+    background: var(--dryness-fg);
+    transition: width 0.25s ease-out, background-color 0.25s ease;
+  }
+
+  /* Pigment indicator — 2px bar at the very bottom of viewport, symmetric
+     with the dryness bar at top. Reuses the same theme colors so both
+     bars invert together when the paper goes dark. */
+  .pigment-indicator {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--dryness-bg);
+    z-index: 5;
+    pointer-events: none;
+  }
+  .pigment-indicator-fill {
+    height: 100%;
+    width: 0%;
+    background: var(--dryness-fg);
+    transition: width 0.25s ease-out, background-color 0.25s ease;
+  }
+
+  /* Numerical pigment readout, just above the bar at the right edge */
+  .pigment-readout {
+    position: absolute;
+    bottom: 6px;
+    right: 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: var(--ink-soft);
+    pointer-events: none;
+    z-index: 6;
+    transition: color 0.25s ease;
+  }
+
+  /* Floating control panel at bottom center */
+  .controls {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--panel-bg);
+    backdrop-filter: blur(14px) saturate(120%);
+    -webkit-backdrop-filter: blur(14px) saturate(120%);
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    padding: 14px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    z-index: 10;
+    box-shadow: var(--panel-shadow);
+    min-width: 420px;
+    max-width: calc(100vw - 32px);
+  }
+
+  /* v0.19 — Performance overlay. Bottom-left corner, monospace, kept
+     small and quiet so it doesn't dominate the canvas. Hidden by
+     default; revealed by ?perf=1 or Watercolor.perf(true). */
+  .perf-overlay {
+    position: absolute;
+    bottom: 16px;
+    left: 16px;
+    background: var(--panel-bg);
+    backdrop-filter: blur(10px) saturate(120%);
+    -webkit-backdrop-filter: blur(10px) saturate(120%);
+    border: 1px solid var(--panel-border);
+    border-radius: 4px;
+    padding: 10px 14px;
+    color: var(--ink);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    line-height: 1.55;
+    letter-spacing: 0.02em;
+    z-index: 9;
+    pointer-events: none;
+    user-select: none;
+    box-shadow: var(--panel-shadow);
+    min-width: 200px;
+  }
+  .perf-overlay[hidden] { display: none; }
+  .perf-overlay .perf-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 14px;
+    white-space: nowrap;
+  }
+  .perf-overlay .perf-label {
+    opacity: 0.65;
+    text-transform: uppercase;
+    font-size: 9.5px;
+    letter-spacing: 0.10em;
+  }
+  .perf-overlay .perf-value {
+    font-variant-numeric: tabular-nums;
+  }
+  /* Subtle thread between sections */
+  .perf-overlay .perf-divider {
+    height: 1px;
+    background: var(--panel-border);
+    margin: 5px 0;
+    opacity: 0.6;
+  }
+
+  /* Pigment + tool swatches */
+  .pigments-wrap {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .paper-sep {
+    width: 1px;
+    height: 24px;
+    background: var(--btn-border);
+    margin: 0 2px;
+  }
+  .pigments {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: center;
+  }
+  /* Native color input styled as a circular swatch to match .pigment-swatch */
+  .paper-color-input {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    padding: 0;
+    appearance: none;
+    -webkit-appearance: none;
+    box-shadow:
+      inset 0 -2px 5px rgba(0,0,0,0.18),
+      inset 0 1px 2px rgba(255,255,255,0.15),
+      0 1px 3px rgba(0,0,0,0.08);
+    transition: transform 0.15s ease;
+  }
+  .paper-color-input::-webkit-color-swatch-wrapper { padding: 0; border-radius: 50%; }
+  .paper-color-input::-webkit-color-swatch { border: none; border-radius: 50%; }
+  .paper-color-input::-moz-color-swatch { border: none; border-radius: 50%; }
+  .paper-control:hover .paper-color-input { transform: scale(1.15); }
+  .pigment {
+    position: relative;
+    width: 34px;
+    height: 34px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .pigment-swatch {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    box-shadow:
+      inset 0 -2px 5px rgba(0,0,0,0.18),
+      inset 0 1px 2px rgba(255,255,255,0.15),
+      0 1px 3px rgba(0,0,0,0.08);
+    transition: transform 0.15s ease;
+    overflow: hidden;
+  }
+  .pigment-swatch canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+  }
+  .pigment:hover .pigment-swatch { transform: scale(1.15); }
+  .pigment.active .pigment-swatch {
+    box-shadow:
+      inset 0 -2px 5px rgba(0,0,0,0.18),
+      inset 0 1px 2px rgba(255,255,255,0.15),
+      0 0 0 1.5px var(--paper),
+      0 0 0 3px var(--ink);
+  }
+
+  /* Swatch label — hidden by default, surfaces as a tooltip on hover */
+  .pigment-label {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 4px 8px;
+    background: var(--tooltip-bg);
+    color: var(--tooltip-text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    border-radius: 2px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+    z-index: 30;
+  }
+  .pigment:hover .pigment-label { opacity: 1; }
+
+  /* Brush slider — its own full-width row */
+  .brush-control {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .brush-label,
+  .brush-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+  .brush-value {
+    color: var(--ink);
+    min-width: 44px;
+    text-align: right;
+  }
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    flex: 1;
+    height: 2px;
+    background: var(--slider-track);
+    outline: none;
+    cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px; height: 14px;
+    background: var(--ink);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: transform 0.1s ease;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 14px; height: 14px;
+    background: var(--ink);
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+  }
+  input[type="range"]:hover::-webkit-slider-thumb { transform: scale(1.2); }
+
+  /* Animation preset dropdown — styled to read like the toggle buttons
+     while behaving like a native select. We hide the browser chevron and
+     draw our own via a background-image SVG, so the appearance stays
+     consistent across platforms. */
+  .select-control {
+    flex: 1;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background: transparent;
+    border: 1px solid var(--btn-border);
+    border-radius: 2px;
+    color: var(--ink);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 6px 26px 6px 10px;
+    cursor: pointer;
+    transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+    /* SVG chevron sized so it sits to the right of the text label */
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="%23808080"/></svg>');
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 8px 5px;
+  }
+  .select-control:hover {
+    color: var(--ink);
+    border-color: var(--btn-border-hover);
+  }
+  .select-control:focus {
+    outline: none;
+    border-color: var(--btn-border-hover);
+  }
+  .select-control option {
+    /* Native option list — color the popover so it matches the theme
+       on platforms where authors can style this (most modern Chromium
+       and Firefox builds honor background-color and color). */
+    background: var(--panel-bg-solid, #f5e9d6);
+    color: var(--ink);
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 12px;
+  }
+  /* v0.16 — text input for the Text painter. Same look as select-control
+     so the controls row stays visually coherent. */
+  .text-input-control {
+    flex: 1;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background: transparent;
+    border: 1px solid var(--btn-border);
+    border-radius: 2px;
+    color: var(--ink);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    padding: 6px 10px;
+    cursor: text;
+    transition: color 0.15s ease, border-color 0.15s ease;
+    min-width: 0;
+  }
+  .text-input-control:hover { border-color: var(--btn-border-hover); }
+  .text-input-control:focus { outline: none; border-color: var(--btn-border-hover); }
+  .text-input-control::placeholder { color: var(--ink-faint, var(--ink)); opacity: 0.45; }
+
+  /* Toggle + button row */
+  .controls-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .toggle,
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: transparent;
+    border: 1px solid var(--btn-border);
+    color: var(--ink-soft);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: all 0.15s ease;
+  }
+  .toggle::before {
+    content: "";
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    border: 1px solid currentColor;
+    background: transparent;
+    transition: background 0.15s ease;
+  }
+  .toggle:hover,
+  .btn:hover {
+    color: var(--ink);
+    border-color: var(--btn-border-hover);
+  }
+  .toggle.on {
+    background: var(--ink);
+    color: var(--canvas-bg);
+    border-color: var(--ink);
+  }
+  .toggle.on::before { background: var(--canvas-bg); }
+
+  /* v0.12.3 — infocon + custom tooltip system. The "ⓘ" marker is an
+     inline span inside each control; it's visible but subtle. Hover on
+     the control (anywhere — marker or label) triggers the tooltip via
+     a ::after pseudo-element on the control. The tooltip is anchored
+     above the control, themed to match the panel, and accommodates
+     multi-line text so descriptions can be longer than a single line. */
+  .info-marker {
+    display: inline-block;
+    margin-left: 5px;
+    font-size: 10px;
+    opacity: 0.55;
+    transition: opacity 0.15s ease;
+    /* Keep the marker out of the click target's path semantically;
+       pointer events still fall through to the parent button. */
+    pointer-events: none;
+  }
+  .toggle:hover .info-marker,
+  .btn:hover .info-marker { opacity: 1; }
+  .toggle.on .info-marker  { opacity: 0.7; }
+  .toggle.on:hover .info-marker { opacity: 1; }
+
+  /* Tooltip — appears above the control on hover. Positioned via the
+     control's own relative-positioning context (.toggle and .btn are
+     already display:inline-flex which establishes containing block
+     for absolute descendants). */
+  .toggle, .btn, .select-control, .brush-control {
+    position: relative;
+  }
+  [data-tip]::after {
+    content: attr(data-tip);
+    position: absolute;
+    bottom: calc(100% + 10px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--ink);
+    color: var(--canvas-bg);
+    padding: 8px 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    text-transform: none;
+    line-height: 1.45;
+    white-space: normal;
+    /* width: max-content with a cap keeps short tips compact while
+       letting longer ones wrap rather than spilling off-screen. */
+    width: max-content;
+    max-width: 240px;
+    border-radius: 4px;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+    z-index: 30;
+  }
+  [data-tip]:hover::after {
+    opacity: 1;
+  }
+
+  /* v0.10 — floating UI-hide button, always visible. Top-right corner,
+     small enough to not interfere with a normal stroke, themed to match
+     the rest of the chrome. When the panel is hidden the bars and
+     readouts vanish too (body.ui-hidden rules below), leaving only the
+     canvas + this button. The button itself stays. */
+  .ui-toggle {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 20;
+    width: 30px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    background: var(--panel-bg);
+    backdrop-filter: blur(14px) saturate(120%);
+    -webkit-backdrop-filter: blur(14px) saturate(120%);
+    border: 1px solid var(--panel-border);
+    color: var(--ink-soft);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+    box-shadow: var(--panel-shadow);
+  }
+  .ui-toggle:hover {
+    color: var(--ink);
+    border-color: var(--btn-border-hover);
+  }
+  /* Fade transitions for the chrome elements. Each rule preserves the
+     element's existing per-property transition (e.g. .pigment-readout's
+     color transition that follows the paper theme) by listing opacity
+     in addition. */
+  .controls           { transition: opacity 0.18s ease; }
+  .dryness            { transition: opacity 0.18s ease; }
+  .pigment-indicator  { transition: opacity 0.18s ease; }
+  .pigment-readout    { transition: color 0.25s ease, opacity 0.18s ease; }
+  /* Hide every chrome element when body.ui-hidden is set. The ui-toggle
+     itself is intentionally NOT included — it needs to stay clickable so
+     the user can bring everything back. Pointer events on hidden elements
+     get suppressed too, so a hidden panel can't intercept brush strokes. */
+  body.ui-hidden .controls,
+  body.ui-hidden .dryness,
+  body.ui-hidden .pigment-indicator,
+  body.ui-hidden .pigment-readout {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* v0.26.2 — When loaded inside an iframe via the multi-instance
+     bridge, hide ALL chrome. The parent controls the instance via
+     the postMessage API, so the inner UI is just visual noise. Goes
+     further than ui-hidden: also hides the ui-toggle button (which
+     ui-hidden intentionally keeps for the "press H to reveal" path)
+     and the docs section entirely. */
+  body.wc-embedded .controls,
+  body.wc-embedded .dryness,
+  body.wc-embedded .pigment-indicator,
+  body.wc-embedded .pigment-readout,
+  body.wc-embedded .ui-toggle,
+  body.wc-embedded .perf-overlay,
+  body.wc-embedded .cursor-preview,
+  body.wc-embedded .docs,
+  body.wc-embedded .app-section > .controls {
+    display: none !important;
+  }
+  /* Embedded canvases fill the whole iframe — no need for the
+     -2.5vh inset that compensates for the floating panel on
+     standalone use. The parent positions the canvas via its
+     iframe element; the canvas itself goes to 100% of that. */
+  body.wc-embedded #canvas {
+    inset: 0 !important;
+  }
+  /* The app-section's height: 100vh still applies, but in an iframe
+     we want it to also fill any oddly-sized container. */
+  body.wc-embedded .app-section {
+    height: 100%;
+    min-height: 100vh;
+  }
+
+  @media (max-width: 520px) {
+    .controls {
+      min-width: 0;
+      width: calc(100vw - 24px);
+      bottom: 12px;
+      padding: 10px 12px;
+    }
+    .pigment, .pigment-swatch { width: 30px; height: 30px; }
+  }
+  /* v0.21 — DOCUMENTATION STYLES
+   * ----------------------------------------------------------
+   * Lives below the app-section in the page flow. Sticky sidebar
+   * navigation, generous typography for body text, monospace for
+   * code blocks. Color palette and surfaces inherit from the
+   * existing theme variables so dark mode is automatic.
+   */
+
+  .docs {
+    position: relative;
+    width: 100%;
+    background: var(--canvas-bg);
+    color: var(--ink);
+    padding: 60px 32px 120px;
+    /* Crimson Pro for body; falls back to system serif. */
+    font-family: 'Crimson Pro', Georgia, serif;
+    line-height: 1.65;
+    /* v0.21.1 — `clip` (not `hidden`) is critical here. `overflow:
+       hidden` would break position: sticky on the descendant
+       .docs-nav by making .docs a scroll container. `clip` prevents
+       horizontal overflow without establishing a scroll container.
+       Modern browsers (Safari 16+, Chrome 90+, Firefox 81+) support
+       it; for older browsers it'll degrade to visible (no
+       clipping), which is still better than breaking sticky. */
+    overflow-x: clip;
+  }
+  [data-theme="dark"] .docs {
+    background: var(--canvas-bg);
+  }
+
+  /* "Documentation" cue at the top of the section. A thin label
+   * between two short rules — a visual breath between the app and
+   * the docs. */
+  .docs-scroll-cue {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    max-width: 920px;
+    margin: 0 auto 56px;
+    opacity: 0.55;
+  }
+  .docs-scroll-cue-line {
+    flex: 1;
+    height: 1px;
+    background: var(--ink);
+    opacity: 0.35;
+    max-width: 240px;
+  }
+  .docs-scroll-cue-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  /* Two-column grid: sticky sidebar nav on the left, main content
+   * on the right. Collapses to single-column on narrow viewports. */
+  .docs-grid {
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: 64px;
+    max-width: 1080px;
+    margin: 0 auto;
+  }
+  @media (max-width: 760px) {
+    .docs-grid {
+      grid-template-columns: 1fr;
+      gap: 32px;
+    }
+    .docs-nav { position: static; }
+  }
+
+  /* Sidebar nav — sticky so it stays visible while scrolling.
+   * Crisp monospace section headers serve as accordion buttons;
+   * child links collapse beneath them. The currently-visible page
+   * auto-expands as the user scrolls. */
+  .docs-nav {
+    position: sticky;
+    top: 32px;
+    align-self: start;
+    font-size: 13px;
+    line-height: 1.5;
+    /* Cap height so a long expanded list scrolls inside the sidebar
+     * rather than pushing the layout. Subtracting 64px gives breathing
+     * room at top and bottom of the viewport. */
+    max-height: calc(100vh - 64px);
+    overflow-y: auto;
+    /* Hide the scrollbar by default; reveal on hover so it isn't a
+     * constant visual element. Works in WebKit/Blink and Firefox. */
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+  .docs-nav:hover {
+    scrollbar-color: var(--panel-border) transparent;
+  }
+  .docs-nav::-webkit-scrollbar { width: 6px; }
+  .docs-nav::-webkit-scrollbar-thumb { background: transparent; border-radius: 3px; }
+  .docs-nav:hover::-webkit-scrollbar-thumb { background: var(--panel-border); }
+  .docs-nav-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+    opacity: 0.92;
+  }
+  .docs-nav-subtitle {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.10em;
+    opacity: 0.5;
+    margin-bottom: 24px;
+  }
+  .docs-nav nav { display: flex; flex-direction: column; }
+
+  /* Accordion group — section header + collapsible items beneath. */
+  .docs-nav-group {
+    border-top: 1px solid transparent;
+  }
+  .docs-nav-group + .docs-nav-group {
+    /* Hairline divider between groups — barely visible, gives the
+     * nav a quiet rhythm without feeling boxy. */
+    border-top-color: var(--panel-border);
+  }
+
+  /* The section button. Reset native button styling, lay out as a
+   * row with a chevron indicator. */
+  .docs-nav-section {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 12px 0;
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    text-align: left;
+    color: var(--ink);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+    opacity: 0.65;
+    transition: opacity 0.15s ease;
+  }
+  .docs-nav-section:hover { opacity: 1; }
+  .docs-nav-section[aria-expanded="true"] { opacity: 1; }
+
+  /* Chevron: rotates 90° when expanded. Plain ›/✕-style glyph in
+   * monospace font so it scales with the label. */
+  .docs-nav-chevron {
+    display: inline-block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    line-height: 1;
+    opacity: 0.55;
+    transition: transform 0.18s ease, opacity 0.15s ease;
+  }
+  .docs-nav-section[aria-expanded="true"] .docs-nav-chevron {
+    transform: rotate(90deg);
+    opacity: 0.9;
+  }
+
+  /* Collapsible item list. max-height transition for a smooth slide
+   * — 600px is more than any group needs, so the animation always
+   * plays to the natural height. opacity adds a fade for the
+   * collapse direction so links don't pop out of view abruptly. */
+  .docs-nav-items {
+    display: flex;
+    flex-direction: column;
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: max-height 0.22s ease, opacity 0.18s ease,
+                padding 0.18s ease;
+    padding: 0 0 0 4px;
+  }
+  .docs-nav-group[data-expanded="true"] .docs-nav-items {
+    max-height: 600px;
+    opacity: 1;
+    padding: 0 0 12px 4px;
+  }
+
+  /* Child link */
+  .docs-nav-item {
+    text-decoration: none;
+    color: var(--ink);
+    padding: 4px 0;
+    font-family: 'Crimson Pro', Georgia, serif;
+    font-size: 14px;
+    opacity: 0.78;
+    transition: opacity 0.15s ease, padding 0.15s ease;
+  }
+  .docs-nav-item:hover {
+    opacity: 1;
+    padding-left: 4px;
+  }
+  /* Currently-active link gets a bit more weight and a subtle accent. */
+  .docs-nav-item.active {
+    opacity: 1;
+    font-weight: 600;
+  }
+
+  /* Main column. Each page-section has generous spacing, max-width
+   * for line-length comfort (around 65 chars), and lets headings
+   * breathe. */
+  .docs-main {
+    min-width: 0;            /* let pre overflow-x: auto behave */
+    max-width: 720px;
+  }
+  .docs-page {
+    margin-bottom: 96px;
+  }
+  .docs-page:last-of-type {
+    margin-bottom: 0;
+  }
+  .docs-main h1 {
+    font-family: 'Crimson Pro', Georgia, serif;
+    font-weight: 600;
+    font-size: 38px;
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+    margin-bottom: 18px;
+    margin-top: 0;
+    scroll-margin-top: 32px;
+  }
+  .docs-main h2 {
+    font-family: 'Crimson Pro', Georgia, serif;
+    font-weight: 600;
+    font-size: 22px;
+    line-height: 1.25;
+    letter-spacing: -0.005em;
+    margin-top: 48px;
+    margin-bottom: 14px;
+    scroll-margin-top: 32px;
+  }
+  .docs-main h3 {
+    font-family: 'Crimson Pro', Georgia, serif;
+    font-weight: 600;
+    font-size: 16px;
+    line-height: 1.3;
+    margin-top: 28px;
+    margin-bottom: 8px;
+    opacity: 0.85;
+    scroll-margin-top: 32px;
+  }
+  .docs-main p,
+  .docs-main ul,
+  .docs-main ol,
+  .docs-main dl {
+    font-size: 16px;
+    margin-bottom: 14px;
+  }
+  .docs-main code {
+    /* Inline code — monospace, slightly tinted background so it
+     * reads as a token without dominating the prose. */
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13.5px;
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    padding: 1px 6px;
+    border-radius: 3px;
+    white-space: nowrap;
+  }
+  .docs-main strong { font-weight: 700; }
+  .docs-main em     { font-style: italic; opacity: 0.85; }
+
+  .docs-lede {
+    font-size: 17.5px;
+    line-height: 1.55;
+    opacity: 0.85;
+    margin-bottom: 24px;
+  }
+
+  /* Code blocks. Subtle border, generous padding, monospace, scroll
+   * horizontally instead of wrapping (so multi-line code samples
+   * keep their structure on narrow viewports). */
+  .docs-code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 1.55;
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 4px;
+    padding: 16px 20px;
+    margin: 14px 0 18px;
+    overflow-x: auto;
+    white-space: pre;
+    color: var(--ink);
+  }
+  .docs-code .docs-sig {
+    font-weight: 600;
+    opacity: 0.95;
+  }
+
+  /* Definition lists — name in monospace, value as prose. Used for
+   * options, modes, and toggle inventories. */
+  .docs-deflist {
+    display: grid;
+    grid-template-columns: minmax(160px, max-content) 1fr;
+    column-gap: 24px;
+    row-gap: 8px;
+    margin: 12px 0 18px;
+    font-size: 15px;
+  }
+  .docs-deflist dt {
+    font-family: 'Crimson Pro', Georgia, serif;
+    font-weight: 600;
+    opacity: 0.95;
+  }
+  .docs-deflist dt code {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 500;
+    font-size: 13.5px;
+  }
+  .docs-deflist dd {
+    opacity: 0.85;
+  }
+  @media (max-width: 580px) {
+    .docs-deflist {
+      grid-template-columns: 1fr;
+      row-gap: 4px;
+    }
+    .docs-deflist dd { margin-bottom: 8px; }
+  }
+
+  /* Plain lists */
+  .docs-list {
+    padding-left: 22px;
+    opacity: 0.92;
+  }
+  .docs-list li {
+    margin-bottom: 6px;
+  }
+
+  /* References — numbered list with mini-prose under each entry. */
+  .docs-references {
+    padding-left: 22px;
+    list-style: decimal;
+  }
+  .docs-references li {
+    margin-bottom: 16px;
+    opacity: 0.92;
+  }
+  .docs-references em {
+    display: block;
+    margin-top: 4px;
+    font-size: 14.5px;
+    opacity: 0.78;
+  }
+
+  /* Quiet closer at the end of References */
+  .docs-footer {
+    margin-top: 48px;
+    padding-top: 28px;
+    border-top: 1px solid var(--panel-border);
+    font-size: 14px;
+    opacity: 0.55;
+    text-align: center;
+  }
+
+  /* v0.23 — CHANGELOG STYLES
+   * ----------------------------------------------------------
+   * Reverse-chronological release history. Inline tag pills
+   * distinguish features / fixes / perf changes; version headers
+   * get a top-border separator for visual rhythm; sub-version
+   * headers (h3) get a little extra spacing because there are
+   * many of them stacked.
+   */
+  .docs-main h2[id^="cl-"] {
+    /* Top-level version headers (v0.22, v0.21, etc.) — separator
+     * line above so reviewing the changelog feels like scrolling
+     * through distinct releases rather than one blurred run-together. */
+    padding-top: 32px;
+    border-top: 1px solid var(--panel-border);
+    margin-top: 56px;
+  }
+  .docs-main h2[id^="cl-"]:first-of-type {
+    border-top: 0;
+    padding-top: 0;
+    margin-top: 32px;
+  }
+  /* Sub-version headers (v0.22.2, v0.22.1) under their parent.
+   * Tighter spacing — they belong together as one "v0.22 family". */
+  .docs-main #changelog ~ * h3 {
+    margin-top: 24px;
+    margin-bottom: 8px;
+  }
+
+  /* Inline tag pills. Three flavors: feature / fix / perf. Match
+   * the monospace section labels in scale + letter-spacing so they
+   * read as compact metadata, not body text. */
+  .cl-tag {
+    display: inline-block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9.5px;
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+    padding: 1px 7px;
+    margin-right: 6px;
+    border-radius: 3px;
+    border: 1px solid currentColor;
+    opacity: 0.85;
+    vertical-align: 0.12em;
+    /* Avoid wrapping the pill across lines */
+    white-space: nowrap;
+  }
+  /* Color hints — kept subtle. Each tag uses a tinted text color
+   * (background stays transparent so dark mode flips correctly). */
+  .cl-feature { color: #5a8a5a; }   /* green — new things */
+  .cl-fix     { color: #a06038; }   /* warm orange — bugs */
+  .cl-perf    { color: #6a7a9a; }   /* blue-grey — perf */
+  [data-theme="dark"] .cl-feature { color: #88c088; }
+  [data-theme="dark"] .cl-fix     { color: #d09060; }
+  [data-theme="dark"] .cl-perf    { color: #9aa8c8; }
+
+  /* Hide ALL fixed/absolute chrome when the user is scrolled past
+   * the app section — none of the toggles, panel, bars, or perf
+   * overlay should appear over the documentation. Implemented via
+   * a class on <body> set by IntersectionObserver in JS. */
+  body.docs-visible .controls,
+  body.docs-visible .dryness,
+  body.docs-visible .pigment-indicator,
+  body.docs-visible .pigment-readout,
+  body.docs-visible .ui-toggle,
+  body.docs-visible .cursor-preview {
+    display: none;
+  }
+  /* perf-overlay is itself fixed-positioned and lives outside .app-section,
+   * so we hide it explicitly when over the docs. */
+  body.docs-visible .perf-overlay {
+    display: none;
+  }
+</style>
+</head>
+<body>
+  <div class="app-section">
+  <div id="canvas-host"></div>
+  <div class="cursor-preview" id="cursor"></div>
+
+  <button class="ui-toggle" id="ui-toggle" type="button"
+          aria-label="Hide controls" aria-pressed="false"
+          title="Hide controls (press H)">−</button>
+
+  <!-- v0.19 — Performance overlay. Hidden by default; toggle via
+       ?perf=1 URL param or Watercolor.perf(true) from the console. -->
+  <div class="perf-overlay" id="perf-overlay" hidden>
+    <div class="perf-row"><span class="perf-label">FPS</span>          <span class="perf-value" id="perf-fps">—</span></div>
+    <div class="perf-row"><span class="perf-label">Frame p50</span>    <span class="perf-value" id="perf-p50">—</span></div>
+    <div class="perf-row"><span class="perf-label">Frame p95</span>    <span class="perf-value" id="perf-p95">—</span></div>
+    <div class="perf-row"><span class="perf-label">Frame p99</span>    <span class="perf-value" id="perf-p99">—</span></div>
+    <div class="perf-divider"></div>
+    <div class="perf-row"><span class="perf-label">sim</span>          <span class="perf-value" id="perf-sim">—</span></div>
+    <div class="perf-row"><span class="perf-label">render</span>       <span class="perf-value" id="perf-render">—</span></div>
+    <div class="perf-row"><span class="perf-label">anim+viz+svg</span> <span class="perf-value" id="perf-extra">—</span></div>
+    <div class="perf-row"><span class="perf-label">wash+fade</span>    <span class="perf-value" id="perf-wash">—</span></div>
+    <div class="perf-divider"></div>
+    <div class="perf-row"><span class="perf-label">active cells</span> <span class="perf-value" id="perf-active">—</span></div>
+    <div class="perf-row"><span class="perf-label">heap</span>         <span class="perf-value" id="perf-heap">—</span></div>
+    <div class="perf-row"><span class="perf-label">LoAF</span>         <span class="perf-value" id="perf-loaf">—</span></div>
+  </div>
+
+  <div class="dryness" title="Paper dryness — fills as water evaporates">
+    <div class="dryness-fill" id="dryness-fill"></div>
+  </div>
+
+  <div class="pigment-indicator" title="Pigment on paper">
+    <div class="pigment-indicator-fill" id="pigment-fill"></div>
+  </div>
+  <div class="pigment-readout" id="pigment-readout">0.0%</div>
+
+  <div class="controls">
+    <div class="pigments-wrap">
+      <div class="pigments" id="pigments"></div>
+      <div class="paper-sep" aria-hidden="true"></div>
+      <div class="pigment paper-control">
+        <input type="color" id="paper-color" class="paper-color-input" aria-label="Paper color">
+        <div class="pigment-label">Paper</div>
+      </div>
+    </div>
+
+    <div class="brush-control">
+      <span class="brush-label">Brush</span>
+      <input type="range" id="size" min="4" max="200" value="28">
+      <span class="brush-value"><span id="size-value">28</span> px</span>
+    </div>
+
+    <div class="brush-control" data-tip="How much pigment a single brush dab deposits. Higher values give denser, more saturated paint that builds up faster on the paper. Affects pigment brushes (rose/yellow/blue) and rainbow — not water, lift, or mask.">
+      <span class="brush-label">Paint load</span>
+      <input type="range" id="paint-load" min="0.1" max="3" step="0.05" value="1">
+      <span class="brush-value"><span id="paint-load-value">1.00</span>×</span>
+    </div>
+
+    <div class="brush-control" data-tip="How wet the brush is. For the water brush, scales wet, pressure, and lift per dab. For pigment brushes (rose/yellow/blue) and rainbow, scales the wet + pressure they contribute alongside their pigment — so combined with Paint load, you can model a saturated wet brush vs. a thick dry brush.">
+      <span class="brush-label">Water load</span>
+      <input type="range" id="water-load" min="0.2" max="3" step="0.05" value="1">
+      <span class="brush-value"><span id="water-load-value">1.00</span>×</span>
+    </div>
+
+    <div class="brush-control">
+      <span class="brush-label">Resolution</span>
+      <input type="range" id="scale-slider" min="1" max="6" step="0.25" value="1.75">
+      <span class="brush-value"><span id="scale-value">2.0</span> px/cell</span>
+    </div>
+
+    <div class="brush-control" id="fade-control" hidden>
+      <span class="brush-label">Fade half-life</span>
+      <input type="range" id="fade-halflife" min="500" max="30000" step="100" value="4000">
+      <span class="brush-value"><span id="fade-value">4000</span> ms</span>
+    </div>
+
+    <div class="brush-control" data-tip="Controls how wet the paper stays. Wetter paper bleeds more dramatically (the watercolor look) but costs more CPU; drier paper holds marks sharper and runs faster. Terms borrowed from real watercolor practice.">
+      <span class="brush-label">Paper wetness</span>
+      <select id="evap-preset" class="select-control">
+        <option value="flooded">Flooded — dramatic blooms</option>
+        <option value="wetOnWet" selected>Wet-on-wet — soft bleed</option>
+        <option value="damp">Damp — controlled blending</option>
+        <option value="dryBrush">Dry-brush — granular texture</option>
+        <option value="boneDry">Bone-dry — crisp marks</option>
+      </select>
+    </div>
+
+    <div class="brush-control" data-tip="Autonomous painting presets — weather and ambient scenes that paint through the same simulation your brush uses.">
+      <span class="brush-label">Animation</span>
+      <select id="animation-mode" class="select-control">
+        <option value="off" selected>Off</option>
+        <option value="ai">AI painter</option>
+        <option value="rainy">Rainy</option>
+        <option value="sunny">Sunny</option>
+        <option value="windy">Windy</option>
+        <option value="thunderstorm">Thunderstorm</option>
+        <option value="partlyCloudy">Partly cloudy</option>
+        <option value="snowing">Snowing</option>
+        <option value="snowingAdditive">Snowing (additive)</option>
+        <option value="tornado">Tornado</option>
+      </select>
+    </div>
+
+    <div class="brush-control" data-tip="Paints a one-shot wash in real pigment across the canvas — the painted background atmosphere. Mixes with everything else via the watercolor simulation.">
+      <span class="brush-label">Background</span>
+      <select id="time-of-day" class="select-control">
+        <option value="day" selected>Day</option>
+        <option value="dawn">Dawn</option>
+        <option value="sunset">Sunset</option>
+        <option value="night">Night</option>
+        <option value="tornado">Tornado</option>
+      </select>
+    </div>
+
+    <div class="brush-control" data-tip="Self-contained generative loops that run indefinitely, showcasing what the simulation can do. Compose freely with Background, Animation, and your own brushwork.">
+      <span class="brush-label">Visualization</span>
+      <select id="visualization-mode" class="select-control">
+        <option value="off" selected>Off</option>
+        <option value="kaleidoscope">Kaleidoscope</option>
+        <option value="lissajous">Lissajous</option>
+        <option value="flowField">Flow field</option>
+        <option value="pulse">Pulse</option>
+      </select>
+    </div>
+
+    <div class="brush-control" data-tip="Type any text and paint it into the canvas using your selected brush. Picks up special brushes too — try Rainbow, Mask, or Water. The watercolor simulation handles the rest (bleed, edge darkening, color mixing).">
+      <span class="brush-label">Text</span>
+      <input id="text-input" type="text" placeholder="type and click Paint…" class="text-input-control" />
+      <button class="btn" id="text-paint-btn" data-tip="Paints the text above with the currently-selected brush at canvas center.">Paint<span class="info-marker" aria-hidden="true">ⓘ</span></button>
+    </div>
+
+    <div class="brush-control" data-tip="Loads an SVG file and traces every path/line/shape with the currently-selected brush, animating the strokes over a couple of seconds. Try with Rainbow for a multi-color trace, or Mask to mask an SVG shape from a wash.">
+      <span class="brush-label">Trace SVG</span>
+      <input id="svg-file-input" type="file" accept=".svg,image/svg+xml" style="display: none" />
+      <button class="btn" id="svg-load-btn" data-tip="Pick an SVG file and trace it onto the canvas with the active brush.">Load SVG<span class="info-marker" aria-hidden="true">ⓘ</span></button>
+    </div>
+
+    <div class="controls-row">
+      <button class="toggle on" id="toggle-edge"        aria-pressed="true"
+              data-tip="Concentrates pigment at the edges of wet regions — the way real watercolor pools at boundaries when the water dries.">Edge darkening<span class="info-marker" aria-hidden="true">ⓘ</span></button>
+      <button class="toggle"    id="toggle-drying"      aria-pressed="false"
+              data-tip="Stops evaporation. Pigment stays suspended in the wet layer indefinitely instead of settling.">Pause drying<span class="info-marker" aria-hidden="true">ⓘ</span></button>
+      <button class="toggle"    id="toggle-autodry"     aria-pressed="false"
+              data-tip="Auto-dries the canvas the moment a Background wash finishes painting. Settles all suspended pigment, zeroes wet/pressure, and idles the sim — saves substantial CPU when running Visualizations or Animations on top of a finished wash.">Auto-dry background<span class="info-marker" aria-hidden="true">ⓘ</span></button>
+      <button class="toggle"    id="toggle-fade"        aria-pressed="false"
+              data-tip="Slowly fades deposited pigment back toward paper. Half-life is adjustable with the slider above.">Fade painting<span class="info-marker" aria-hidden="true">ⓘ</span></button>
+      <button class="toggle"    id="toggle-transparent" aria-pressed="false"
+              data-tip="Makes the body background transparent so the canvas can layer over another page or image when embedded.">Transparent<span class="info-marker" aria-hidden="true">ⓘ</span></button>
+      <button class="toggle"    id="toggle-webgl"       aria-pressed="false"
+              data-tip="Use the WebGL render path instead of the CPU. Moves the per-pixel Kubelka-Munk + paper compositing onto the GPU. Sim (bleed, advection, evaporation) still runs on CPU in v0.20. Toggling off restores the CPU render path. Falls back automatically if WebGL2 isn't available.">WebGL render<span class="info-marker" aria-hidden="true">ⓘ</span></button>
+      <button class="toggle"    id="toggle-perf"        aria-pressed="false"
+              data-tip="Show the performance overlay with FPS, p50/p95/p99 frame times, per-phase ms breakdown, active cell count, heap delta, and Long Animation Frame count. Can also be enabled via ?perf=1 URL parameter.">Perf<span class="info-marker" aria-hidden="true">ⓘ</span></button>
+      <button class="btn"       id="rewet-btn"
+              data-tip="Restores wetness across the whole canvas and lifts 30% of deposited pigment back into suspension so dried strokes become mobile again.">Re-wet<span class="info-marker" aria-hidden="true">ⓘ</span></button>
+      <button class="btn"       id="big-splash-btn"
+              data-tip="Big Splash: dramatic dispersal across the canvas. Large splash zones (~280px), strong velocity, lifts 85% of deposited pigment. Like a bucket of water hitting a fresh wash.">Big splash<span class="info-marker" aria-hidden="true">ⓘ</span></button>
+      <button class="btn"       id="fine-spritz-btn"
+              data-tip="Fine Spritz: many small concentrated bursts. Small splash zones (~80px), gentle velocity, lifts 50% of deposited pigment. Like flicking water from a brush onto the painting.">Fine spritz<span class="info-marker" aria-hidden="true">ⓘ</span></button>
+      <button class="btn"       id="dry-btn"
+              data-tip="Instantly evaporates all water. Any suspended pigment locks in place as deposited.">Dry<span class="info-marker" aria-hidden="true">ⓘ</span></button>
+      <button class="btn"       id="remove-mask-btn"
+              data-tip="Removes all masking fluid in one go — like rubbing it off a dry painting. Reveals whatever was frozen underneath.">Remove mask<span class="info-marker" aria-hidden="true">ⓘ</span></button>
+      <button class="btn"       id="export-btn"
+              data-tip="Saves the current canvas as a PNG. Composites the paper color underneath unless Transparent is on.">Export PNG<span class="info-marker" aria-hidden="true">ⓘ</span></button>
+      <button class="btn"       id="reset"
+              data-tip="Clears all pigment and returns the canvas to fresh wet paper.">Reset<span class="info-marker" aria-hidden="true">ⓘ</span></button>
+    </div>
+  </div>
+  </div><!-- /.app-section -->
+
+  <!-- v0.21 — DOCUMENTATION. Scrollable section below the canvas. -->
+  <section class="docs" id="docs">
+    <div class="docs-scroll-cue" aria-hidden="true">
+      <div class="docs-scroll-cue-line"></div>
+      <div class="docs-scroll-cue-label">Documentation</div>
+      <div class="docs-scroll-cue-line"></div>
+    </div>
+
+    <div class="docs-grid">
+      <aside class="docs-nav" aria-label="Documentation table of contents">
+        <div class="docs-nav-title">Watercolor</div>
+        <div class="docs-nav-subtitle">v0.27</div>
+        <nav>
+          <!-- v0.21 — accordion sections. Each .docs-nav-group has a
+               button-styled header (.docs-nav-section) plus a list of
+               child links (.docs-nav-items) that collapses by default.
+               The currently-visible page expands automatically as the
+               user scrolls. data-section maps the group to the
+               corresponding section id so the scroll observer can
+               find it. -->
+          <div class="docs-nav-group" data-section="intro">
+            <button class="docs-nav-section" type="button" aria-expanded="true">
+              <span>Introduction</span><span class="docs-nav-chevron" aria-hidden="true">›</span>
+            </button>
+            <div class="docs-nav-items">
+              <a href="#intro" class="docs-nav-item">Overview</a>
+              <a href="#getting-started" class="docs-nav-item">Getting started</a>
+              <a href="#philosophy" class="docs-nav-item">Design philosophy</a>
+            </div>
+          </div>
+
+          <div class="docs-nav-group" data-section="brushes">
+            <button class="docs-nav-section" type="button" aria-expanded="false">
+              <span>Brushes &amp; painting</span><span class="docs-nav-chevron" aria-hidden="true">›</span>
+            </button>
+            <div class="docs-nav-items">
+              <a href="#pigments" class="docs-nav-item">Pigments</a>
+              <a href="#special-brushes" class="docs-nav-item">Water, lift, rainbow</a>
+              <a href="#mask" class="docs-nav-item">Masking fluid</a>
+            </div>
+          </div>
+
+          <div class="docs-nav-group" data-section="composition">
+            <button class="docs-nav-section" type="button" aria-expanded="false">
+              <span>Composition layers</span><span class="docs-nav-chevron" aria-hidden="true">›</span>
+            </button>
+            <div class="docs-nav-items">
+              <a href="#backgrounds" class="docs-nav-item">Backgrounds</a>
+              <a href="#animations" class="docs-nav-item">Animations</a>
+              <a href="#visualizations" class="docs-nav-item">Visualizations</a>
+              <a href="#text" class="docs-nav-item">Text painting</a>
+              <a href="#svg" class="docs-nav-item">SVG tracing</a>
+            </div>
+          </div>
+
+          <div class="docs-nav-group" data-section="controls">
+            <button class="docs-nav-section" type="button" aria-expanded="false">
+              <span>Canvas controls</span><span class="docs-nav-chevron" aria-hidden="true">›</span>
+            </button>
+            <div class="docs-nav-items">
+              <a href="#paper-wetness" class="docs-nav-item">Paper wetness</a>
+              <a href="#toggles" class="docs-nav-item">Toggles</a>
+              <a href="#actions" class="docs-nav-item">Actions</a>
+              <a href="#performance" class="docs-nav-item">Performance</a>
+            </div>
+          </div>
+
+          <div class="docs-nav-group" data-section="api">
+            <button class="docs-nav-section" type="button" aria-expanded="false">
+              <span>Programmatic API</span><span class="docs-nav-chevron" aria-hidden="true">›</span>
+            </button>
+            <div class="docs-nav-items">
+              <a href="#api-quickstart" class="docs-nav-item">Quickstart</a>
+              <a href="#api-cursors" class="docs-nav-item">Cursors</a>
+              <a href="#api-modes" class="docs-nav-item">Modes</a>
+              <a href="#api-text-svg" class="docs-nav-item">Text &amp; SVG</a>
+              <a href="#api-toggles" class="docs-nav-item">Toggles</a>
+              <a href="#api-actions" class="docs-nav-item">Actions</a>
+              <a href="#api-perf" class="docs-nav-item">Performance</a>
+              <a href="#api-coords" class="docs-nav-item">Coordinates</a>
+              <a href="#api-state" class="docs-nav-item">State snapshot</a>
+            </div>
+          </div>
+
+          <div class="docs-nav-group" data-section="concepts">
+            <button class="docs-nav-section" type="button" aria-expanded="false">
+              <span>Concepts</span><span class="docs-nav-chevron" aria-hidden="true">›</span>
+            </button>
+            <div class="docs-nav-items">
+              <a href="#concept-physics" class="docs-nav-item">The physics</a>
+              <a href="#concept-active-rect" class="docs-nav-item">Active rect</a>
+              <a href="#concept-mask-rect" class="docs-nav-item">Mask rect</a>
+              <a href="#concept-webgl" class="docs-nav-item">WebGL render path</a>
+            </div>
+          </div>
+
+          <div class="docs-nav-group" data-section="references">
+            <button class="docs-nav-section" type="button" aria-expanded="false">
+              <span>References</span><span class="docs-nav-chevron" aria-hidden="true">›</span>
+            </button>
+            <div class="docs-nav-items">
+              <a href="#references" class="docs-nav-item">Citations</a>
+            </div>
+          </div>
+
+          <div class="docs-nav-group" data-section="changelog">
+            <button class="docs-nav-section" type="button" aria-expanded="false">
+              <span>Changelog</span><span class="docs-nav-chevron" aria-hidden="true">›</span>
+            </button>
+            <div class="docs-nav-items">
+              <a href="#changelog" class="docs-nav-item">All versions</a>
+              <a href="#cl-0-27" class="docs-nav-item">v0.27 — Library extraction</a>
+              <a href="#cl-0-26" class="docs-nav-item">v0.26 — Multi-instance bridge</a>
+              <a href="#cl-0-25" class="docs-nav-item">v0.25 — Splash presets</a>
+              <a href="#cl-0-24" class="docs-nav-item">v0.24 — Splash</a>
+              <a href="#cl-0-23" class="docs-nav-item">v0.23 — Changelog</a>
+              <a href="#cl-0-22" class="docs-nav-item">v0.22 — Brush load</a>
+              <a href="#cl-0-21" class="docs-nav-item">v0.21 — Documentation</a>
+              <a href="#cl-0-20" class="docs-nav-item">v0.20 — WebGL render</a>
+              <a href="#cl-0-19" class="docs-nav-item">v0.19 — Perf overlay</a>
+              <a href="#cl-0-18" class="docs-nav-item">v0.18 — API</a>
+              <a href="#cl-earlier" class="docs-nav-item">Earlier versions</a>
+            </div>
+          </div>
+        </nav>
+      </aside>
+
+      <main class="docs-main">
+
+      <!-- ============================== INTRODUCTION ============================== -->
+      <section class="docs-page" data-section="intro">
+        <h1 id="intro">Watercolor</h1>
+        <p class="docs-lede">
+          A browser-based interactive watercolor simulation. Paints with
+          three real pigments through a physically-motivated wet-paper
+          model — capillary diffusion, edge darkening, Kubelka-Munk
+          color mixing, granulation, masking fluid. Composable layers,
+          a complete programmatic API, optional GPU acceleration.
+          Single HTML file, no dependencies, runs offline.
+        </p>
+
+        <h2 id="getting-started">Getting started</h2>
+        <p>
+          Move your pointer over the canvas above to see the brush
+          cursor. Click and drag to paint. The dab spreads through the
+          wet substrate, bleeds at its edges, and mixes with adjacent
+          color via Kubelka-Munk reflectance — the same equations
+          published in the seminal SIGGRAPH 1997 paper by Curtis,
+          Anderson, Seims, Fleischer, and Salesin.
+        </p>
+        <p>
+          The control panel at the bottom contains everything: brush
+          and pigment selection, background washes, autonomous
+          animations, generative visualizations, text and SVG painters,
+          paper-wetness presets, fade-painting, masking fluid, and the
+          WebGL render toggle. Hover any control for an inline tooltip
+          explaining what it does.
+        </p>
+
+        <h2 id="philosophy">Design philosophy</h2>
+        <p>
+          Every feature composes through one path: <code>paintAt</code>.
+          When you click the canvas, when the Tornado animation paints
+          its funnel, when the Kaleidoscope visualization stamps its
+          rotational pattern, when text or SVG geometry traces — all
+          of them call the same function and inherit the same physics.
+          That's why every brush color works with every painter:
+          Rainbow text, Mask-traced SVG, Water-brush dot-burst.
+        </p>
+        <p>
+          The simulation is honest about being a model. Pigment is
+          three pigments. Paper is one cream substrate with subtle
+          warm noise. Time is sim-step ticks at the requested
+          resolution. No filters, no shortcuts, no post-processing.
+          What you see is the wet-paper equations playing out.
+        </p>
+      </section>
+
+      <!-- ============================== BRUSHES ============================== -->
+      <section class="docs-page" data-section="brushes">
+        <h1 id="brushes">Brushes &amp; painting</h1>
+
+        <h2 id="pigments">Pigments</h2>
+        <p>
+          Three pigments from Figure 5 of the Curtis et al. paper,
+          chosen as a complementary triad for color-mixing demos:
+        </p>
+        <dl class="docs-deflist">
+          <dt>Quinacridone Rose</dt>
+          <dd>Magenta-red. High staining (ω=5.5) and granulation (γ=0.81) — sticks where it lands, fills in paper texture.</dd>
+          <dt>Hansa Yellow</dt>
+          <dd>Warm yellow. Low staining (ω=1.0) and granulation (γ=0.08) — flows freely, blends smoothly.</dd>
+          <dt>Cerulean Blue</dt>
+          <dd>Cool blue. The paper's authentic Cerulean is a famous lifting pigment; we raise its staining and granulation here for visual consistency with Quinacridone Rose.</dd>
+        </dl>
+        <p>
+          Pigments mix via <strong>Kubelka-Munk reflectance</strong>,
+          not RGB averaging. Mixing yellow and blue gives a real
+          watercolor green — not the muddy gray you'd get from adding
+          their colors directly. The K and S values per channel
+          (absorption and scattering) determine how light propagates
+          through the layer.
+        </p>
+
+        <h2 id="special-brushes">Water, lift, rainbow</h2>
+        <p>Three special brushes alongside the pigments:</p>
+        <dl class="docs-deflist">
+          <dt>Water</dt>
+          <dd>Deposits water and pressure without pigment. Lifts a fraction of deposited pigment back into suspension at each touched cell, letting you re-mobilize dry paint for blending, edge-softening, or washout effects.</dd>
+          <dt>Lift</dt>
+          <dd>Removes pigment from each touched cell. Drag-compounding: a single dab at brush center keeps 78% of the pigment; ten dabs keep 8%. Leaves water and pressure alone so the surroundings don't bleed.</dd>
+          <dt>Rainbow</dt>
+          <dd>Same dynamics as a regular pigment brush, but the stamp color cycles through rose → yellow → blue over time. Long strokes traverse the spectrum.</dd>
+        </dl>
+
+        <h2 id="mask">Masking fluid</h2>
+        <p>
+          The amber-yellow swatch at the end of the brush row. Paints a
+          translucent reservation layer over the paper:
+        </p>
+        <ul class="docs-list">
+          <li><strong>Paint mask first</strong> — masked cells reject all subsequent paint, water, and lift</li>
+          <li><strong>Paint over mask</strong> — pigment frozen beneath stays unchanged through every sim step</li>
+          <li><strong>Click "Remove mask"</strong> — the rubbery layer comes off in one pass, revealing whatever was frozen underneath (paper, or pigment that was there when you masked)</li>
+        </ul>
+        <p>
+          The visible amber tint scales with mask density — a single
+          dab is faint, dense coverage is fully amber. The tint sits
+          on top of any pigment underneath, so you see through the
+          mask to your painting while it's working. This is how real
+          masking fluid behaves on real paper.
+        </p>
+      </section>
+
+      <!-- ============================== COMPOSITION ============================== -->
+      <section class="docs-page" data-section="composition">
+        <h1 id="composition">Composition layers</h1>
+        <p>
+          Three independent autonomous painters sit in the controls
+          row, each driven by its own dropdown. They paint <em>through
+          the same simulation your brush uses</em>, so wet-on-wet
+          mixing, edge darkening, and granulation all apply.
+        </p>
+
+        <h2 id="backgrounds">Backgrounds</h2>
+        <p>
+          One-shot washes painted across the canvas in ~0.75 seconds.
+          Five options:
+        </p>
+        <dl class="docs-deflist">
+          <dt>Day</dt>     <dd>Pale cerulean sky wash, lighter toward the horizon.</dd>
+          <dt>Dawn</dt>    <dd>Cerulean top, rose mid, yellow horizon — gentle pre-sunrise gradient.</dd>
+          <dt>Sunset</dt>  <dd>Warm rose-and-yellow horizon over cool cerulean zenith.</dd>
+          <dt>Night</dt>   <dd>Deep blue-purple, denser than the others — rose tints the upper sky.</dd>
+          <dt>Tornado</dt> <dd>The sickly green-yellow tornado sky from American Plains storms. Pair with the Tornado animation for the full picture.</dd>
+        </dl>
+
+        <h2 id="animations">Animations</h2>
+        <p>
+          Continuously-running weather and ambient scenes. Each calls
+          <code>paintAt</code> on its own schedule with appropriate
+          brushes:
+        </p>
+        <dl class="docs-deflist">
+          <dt>AI painter</dt>    <dd>Weighted stroke strategies that paint indefinitely with all three pigments.</dd>
+          <dt>Rainy</dt>         <dd>Falling drops of cerulean and water; rose flecks for variety.</dd>
+          <dt>Sunny</dt>         <dd>Slow horizontal warm sweeps across the canvas.</dd>
+          <dt>Windy</dt>         <dd>Fast horizontal streaks with periodic gust-direction flips.</dd>
+          <dt>Thunderstorm</dt>  <dd>Heavy rain plus periodic yellow lightning bolts.</dd>
+          <dt>Partly cloudy</dt> <dd>Three large slow clouds drifting across the sky.</dd>
+          <dt>Snowing</dt>       <dd>Cerulean wash + water-brush flakes lifting it for white snow trails.</dd>
+          <dt>Snowing (additive)</dt> <dd>Tiny cerulean dabs with rose flecks — the original snow preset, kept for the additive look.</dd>
+          <dt>Tornado</dt>       <dd>14 cursors orbit a meandering vertical axis with layered-sine motion. 5-second pause between passes. Pair with the Tornado background for the green sky.</dd>
+        </dl>
+
+        <h2 id="visualizations">Visualizations</h2>
+        <p>
+          Generative loops that run indefinitely, showcasing what the
+          simulation can do:
+        </p>
+        <dl class="docs-deflist">
+          <dt>Kaleidoscope</dt> <dd>Six cursors at 60° rotational symmetry around canvas center. Phases cycle through arc-trace (organic curves), dot-burst (sharp hexagonal dots), and rose-petals (r = R·cos(k·θ) flower curves).</dd>
+          <dt>Lissajous</dt>    <dd>A master point traces sin(a·t)·R<sub>x</sub>, sin(b·t)·R<sub>y</sub> where (a, b) morph slowly via low-frequency carrier sines. Dense overlapping curves that never repeat.</dd>
+          <dt>Flow field</dt>   <dd>22 particles follow a vector field derived from the paperH noise + a slow time offset. Wind-blown / topographic line patterns.</dd>
+          <dt>Pulse</dt>        <dd>Concentric rings expand from random epicenters. Strength tapers as each ring grows, giving fading wave-fronts that interfere where they overlap.</dd>
+        </dl>
+
+        <h2 id="text">Text painting</h2>
+        <p>
+          Type any phrase in the Text control's input, press Enter or
+          click <strong>Paint</strong>. The text renders at 96px Georgia
+          bold to an offscreen canvas, then each ink pixel becomes a
+          <code>paintAt</code> call. Uses the currently-selected brush —
+          try Rainbow for shifting hue, or Mask to reserve a text-shaped
+          area for a later wash.
+        </p>
+
+        <h2 id="svg">SVG tracing</h2>
+        <p>
+          Click <strong>Load SVG</strong> to pick a vector file. The
+          parser walks every <code>path</code>, <code>line</code>,
+          <code>polyline</code>, <code>polygon</code>, <code>rect</code>,
+          <code>circle</code>, and <code>ellipse</code> element,
+          converts each to a path-d string, and uses
+          <code>SVGPathElement.getPointAtLength</code> to sample
+          arc-length-parametrized points along it. Points are queued
+          and 10 are painted per frame, so the SVG draws itself with a
+          watercolor brush over a couple of seconds. Uses the
+          currently-selected pigment.
+        </p>
+      </section>
+
+      <!-- ============================== CONTROLS ============================== -->
+      <section class="docs-page" data-section="controls">
+        <h1 id="controls">Canvas controls</h1>
+
+        <h2 id="paper-wetness">Paper wetness</h2>
+        <p>
+          Five named presets borrowed from real watercolor practice,
+          tied to evaporation rate:
+        </p>
+        <dl class="docs-deflist">
+          <dt>Flooded</dt>     <dd>Pooled water and dramatic blooms. ~9.5 second half-life. Least performant.</dd>
+          <dt>Wet-on-wet (default)</dt> <dd>Soft Curtis-style bleed. ~3.2 second half-life. Balanced for interactive use.</dd>
+          <dt>Damp</dt>        <dd>Controlled blending, firmer edges. ~1.2 second half-life.</dd>
+          <dt>Dry-brush</dt>   <dd>Paint sits where placed, granular texture shows. ~0.5 second half-life.</dd>
+          <dt>Bone-dry</dt>    <dd>Marks stay crisp like pen. ~0.2 second half-life. Most performant.</dd>
+        </dl>
+        <p>
+          Faster evaporation reclaims active cells sooner, which
+          reclaims simulation cost — useful as a performance lever for
+          heavy animations and visualizations, at the cost of less
+          wet-on-wet bleed.
+        </p>
+
+        <h2 id="toggles">Toggles</h2>
+        <dl class="docs-deflist">
+          <dt>Edge darkening</dt>      <dd>Concentrates pigment at the boundaries of wet regions — the way real watercolor pools at edges when water dries. On by default.</dd>
+          <dt>Pause drying</dt>        <dd>Stops evaporation entirely. Pigment stays suspended indefinitely.</dd>
+          <dt>Auto-dry background</dt> <dd>Settles the canvas instantly when a Background wash completes. Saves substantial CPU when running visualizations on top of a finished wash.</dd>
+          <dt>Fade painting</dt>       <dd>Slowly fades deposited pigment back toward paper. Half-life adjustable via the slider.</dd>
+          <dt>Transparent</dt>         <dd>Makes the body background transparent so the canvas layers over the page background. Useful for embedding.</dd>
+          <dt>WebGL render</dt>        <dd>Routes the per-pixel render through a WebGL2 fragment shader instead of the CPU. Falls back silently if WebGL2 isn't available.</dd>
+        </dl>
+
+        <h2 id="actions">Actions</h2>
+        <dl class="docs-deflist">
+          <dt>Re-wet</dt>      <dd>Restores wetness across the whole canvas and lifts 30% of deposited pigment back into suspension — dried strokes become mobile again.</dd>
+          <dt>Big splash</dt>  <dd>Dramatic dispersal across the canvas. Large splash zones (~280px radius), strong velocity, lifts 85% of deposited pigment. Like a bucket of water hitting a fresh wash.</dd>
+          <dt>Fine spritz</dt> <dd>Many small concentrated bursts (8&ndash;15 epicenters). Small splash zones (~80px radius), gentle velocity, lifts 50% of deposited pigment. Like flicking water from a brush onto the painting.</dd>
+          <dt>Dry</dt>         <dd>Instantly evaporates all water. Suspended pigment locks in place as deposited.</dd>
+          <dt>Remove mask</dt> <dd>Clears all masking fluid in one pass.</dd>
+          <dt>Export PNG</dt>  <dd>Saves the current canvas. Composites paper color underneath unless Transparent is on.</dd>
+          <dt>Reset</dt>       <dd>Clears all pigment, returns the canvas to fresh wet paper.</dd>
+        </dl>
+
+        <h2 id="performance">Performance overlay</h2>
+        <p>
+          Hidden by default. Enable two ways:
+        </p>
+        <pre class="docs-code">// URL parameter
+?perf=1
+
+// Console
+Watercolor.perf(true);</pre>
+        <p>
+          The overlay shows FPS, p50/p95/p99 frame times, per-phase ms
+          breakdown (sim, render, anim+viz+svg, wash+fade), active cell
+          count, heap delta (Chromium-only), and the Long Animation
+          Frames counter. Refreshes at 10 Hz; zero overhead when off.
+        </p>
+      </section>
+
+      <!-- ============================== API ============================== -->
+      <section class="docs-page" data-section="api">
+        <h1 id="api">Programmatic API</h1>
+        <p class="docs-lede">
+          Everything in the UI is also reachable through
+          <code>window.Watercolor</code>. Drive the canvas from the
+          browser console, an external script, or an automation file.
+          Designed to be small, composable, and discoverable.
+        </p>
+
+        <h2 id="api-quickstart">Quickstart</h2>
+        <p>
+          Open DevTools (F12 or ⌘⌥I), paste these into the console one
+          at a time, and watch the canvas:
+        </p>
+        <pre class="docs-code">// Set a sunset wash
+Watercolor.setBackground('sunset');
+
+// Stamp a rainbow brush at canvas center
+Watercolor.cursor({ color: 'rainbow', size: 40 }).stamp();
+
+// Six cursors painting in a hexagonal orbit
+const cs = Array.from({length: 6}, () =&gt; Watercolor.cursor({ color: 'blue', size: 18 }));
+let t = 0;
+setInterval(() =&gt; {
+  t += 0.03;
+  const { width, height } = Watercolor.grid;
+  cs.forEach((c, i) =&gt; {
+    const angle = t + i * Math.PI / 3;
+    const r = 200 + Math.sin(t * 2) * 80;
+    c.move(width/2 + Math.cos(angle)*r, height/2 + Math.sin(angle)*r).stamp();
+  });
+}, 33);</pre>
+
+        <h2 id="api-cursors">Cursors</h2>
+        <p>
+          Cursors are programmable brushes. They hold position and
+          appearance state; they never paint on their own — call
+          <code>.stamp()</code> when you want a deposit. Many cursors
+          can coexist; the caller's references keep them alive.
+        </p>
+
+        <h3>Constructor</h3>
+        <pre class="docs-code"><span class="docs-sig">Watercolor.cursor(opts)</span> → cursor handle</pre>
+        <p>Accepted options (all optional):</p>
+        <dl class="docs-deflist">
+          <dt><code>color</code></dt>  <dd>One of <code>'rose'</code>, <code>'yellow'</code>, <code>'blue'</code> (alias <code>'cerulean'</code>), <code>'rainbow'</code>, <code>'water'</code>, <code>'lift'</code>, <code>'mask'</code>. Default <code>'blue'</code>.</dd>
+          <dt><code>size</code></dt>     <dd>Brush diameter in display pixels. Default 16.</dd>
+          <dt><code>strength</code></dt> <dd>Deposit strength per stamp. Default 0.35. Range 0&ndash;1.</dd>
+          <dt><code>x</code>, <code>y</code></dt> <dd>Grid coordinates. Default canvas center. See <a href="#api-coords">coordinates</a>.</dd>
+        </dl>
+
+        <h3>Methods</h3>
+        <dl class="docs-deflist">
+          <dt><code>cursor.move(x, y)</code></dt> <dd>Update position in grid coordinates. Returns the cursor for chaining.</dd>
+          <dt><code>cursor.set({...})</code></dt> <dd>Update one or more of <code>color</code>, <code>size</code>, <code>strength</code>, <code>x</code>, <code>y</code>. Returns the cursor.</dd>
+          <dt><code>cursor.stamp()</code></dt>   <dd>Paint once at the current position with current properties. Returns the cursor.</dd>
+          <dt><code>cursor.remove()</code></dt>  <dd>Detach from the active set. Optional &mdash; just dropping the reference also works.</dd>
+        </dl>
+
+        <h3>Read-only properties</h3>
+        <p>
+          <code>cursor.id</code>, <code>cursor.x</code>,
+          <code>cursor.y</code>, <code>cursor.size</code>,
+          <code>cursor.strength</code>, <code>cursor.color</code>.
+        </p>
+
+        <pre class="docs-code"><span class="docs-sig">Watercolor.cursors()</span> → cursor[]</pre>
+        <p>Returns an array of all currently-alive cursor handles.</p>
+
+        <h2 id="api-modes">Modes</h2>
+        <p>
+          The three composition layers — animations, visualizations,
+          backgrounds — each have a get/set pair. The <code>set</code>
+          variants accept <code>{replace: bool}</code>; default
+          <code>replace: true</code> mirrors the dropdown behavior
+          (switching presets clears the old one's state).
+        </p>
+
+        <pre class="docs-code"><span class="docs-sig">Watercolor.setAnimation(name, opts?)</span>
+<span class="docs-sig">Watercolor.getAnimation()</span> → string
+
+<span class="docs-sig">Watercolor.setVisualization(name, opts?)</span>
+<span class="docs-sig">Watercolor.getVisualization()</span> → string
+
+<span class="docs-sig">Watercolor.setBackground(name)</span>
+<span class="docs-sig">Watercolor.isBackgroundRunning()</span> → bool</pre>
+
+        <p>Valid names:</p>
+        <dl class="docs-deflist">
+          <dt>Animations</dt>      <dd><code>'off'</code>, <code>'ai'</code>, <code>'rainy'</code>, <code>'sunny'</code>, <code>'windy'</code>, <code>'thunderstorm'</code>, <code>'partlyCloudy'</code>, <code>'snowing'</code>, <code>'snowingAdditive'</code>, <code>'tornado'</code></dd>
+          <dt>Visualizations</dt>  <dd><code>'off'</code>, <code>'kaleidoscope'</code>, <code>'lissajous'</code>, <code>'flowField'</code>, <code>'pulse'</code></dd>
+          <dt>Backgrounds</dt>     <dd><code>'day'</code>, <code>'dawn'</code>, <code>'sunset'</code>, <code>'night'</code>, <code>'tornado'</code></dd>
+        </dl>
+
+        <h2 id="api-text-svg">Text &amp; SVG</h2>
+        <pre class="docs-code"><span class="docs-sig">Watercolor.paintText(text, opts?)</span> → number of dabs
+
+opts: { x, y, fontSize, sampleStep, strength, pigment }</pre>
+        <p>
+          Renders text at the given grid coordinates. <code>pigment</code>
+          accepts a color name string (same as cursor); defaults to the
+          UI's currently-selected brush.
+        </p>
+
+        <pre class="docs-code"><span class="docs-sig">await Watercolor.traceSVG(source)</span> → points queued
+
+<span class="docs-sig">Watercolor.cancelSVGTrace()</span></pre>
+        <p>
+          <code>source</code> accepts SVG markup (a string starting
+          with <code>&lt;</code>), a URL string (fetched then parsed),
+          or a <code>File</code> object (e.g. from a file picker).
+        </p>
+
+        <h2 id="api-toggles">Toggles</h2>
+        <p>
+          All toggles follow the same pattern: pass a boolean to set,
+          omit to read.
+        </p>
+        <pre class="docs-code">Watercolor.edgeDarkening();        // current state
+Watercolor.edgeDarkening(false);   // disable
+
+Watercolor.pauseDrying(true);
+Watercolor.autoDryBackground(true);
+Watercolor.fadePainting(true);
+Watercolor.fadeFullRender(true);   // re-render whole canvas on fade tick
+Watercolor.transparent(true);
+Watercolor.webgl(true);            // enable WebGL render path
+Watercolor.webglDebugTint(true);   // visible green tint for verification</pre>
+
+        <pre class="docs-code"><span class="docs-sig">Watercolor.evaporation(value)</span></pre>
+        <p>
+          Accepts a paper-wetness preset name (<code>'flooded'</code>,
+          <code>'wetOnWet'</code>, <code>'damp'</code>,
+          <code>'dryBrush'</code>, <code>'boneDry'</code>) or a numeric
+          multiplier for advanced control. Called with no arg, returns
+          the current effective multiplier.
+        </p>
+
+        <pre class="docs-code">Watercolor.paperWetnessPresets();
+// → { flooded: 1, wetOnWet: 3, damp: 8, dryBrush: 18, boneDry: 50 }</pre>
+
+        <h3>Brush load</h3>
+        <p>
+          Per-dab multipliers for the pigment and water brushes. Both
+          default to <code>1.0</code> and accept floats; the UI sliders
+          clamp them to sensible ranges (paint 0.1&ndash;3, water 0.2&ndash;3),
+          but the API doesn't enforce a hard cap — extreme values just
+          saturate the per-cell maxima.
+        </p>
+        <pre class="docs-code"><span class="docs-sig">Watercolor.paintLoad(mult?)</span>
+<span class="docs-sig">Watercolor.waterLoad(mult?)</span>
+
+// Examples
+Watercolor.paintLoad(2);     // dense, saturated pigment
+Watercolor.paintLoad(0.3);   // pale, sparse pigment
+Watercolor.waterLoad(2.5);   // very wet water brush — big pools
+Watercolor.waterLoad(0.5);   // damp water brush — gentle lifting</pre>
+        <p>
+          <code>paintLoad</code> affects pigment brushes (rose, yellow,
+          blue) and rainbow — it controls how much <em>pigment</em>
+          each dab deposits.
+        </p>
+        <p>
+          <code>waterLoad</code> affects every brush that carries water:
+          the dedicated <strong>water</strong> brush (where it scales
+          wet, pressure, and lift), and the <strong>pigment</strong>
+          and <strong>rainbow</strong> brushes (where it scales the
+          wet + pressure contribution they implicitly add along with
+          their pigment). The two sliders combine on pigment brushes
+          to model a physical "loading the brush" picture:
+        </p>
+        <dl class="docs-deflist">
+          <dt>paintLoad 2×, waterLoad 1×</dt>
+          <dd>Saturated brush, normal water — dense pigment with normal bleeding.</dd>
+          <dt>paintLoad 2×, waterLoad 2×</dt>
+          <dd>Saturated <em>wet</em> brush — dense pigment with dramatic bleeding.</dd>
+          <dt>paintLoad 0.3×, waterLoad 2×</dt>
+          <dd>Sparse wet brush — pale paint with lots of bleed (dry-brush-into-wash effect).</dd>
+          <dt>paintLoad 2×, waterLoad 0.3×</dt>
+          <dd>Thick dry brush — saturated paint that barely spreads.</dd>
+        </dl>
+
+        <h2 id="api-actions">Actions</h2>
+        <p>All chainable — each returns <code>Watercolor</code>.</p>
+        <pre class="docs-code">Watercolor.rewet();
+Watercolor.splash();                    // default preset, auto epicenters
+Watercolor.splash('bigSplash');         // big preset
+Watercolor.splash('fineSpritz');        // fine preset
+Watercolor.dry();
+Watercolor.removeMask();
+Watercolor.exportPNG();
+Watercolor.reset();</pre>
+
+        <h3>Splash with explicit coordinates</h3>
+        <p>
+          Pass an array of <code>{x, y}</code> points (grid coordinates)
+          to choreograph the splash exactly. Each point can include
+          optional <code>radius</code>, <code>velocity</code>,
+          <code>pressure</code>, and <code>lift</code> overrides that
+          apply just to that epicenter.
+        </p>
+        <pre class="docs-code">// Two splashes at specific locations
+Watercolor.splash([
+  { x: 200, y: 300 },
+  { x: 800, y: 500 }
+]);
+
+// With a preset
+Watercolor.splash([{ x: 576, y: 324 }], 'fineSpritz');
+
+// Per-point overrides — one big, one subtle
+Watercolor.splash([
+  { x: 200, y: 300, radius: 300, velocity: 1.2 },
+  { x: 800, y: 500, radius: 50,  velocity: 0.3 }
+]);
+
+// Object form (alternative)
+Watercolor.splash({
+  coords: [{ x: 576, y: 324 }],
+  preset: 'bigSplash'
+});
+
+// Discover preset names
+Watercolor.splashPresets();
+// → ['default', 'bigSplash', 'fineSpritz']
+
+// Chain after a wash to disperse it
+Watercolor.setBackground('sunset').splash('fineSpritz');</pre>
+        <p>
+          Coordinates are in grid units (use <code>Watercolor.toGrid()</code>
+          to convert from pointer events). Per-point overrides win over
+          the preset; preset values fill in anything the point doesn't
+          specify. <code>radius</code> is in display pixels.
+        </p>
+
+        <h2 id="api-perf">Performance</h2>
+        <pre class="docs-code"><span class="docs-sig">Watercolor.perf(v?)</span></pre>
+        <p>
+          Toggle or read the performance overlay state. The overlay
+          shows p50/p95/p99 frame times, per-phase ms breakdown,
+          active cell count, heap delta (Chromium-only), and Long
+          Animation Frames.
+        </p>
+
+        <pre class="docs-code"><span class="docs-sig">Watercolor.webglAvailable()</span> → bool</pre>
+        <p>
+          Tests for WebGL2 support. Lazy-inits on first call. Use this
+          before calling <code>Watercolor.webgl(true)</code> to know
+          whether the toggle will succeed.
+        </p>
+
+        <h2 id="api-coords">Coordinates</h2>
+        <p>
+          The canvas has internal <strong>grid coordinates</strong>
+          (0..GW × 0..GH) which is what cursors and <code>paintAt</code>
+          use. <strong>Display coordinates</strong> (CSS pixels) are
+          what pointer events come in as. Helpers convert between them:
+        </p>
+        <pre class="docs-code">Watercolor.grid;
+// → { width: 1152, height: 648 }   (varies with resolution slider)
+
+Watercolor.toGrid(displayX, displayY);
+// → { x, y } in grid units
+
+Watercolor.toDisplay(gridX, gridY);
+// → { x, y } in display pixels</pre>
+
+        <h2 id="api-state">State snapshot</h2>
+        <pre class="docs-code"><span class="docs-sig">Watercolor.state()</span> → object</pre>
+        <p>
+          Snapshot of top-level simulation state. Useful for debugging.
+          Does not include the giant Float32Arrays.
+        </p>
+        <pre class="docs-code">{
+  animation: 'rainy',
+  visualization: 'kaleidoscope',
+  backgroundRunning: false,
+  svgTracing: false,
+  svgTraceRemaining: 0,
+  cursorsActive: 6,
+  maskActive: false,
+  gridWidth: 1152,
+  gridHeight: 648,
+  edgeDarkening: true,
+  dryingPaused: false,
+  autoDryBackground: false,
+  fadePainting: false,
+  transparent: false
+}</pre>
+      </section>
+
+      <!-- ============================== CONCEPTS ============================== -->
+      <section class="docs-page" data-section="concepts">
+        <h1 id="concepts">Concepts</h1>
+
+        <h2 id="concept-physics">The physics</h2>
+        <p>
+          Each cell on the grid carries seven values:
+          <code>wet</code> (water amount),
+          <code>g</code> (suspended pigment, 3 channels),
+          <code>d</code> (deposited pigment, 3 channels),
+          <code>u</code> and <code>v</code> (velocity components),
+          <code>pressure</code> (drives flow),
+          <code>paperH</code> (paper height noise for granulation),
+          and <code>mask</code> (masking fluid coverage).
+        </p>
+        <p>
+          Every sim step runs these phases in order:
+        </p>
+        <ol class="docs-list">
+          <li><strong>applyEdgeDarkening</strong> — gradient of wet against neighbors creates pressure that pulls pigment outward (the dark ring at wash edges).</li>
+          <li><strong>updateVelocity</strong> — pressure gradient drives <code>u</code> and <code>v</code>. Wet cells flow; dry cells are walls.</li>
+          <li><strong>movePigment</strong> — advection by the velocity field, then isotropic diffusion. Suspended pigment moves; deposited pigment doesn't.</li>
+          <li><strong>transferPigment</strong> — adsorption (suspended → deposited at rate proportional to <code>1 - h·granulation</code>) and desorption (deposited → suspended at rate <code>staining</code>). The granulation term makes paper-texture variation cause variable deposition.</li>
+          <li><strong>diffuseWet</strong> — capillary spread of water through paper fibers via Laplacian diffusion.</li>
+          <li><strong>evaporate</strong> — water decays exponentially. Cells that fall below the dry threshold settle their suspended pigment to deposited.</li>
+        </ol>
+        <p>
+          The render phase then computes per-pixel color via
+          Kubelka-Munk: weighted K and S from the three pigments,
+          run through the sinh/cosh-based reflectance formula,
+          composited over the paper substrate.
+        </p>
+
+        <h2 id="concept-active-rect">Active rect</h2>
+        <p>
+          A bounding box of cells with active dynamics (wet &gt;
+          threshold). Every sim phase iterates only inside this rect.
+          On a fresh canvas with one dab, the rect might be 200×200
+          cells — out of 1152×648 = 746,000 total. The simulation
+          isn't doing nothing on the unpainted area; it's doing
+          <em>literally zero work</em> there.
+        </p>
+        <p>
+          The rect grows when paint lands outside it (via
+          <code>expandActiveRect</code> inside <code>paintAt</code>).
+          It shrinks periodically when all cells along an edge have
+          dried out. The render is also rect-localized — only cells
+          inside the rect get re-drawn each frame.
+        </p>
+
+        <h2 id="concept-mask-rect">Mask rect</h2>
+        <p>
+          Same idea as the active rect, but tracking the bounding box
+          of masked cells. Without this optimization, every sim phase
+          paid a per-cell mask check across the entire active rect,
+          even when the mask covered &lt;1% of cells. With it, the
+          mask check is restricted to the small region where the mask
+          actually lives.
+        </p>
+        <p>
+          A small mask (625 cells in a 462,681-cell active rect) now
+          adds <strong>−1.1% overhead</strong> to <code>movePigment</code>
+          — within measurement noise. Previously the same scenario
+          would have added 80–100% overhead.
+        </p>
+
+        <h2 id="concept-webgl">WebGL render path</h2>
+        <p>
+          An optional fragment-shader implementation of the render
+          phase, toggleable via the <strong>WebGL render</strong>
+          button. The shader mirrors the CPU code's Kubelka-Munk
+          math bit-for-bit (verified across 792 sweep points; max
+          difference 3.3e-16).
+        </p>
+        <p>
+          Simulation phases still run on the CPU in this version;
+          state arrays are uploaded as textures each render frame.
+          Future v0.20.x releases will migrate individual sim phases
+          to compute over textures, with the perf overlay measuring
+          each migration's impact.
+        </p>
+        <p>
+          The toggle silently no-ops if WebGL2 isn't available. The
+          tooltip updates to reflect the unavailable state.
+        </p>
+      </section>
+
+      <!-- ============================== REFERENCES ============================== -->
+      <section class="docs-page" data-section="references">
+        <h1 id="references">References</h1>
+        <ol class="docs-references">
+          <li>
+            <strong>Curtis, C. J., Anderson, S. E., Seims, J. E., Fleischer, K. W., &amp; Salesin, D. H.</strong>
+            "Computer-Generated Watercolor." SIGGRAPH '97 Proceedings.
+            <em>The foundation paper. Three-layer water/pigment/paper model with capillary diffusion, edge darkening, and Kubelka-Munk compositing. Figure 5 lists the K and S values used here.</em>
+          </li>
+          <li>
+            <strong>Foster, N., &amp; Metaxas, D.</strong>
+            "Realistic Animation of Liquids." Graphics Interface '96.
+            <em>Staggered-grid fluid scheme; basis for the velocity update.</em>
+          </li>
+          <li>
+            <strong>Stam, J.</strong>
+            "Stable Fluids." SIGGRAPH '99.
+            <em>Modern numerical-stability conventions for the advection step.</em>
+          </li>
+          <li>
+            <strong>Kubelka, P.</strong>
+            "New contributions to the optics of intensely light-scattering materials." JOSA 1954.
+            <em>The reflectance compositing formula used in the render path.</em>
+          </li>
+        </ol>
+      </section>
+
+      <!-- ============================== CHANGELOG ============================== -->
+      <section class="docs-page" data-section="changelog">
+        <h1 id="changelog">Changelog</h1>
+        <p class="docs-lede">
+          Reverse-chronological release history. Each version is a
+          standalone <code>.html</code> file kept in <code>/mnt/user-data/outputs/</code>
+          so you can always go back to a previous version's exact behavior.
+        </p>
+
+        <!-- ===== v0.27 ===== -->
+        <h2 id="cl-0-27">v0.27 &mdash; Library extraction + UI on top</h2>
+        <ul class="docs-list">
+          <li><span class="cl-tag cl-feature">feature</span> The simulation core is now a standalone JavaScript library, <code>watercolor-lib.js</code>. This page (v0.27) is the same HTML/CSS as v0.26.2, but the inline ~5,800-line <code>&lt;script&gt;</code> block is replaced by <code>&lt;script src="watercolor-lib.js"&gt;&lt;/script&gt;</code> + a ~390-line wiring script that hooks each UI element to a method on the library instance. State isolation is via JavaScript closure semantics &mdash; every variable inside the factory's <code>create()</code> call is unique per instance.</li>
+          <li><span class="cl-tag cl-feature">feature</span> The library can also be used to mount multiple independent watercolor instances on one page: <code>Watercolor.create(targetEl)</code> returns a fresh handle whose state is fully isolated from other instances. See <code>watercolor-multi-example.html</code> and <code>watercolor-simple-example.html</code> alongside the library.</li>
+          <li><span class="cl-tag cl-feature">feature</span> Auto canvas-scale: brushes from animations and visualizations stay visually proportional on small canvases. A 320px-wide embedded canvas auto-downscales brush radii by ~0.27&times; relative to the standalone tuning. Override per-instance via <code>{ canvasScale: 1.0 }</code> in the create options.</li>
+          <li><span class="cl-tag cl-feature">feature</span> WebGL render path on by default when available (was opt-in via toggle in v0.20&ndash;v0.26.2). Falls back silently to CPU on browsers without WebGL2.</li>
+          <li><span class="cl-tag cl-feature">feature</span> New <strong>Perf</strong> toggle in the toggles row. Same overlay as v0.19 (FPS, p50/p95/p99 frame times, per-phase ms, active cells, heap delta, Long Animation Frames). Library exposes <code>perfMetrics()</code> as a snapshot method; UI polls it every 150ms.</li>
+          <li><span class="cl-tag cl-fix">fix</span> Brush sizes in animations + splash were tuned for a ~1200px-wide canvas and looked disproportionate on smaller hosts. Fixed by the auto canvas-scale above.</li>
+          <li><span class="cl-tag cl-fix">fix</span> The pigment swatches in v0.27's first build were flat CSS buttons; v0.26.2 used real KM-compositor-rendered <code>&lt;canvas&gt;</code> swatches (paper texture, edge fade, granulation). Extracted the original <code>buildPigmentSwatches()</code> as <code>inst.buildPigmentSwatches(rootEl)</code>; the wiring calls it and the swatches now look identical to v0.26.2.</li>
+          <li><span class="cl-tag cl-fix">fix</span> Major perf bug in the first library draft: only <code>framesSincePaint</code> incremented per frame, not <code>framesSinceIdleCheck</code> or <code>framesSinceFade</code>. The idle-skip gate in <code>shouldRunSim()</code> was permanently stuck at 0 &lt; 30, so the sim never skipped frames even on settled canvases. Lib now matches v0.26.2's three-counter loop exactly.</li>
+          <li><span class="cl-tag cl-fix">fix</span> Main loop referenced <code>FADE_INTERVAL_FRAMES</code> and <code>applyPigmentFade</code> &mdash; neither exists. Real names are <code>FADE_TICK_INTERVAL</code> and <code>fadeStep</code>. Without this, fade silently threw every frame when fade was on.</li>
+          <li><span class="cl-tag cl-fix">fix</span> Cursor preview TDZ error: <code>wireSlider</code> fires an initial input event to sync the readout, which called <code>updateCursorPreview()</code>, which referenced <code>cursorEl</code> &mdash; declared later in the script. Moved cursor preview setup ahead of the swatches and sliders.</li>
+        </ul>
+
+        <!-- ===== v0.26 ===== -->
+        <h2 id="cl-0-26">v0.26 &mdash; Multi-instance bridge (deprecated)</h2>
+        <ul class="docs-list">
+          <li><span class="cl-tag cl-feature">feature</span> First attempt at multi-instance support via a <code>postMessage</code> bridge: each iframe loaded a standalone Watercolor and the parent page called methods over the postMessage protocol. Worked in principle, fragile in practice &mdash; <code>file://</code> origin restrictions varied between Chrome / Firefox / Safari and the bridge often hung silently.</li>
+          <li><span class="cl-tag cl-feature">feature</span> <strong>v0.26.1</strong> added belt-and-suspenders ready signaling: <code>wc:ready</code> announced on script eval, again on next tick, and on receipt of a parent ping. Reply targetOrigin set to <code>'*'</code> instead of echoing <code>e.origin</code>.</li>
+          <li><span class="cl-tag cl-feature">feature</span> <strong>v0.26.2</strong> added a <code>body.wc-embedded</code> CSS class auto-applied when running inside an iframe. Collapses the inner control panel, dryness bar, ui-toggle, and docs section &mdash; the parent owns the UI.</li>
+          <li>Superseded by v0.27's library approach. The bridge architecture survives only in <code>watercolor-v0.26.2.html</code> if you specifically need iframe isolation.</li>
+        </ul>
+
+        <!-- ===== v0.25 ===== -->
+        <h2 id="cl-0-25">v0.25 &mdash; Splash presets + explicit coordinates</h2>
+        <ul class="docs-list">
+          <li><span class="cl-tag cl-feature">feature</span> Splash now has two presets exposed as separate buttons: <strong>Big splash</strong> (large radii, strong velocity, whole-canvas chaos) and <strong>Fine spritz</strong> (small radii, gentle velocity, many epicenters &mdash; like flicking water from a brush).</li>
+          <li><span class="cl-tag cl-feature">feature</span> <code>Watercolor.splash()</code> now accepts a preset name and/or an array of explicit epicenter coordinates. Each coordinate can include per-point <code>radius</code>, <code>velocity</code>, <code>pressure</code>, <code>lift</code> overrides for choreographed splashes.</li>
+          <li><code>Watercolor.splashPresets()</code> lists the available presets.</li>
+        </ul>
+
+        <!-- ===== v0.24 ===== -->
+        <h2 id="cl-0-24">v0.24 &mdash; Splash</h2>
+        <ul class="docs-list">
+          <li><span class="cl-tag cl-feature">feature</span> New <strong>Splash</strong> button next to Re-wet. Dramatic re-wet that creates real pigment dispersal: saturates the canvas, lifts 80% of deposited pigment back into suspension, and injects outward-radial velocity + pressure spike from 3&ndash;7 epicenters.</li>
+          <li>Epicenters are biased toward high-pigment cells via rejection sampling, so the dispersal happens where there's actually pigment to disperse.</li>
+          <li>Sim's advection + diffusion carries the dispersal forward over ~60&ndash;120 frames (1&ndash;2 seconds at 60fps). One-shot action, not a mode.</li>
+          <li>Exposed on the API as <code>Watercolor.splash()</code>. Chainable.</li>
+        </ul>
+
+        <!-- ===== v0.23 ===== -->
+        <h2 id="cl-0-23">v0.23 &mdash; Changelog</h2>
+        <ul class="docs-list">
+          <li><span class="cl-tag cl-feature">feature</span> This page. Reverse-chronological release history with feature/fix/perf tags.</li>
+        </ul>
+
+        <!-- ===== v0.22.x ===== -->
+        <h2 id="cl-0-22">v0.22 &mdash; Brush load</h2>
+
+        <h3>v0.22.2 &mdash; Hoisted brush gains <span class="cl-tag cl-perf">perf</span></h3>
+        <ul class="docs-list">
+          <li>Moved <code>0.45 * waterLoadMult</code> and <code>0.18 * waterLoadMult</code> computations out of the pigment + rainbow brush inner loops. Now computed once per <code>paintAt</code> call instead of per cell.</li>
+          <li>Same code pattern as the water brush in v0.22. Math bit-identical; pressure scaling at <code>waterLoad=2</code> verified exactly 2&times; on both pigment and rainbow.</li>
+        </ul>
+
+        <h3>v0.22.1 &mdash; Water load combines with pigment brushes <span class="cl-tag cl-feature">feature</span></h3>
+        <ul class="docs-list">
+          <li><strong>Water load</strong> now also scales the wet + pressure contribution of pigment and rainbow brushes &mdash; not just the water brush.</li>
+          <li>Paint load and Water load combine on pigment brushes for a physical "loading the brush" model: saturated dry brush, sparse wet brush, dramatic wet wash, etc.</li>
+          <li>Updated tooltip and docs to explain the combined behavior.</li>
+        </ul>
+
+        <h3>v0.22 &mdash; Paint load + Water load sliders <span class="cl-tag cl-feature">feature</span></h3>
+        <ul class="docs-list">
+          <li>New <strong>Paint load</strong> slider (0.1&times;&ndash;3&times;, default 1&times;): scales the per-dab pigment strength of pigment + rainbow brushes.</li>
+          <li>New <strong>Water load</strong> slider (0.2&times;&ndash;3&times;, default 1&times;): scales the per-dab water + pressure + lift of the water brush.</li>
+          <li>Both exposed on the API as <code>Watercolor.paintLoad()</code> / <code>Watercolor.waterLoad()</code>.</li>
+        </ul>
+
+        <!-- ===== v0.21 ===== -->
+        <h2 id="cl-0-21">v0.21 &mdash; Documentation</h2>
+        <ul class="docs-list">
+          <li><span class="cl-tag cl-feature">feature</span> Full documentation section below the canvas. Sticky sidebar navigation with collapsible accordion sections, code examples, conceptual explanations, complete API reference.</li>
+          <li><span class="cl-tag cl-feature">feature</span> Scroll-spy auto-expands the current section as you read; active heading gets a visual marker in the nav.</li>
+          <li><span class="cl-tag cl-fix">fix</span> Sticky sidebar wasn't sticking &mdash; <code>overflow-x: hidden</code> on the body was making it the scroll container. Switched to <code>overflow-x: clip</code> on the <code>.docs</code> wrapper instead.</li>
+          <li><span class="cl-tag cl-fix">fix</span> Removed the on-load <code>console.log</code> hint that printed the API teaser. The console stays clean now.</li>
+        </ul>
+
+        <!-- ===== v0.20 ===== -->
+        <h2 id="cl-0-20">v0.20 &mdash; WebGL render path</h2>
+        <ul class="docs-list">
+          <li><span class="cl-tag cl-feature">feature</span> Optional GPU render via WebGL2 fragment shader. Per-pixel Kubelka-Munk + paper compositing moves off the CPU.</li>
+          <li><span class="cl-tag cl-feature">feature</span> <strong>WebGL render</strong> toggle in the controls row. Falls back silently to CPU if WebGL2 is unavailable.</li>
+          <li><span class="cl-tag cl-feature">feature</span> Debug tint mode (<code>Watercolor.webglDebugTint(true)</code>): blends a faint green over the GPU output so you can verify the GPU path is actually running.</li>
+          <li><span class="cl-tag cl-fix">fix</span> Y-axis was flipped on first ship &mdash; WebGL textures have Y=0 at the bottom while 2D canvas has Y=0 at the top. One-line fix in the shader: sample at <code>(vUv.x, 1.0 - vUv.y)</code>.</li>
+          <li>GLSL <code>kmReflect</code> verified bit-identical to JS implementation (max diff 3.3e-16 across 792 sweep points).</li>
+        </ul>
+
+        <!-- ===== v0.19 ===== -->
+        <h2 id="cl-0-19">v0.19 &mdash; Perf overlay + paper wetness</h2>
+
+        <h3>v0.19.1 &mdash; Mask-rect optimization <span class="cl-tag cl-perf">perf</span></h3>
+        <ul class="docs-list">
+          <li>Tracking bounding box of masked cells eliminates the per-cell <code>mask[i]</code> load outside the mask region.</li>
+          <li>Small mask (625 cells in a 462,681-cell active rect) now adds <strong>&minus;1.1% overhead</strong> to <code>movePigment</code> &mdash; within measurement noise. Previously would have added 80&ndash;100%.</li>
+        </ul>
+
+        <h3>v0.19 &mdash; Performance overlay <span class="cl-tag cl-feature">feature</span></h3>
+        <ul class="docs-list">
+          <li>Optional perf overlay (<code>?perf=1</code> or <code>Watercolor.perf(true)</code>). Shows FPS, p50/p95/p99 frame times, per-phase ms breakdown, active cells, heap delta, Long Animation Frames count.</li>
+          <li>Paper-wetness preset dropdown: <strong>Flooded</strong> / <strong>Wet-on-wet</strong> / <strong>Damp</strong> / <strong>Dry-brush</strong> / <strong>Bone-dry</strong>. Replaces what was briefly an evaporation slider.</li>
+          <li><span class="cl-tag cl-fix">fix</span> Rectangle artifact when fade painting was on &mdash; fade tick mutated <code>d[]</code> across the whole canvas but only the active rect was being re-rendered. Added <code>fadeFullRender</code> flag (default on) that forces a full render on fade ticks.</li>
+        </ul>
+
+        <!-- ===== v0.18 ===== -->
+        <h2 id="cl-0-18">v0.18 &mdash; Programmatic API</h2>
+        <ul class="docs-list">
+          <li><span class="cl-tag cl-feature">feature</span> <code>window.Watercolor</code> namespace. Everything in the UI &mdash; cursors, animations, visualizations, backgrounds, text, SVG, toggles, actions &mdash; reachable from the console or external scripts.</li>
+          <li>Cursors are pure data objects with <code>.move()</code>, <code>.set()</code>, <code>.stamp()</code>, <code>.remove()</code>. Caller drives motion; cursors never auto-paint.</li>
+          <li>SVG tracing accepts markup, URL, or File. Text painting accepts pigment options.</li>
+          <li>Coordinate helpers: <code>Watercolor.grid</code>, <code>Watercolor.toGrid()</code>, <code>Watercolor.toDisplay()</code>.</li>
+        </ul>
+
+        <!-- ===== Earlier ===== -->
+        <h2 id="cl-earlier">Earlier versions</h2>
+
+        <h3>v0.17 &mdash; SVG tracing</h3>
+        <p>Load an SVG file; the parser walks <code>path</code>, <code>line</code>, <code>polyline</code>, <code>polygon</code>, <code>rect</code>, <code>circle</code>, and <code>ellipse</code>, samples each via <code>SVGPathElement.getPointAtLength</code>, paints 10 points per frame.</p>
+
+        <h3>v0.16 &mdash; Lissajous, Flow Field, Pulse + Text painting</h3>
+        <p>Three new visualizations and a text-painting feature. Text renders to an offscreen canvas, then each ink pixel becomes a <code>paintAt</code> call &mdash; uses whatever brush is currently selected.</p>
+
+        <h3>v0.15 &mdash; Visualizations dropdown + Auto-dry</h3>
+        <p>Kaleidoscope visualization with six-fold rotational symmetry. Auto-dry background toggle settles the canvas after a wash to reclaim CPU.</p>
+
+        <h3>v0.14 &mdash; Tornado animation + modular backgrounds</h3>
+        <p>Funnel-shaped 14-cursor orbital animation with a meandering vertical axis. Modular Background system: Day, Dawn, Sunset, Night, Tornado.</p>
+
+        <h3>v0.13 &mdash; Masking fluid</h3>
+        <p>Amber-yellow brush that paints a translucent reservation layer over the paper. Cells under the mask freeze pigment in place. <strong>v0.13.1</strong> made the mask diffused/translucent so you can see through to the painting beneath.</p>
+
+        <h3>v0.12 &mdash; Weather presets + Time of Day washes</h3>
+        <p>Rainy, Sunny, Windy, Thunderstorm, Partly cloudy, Snowing, and Snowing (additive) animation modes. Time-of-day washes paint pigment dabs across the canvas.</p>
+
+        <h3>v0.11 &mdash; Animation presets dropdown</h3>
+        <p>First autonomous painters: the AI painter strategy weights, plus rainy.</p>
+
+        <h3>v0.10 &mdash; Active rect optimization <span class="cl-tag cl-perf">perf</span></h3>
+        <p>Bounding box of cells with active dynamics. Sim phases iterate only inside this rect &mdash; <strong>29&times; speedup</strong> on lightly-painted canvases. PNG export added.</p>
+
+        <h3>v0.9 &mdash; SCALE knob</h3>
+        <p>Resolution slider exposes the internal simulation grid size. 1&times; for fast performance; 6&times; for high-detail bleeds at the cost of CPU.</p>
+
+        <h3>v0.8 &mdash; Wet diffusion + Rainbow brush</h3>
+        <p>Capillary wet diffusion via Laplacian (water spreads through paper fibers). Rainbow brush cycles through rose/yellow/blue over time, splits its strength weighted across all three pigment channels.</p>
+
+        <h3>v0.7 &mdash; Performance pass</h3>
+        <p>Idle detection (skips sim when nothing is happening), fused sim passes, the fade subsystem.</p>
+
+        <h3>v0.6 &mdash; UI shell</h3>
+        <p>Floating control panel, dark theme, transparent toggle, paper-color picker, dryness/pigment bars.</p>
+
+        <h3>v0.1&ndash;v0.5 &mdash; Initial simulation</h3>
+        <p>Three pigments (Quinacridone Rose, Hansa Yellow, Cerulean Blue) with K/S triplets from Curtis et al. Figure 5. Full Kubelka-Munk compositing, capillary bleeding, edge darkening, granulation via paper-height noise.</p>
+
+        <p class="docs-footer">
+          Built iteratively from v0.1 to v0.27. v0.1&ndash;v0.26.2 were
+          single-file builds; v0.27 splits the simulation into a
+          reusable library (<code>watercolor-lib.js</code>) and a thin
+          UI wiring layer.
+        </p>
+      </section>
+
+      </main>
+    </div>
+  </section>
+
+<script src="watercolor-lib.js"></script>
+<script>
+"use strict";
+
+// ============================================================
+// Watercolor v0.27 — UI WIRING
+// ============================================================
+// This file used to be ~5800 lines of inline simulation code in
+// watercolor-v0.26.2.html. In v0.27 the simulation lives in
+// watercolor-lib.js (v2). Everything below just wires the UI
+// elements that already exist in the page to method calls on
+// a single Watercolor instance.
+//
+// Layout: ~400 lines of wiring, organized in the same order the
+// UI is presented in the panel.
+
+// ----- Create the instance ----------------------------------------------
+// Pass the .app-section as the target. The lib appends its <canvas> there
+// (the old inline <canvas id="canvas"> was replaced with a #canvas-host
+// div above). canvasScale: 1 — full-viewport canvas matches the original
+// brush tuning so animations look the same as in v0.26.2.
+const host = document.getElementById('canvas-host');
+host.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;';
+const wc = Watercolor.create(host, { canvasScale: 1 });
+window.Watercolor = wc;  // expose for console use (replaces v0.26.2's window.Watercolor)
+
+// v0.27 — WebGL on by default when available. The lib lazy-inits on
+// first call; if WebGL2 isn't supported the toggle silently falls back
+// to CPU and webgl() returns false.
+if (wc.webglAvailable()) {
+  wc.webgl(true);
+}
+
+// ----- Initial paint so the canvas isn't blank --------------------------
+const w0 = wc.grid.width, h0 = wc.grid.height;
+wc.paintAt(w0 * 0.40, h0 * 0.50, w0 * 0.04, 0, 0.7);
+wc.paintAt(w0 * 0.60, h0 * 0.50, w0 * 0.04, 2, 0.7);
+
+// ----- Cursor preview ---------------------------------------------------
+// Re-implements v0.26.2's floating cursor preview using the library's
+// brushSize + pigment APIs. The element exists in HTML as #cursor.
+const cursorEl = document.getElementById('cursor');
+let _cursorVisible = false;
+function updateCursorPreview() {
+  if (!cursorEl) return;
+  const size = wc.brushSize();
+  cursorEl.style.width  = size + 'px';
+  cursorEl.style.height = size + 'px';
+  const pig = wc.pigment();
+  // Style based on pigment. v0.26.2 had matching applyCursorColor logic.
+  cursorEl.style.borderStyle = 'solid';
+  if (pig === -1) {
+    // water
+    cursorEl.style.background = 'rgba(180, 210, 220, 0.18)';
+    cursorEl.style.border = '1.5px solid rgba(110, 145, 160, 0.65)';
+  } else if (pig === -2) {
+    // lift
+    cursorEl.style.background = 'rgba(245, 240, 232, 0.22)';
+    cursorEl.style.border = '1.5px dashed rgba(95, 85, 75, 0.78)';
+  } else if (pig === -3) {
+    // rainbow — color updated each frame by the loop below
+    cursorEl.style.border = '1.5px solid rgba(95, 85, 75, 0.55)';
+  } else if (pig === -4) {
+    // mask
+    cursorEl.style.background = 'rgba(232, 196, 74, 0.40)';
+    cursorEl.style.border = '1.5px dashed rgba(180, 140, 30, 0.78)';
+  } else {
+    // standard pigment — use swatch color
+    const colors = ['#c95e84', '#e8c44a', '#5089b0'];
+    cursorEl.style.background = colors[pig] || '#c95e84';
+    cursorEl.style.border = '1.5px solid rgba(0,0,0,0.30)';
+  }
+}
+function tickRainbowCursor() {
+  if (!cursorEl) return;
+  if (wc.pigment() === -3) {
+    const c = wc.rainbowColor();
+    const r = Math.round(c.r * 255 + 100);   // brighten — Sx are reflectance contributions
+    const g = Math.round(c.g * 255 + 100);
+    const b = Math.round(c.b * 255 + 100);
+    cursorEl.style.background = 'rgba(' + r + ',' + g + ',' + b + ',0.40)';
+  }
+  requestAnimationFrame(tickRainbowCursor);
+}
+tickRainbowCursor();
+updateCursorPreview();
+
+document.addEventListener('pointermove', (e) => {
+  if (!cursorEl) return;
+  cursorEl.style.left = e.clientX + 'px';
+  cursorEl.style.top  = e.clientY + 'px';
+  if (!_cursorVisible) {
+    cursorEl.style.opacity = '1';
+    _cursorVisible = true;
+  }
+});
+document.addEventListener('pointerleave', () => {
+  if (cursorEl) cursorEl.style.opacity = '0';
+  _cursorVisible = false;
+});
+
+// ----- Pigment swatches -------------------------------------------------
+// Use the library's real KM-rendered swatches. Each swatch is a 56×56
+// <canvas> drawn through kmReflect with paper texture + edge fade,
+// matching the original v0.26.2 look exactly.
+//
+// The lib dispatches a 'pigmentchange' CustomEvent on the root when
+// a swatch is clicked; we listen and update cursor preview + active
+// state.
+const pigmentsContainer = document.getElementById('pigments');
+function rebuildSwatches() {
+  wc.buildPigmentSwatches(pigmentsContainer);
+}
+rebuildSwatches();
+
+pigmentsContainer.addEventListener('pigmentchange', () => {
+  updateCursorPreview();
+});
+
+// The library's swatches manage their own active class — when a
+// swatch is clicked, it toggles .active on itself and dispatches
+// 'pigmentchange'. No need for our own highlight logic.
+
+// ----- Sliders -----------------------------------------------------------
+function wireSlider(id, valueId, apiFn, fmt) {
+  const el = document.getElementById(id);
+  const out = document.getElementById(valueId);
+  if (!el) return;
+  el.addEventListener('input', () => {
+    const v = parseFloat(el.value);
+    apiFn(v);
+    if (out) out.textContent = fmt ? fmt(v) : v;
+    updateCursorPreview();
+  });
+  // Initial sync
+  el.dispatchEvent(new Event('input'));
+}
+wireSlider('size',       'size-value',       v => wc.brushSize(v));
+wireSlider('paint-load', 'paint-load-value', v => wc.paintLoad(v), v => v.toFixed(1) + '×');
+wireSlider('water-load', 'water-load-value', v => wc.waterLoad(v), v => v.toFixed(1) + '×');
+// Fade half-life slider — wired to lib's fadeHalfLife API.
+// The control's value-readout span shows the half-life in ms.
+const fadeSlider = document.getElementById('fade-halflife');
+const fadeValueLabel = document.getElementById('fade-value');
+if (fadeSlider) {
+  fadeSlider.value = wc.fadeHalfLife();
+  if (fadeValueLabel) fadeValueLabel.textContent = wc.fadeHalfLife();
+  fadeSlider.addEventListener('input', () => {
+    const ms = parseInt(fadeSlider.value, 10);
+    wc.fadeHalfLife(ms);
+    if (fadeValueLabel) fadeValueLabel.textContent = wc.fadeHalfLife();
+  });
+}
+
+// ----- Paper-wetness preset ---------------------------------------------
+const evapSelect = document.getElementById('evap-preset');
+if (evapSelect) {
+  evapSelect.addEventListener('change', () => {
+    wc.paperWetness(evapSelect.value);
+  });
+  // v0.26.2 defaulted to wetOnWet — lib does the same automatically.
+}
+
+// ----- Scale slider ------------------------------------------------------
+// Resolution slider: changes SCALE which determines how many display
+// pixels each simulation cell occupies. The lib's scale() method
+// reallocates state arrays + regenerates paper + resets the canvas.
+// After it completes, the lib dispatches a 'rescaled' event so we can
+// rebuild the swatches against the new paper.
+const scaleSlider = document.getElementById('scale-slider');
+const scaleValueLabel = document.getElementById('scale-value');
+if (scaleSlider) {
+  // Initial sync from lib
+  scaleSlider.value = wc.scale();
+  if (scaleValueLabel) scaleValueLabel.textContent = (+scaleSlider.value).toFixed(1);
+
+  // Debounce the rebuild — drag events fire 30+ times per second and
+  // each one reallocates ~12 Float32Arrays. Wait until the user stops
+  // moving the slider for 80ms before triggering the rebuild.
+  let scaleTimer = null;
+  scaleSlider.addEventListener('input', () => {
+    const v = parseFloat(scaleSlider.value);
+    if (scaleValueLabel) scaleValueLabel.textContent = v.toFixed(1);
+    if (scaleTimer) clearTimeout(scaleTimer);
+    scaleTimer = setTimeout(() => {
+      scaleTimer = null;
+      try { wc.scale(v); } catch (err) { console.warn('scale():', err.message); }
+    }, 80);
+  });
+
+  // When the lib finishes a rescale it dispatches an event — rebuild
+  // the swatches so they render against the new paper texture.
+  host.addEventListener('rescaled', () => {
+    rebuildSwatches();
+  });
+}
+
+// ----- Animation / visualization / background ---------------------------
+const animationSelect = document.getElementById('animation-mode');
+if (animationSelect) {
+  animationSelect.addEventListener('change', () => wc.setAnimation(animationSelect.value || 'off'));
+}
+const vizSelect = document.getElementById('visualization-mode');
+if (vizSelect) {
+  vizSelect.addEventListener('change', () => wc.setVisualization(vizSelect.value || 'off'));
+}
+const timeOfDaySelect = document.getElementById('time-of-day');
+if (timeOfDaySelect) {
+  timeOfDaySelect.addEventListener('change', () => {
+    if (timeOfDaySelect.value) wc.setBackground(timeOfDaySelect.value);
+  });
+}
+
+// ----- Action buttons ----------------------------------------------------
+function flash(el) {
+  if (!el) return;
+  el.classList.add('on');
+  setTimeout(() => el.classList.remove('on'), 220);
+}
+function wireBtn(id, fn) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener('click', () => { fn(); flash(el); });
+}
+wireBtn('rewet-btn',       () => wc.rewet());
+wireBtn('big-splash-btn',  () => wc.splash('bigSplash'));
+wireBtn('fine-spritz-btn', () => wc.splash('fineSpritz'));
+wireBtn('dry-btn',         () => wc.dry());
+wireBtn('remove-mask-btn', () => wc.removeMask());
+wireBtn('reset',           () => wc.reset());
+wireBtn('export-btn', () => {
+  const url = wc.exportPNG();
+  const a = document.createElement('a');
+  a.href = url;
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  a.download = 'watercolor-' + stamp + '.png';
+  a.click();
+});
+
+// ----- Toggles -----------------------------------------------------------
+function wireToggle(id, getter, setter) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  function sync() {
+    const v = !!getter();
+    el.classList.toggle('on', v);
+    el.setAttribute('aria-pressed', String(v));
+  }
+  sync();
+  el.addEventListener('click', () => {
+    setter(!getter());
+    sync();
+  });
+}
+wireToggle('toggle-edge',     () => wc.edgeDarkening(),     v => wc.edgeDarkening(v));
+wireToggle('toggle-fade',     () => wc.fadePainting(),      v => wc.fadePainting(v));
+wireToggle('toggle-drying',   () => wc.pauseDrying(),       v => wc.pauseDrying(v));
+wireToggle('toggle-autodry',  () => wc.autoDryBackground(), v => wc.autoDryBackground(v));
+wireToggle('toggle-transparent', () => wc.transparent(),    v => {
+  wc.transparent(v);
+  document.body.classList.toggle('transparent-canvas', v);
+});
+
+// WebGL toggle (v0.27.1 — actually wired to lib v2's WebGL render path).
+const webglToggle = document.getElementById('toggle-webgl');
+if (webglToggle) {
+  // Disable visually if WebGL2 isn't available, matching v0.26.2 behavior.
+  if (!wc.webglAvailable()) {
+    webglToggle.disabled = true;
+    webglToggle.style.opacity = '0.4';
+    webglToggle.title = 'WebGL2 unavailable in this browser';
+  } else {
+    // Sync initial state — WebGL was enabled at startup if available.
+    const initial = !!wc.webgl();
+    webglToggle.classList.toggle('on', initial);
+    webglToggle.setAttribute('aria-pressed', String(initial));
+    webglToggle.addEventListener('click', () => {
+      const next = !wc.webgl();
+      wc.webgl(next);
+      webglToggle.classList.toggle('on', next);
+      webglToggle.setAttribute('aria-pressed', String(next));
+    });
+  }
+}
+
+// ----- Paper color picker -----------------------------------------------
+const paperColorEl = document.getElementById('paper-color');
+if (paperColorEl) {
+  // Initialize from library
+  const c = wc.paperColor();
+  const toHex = (f) => Math.round(f * 255).toString(16).padStart(2, '0');
+  paperColorEl.value = '#' + toHex(c.r) + toHex(c.g) + toHex(c.b);
+  paperColorEl.addEventListener('input', () => {
+    const hex = paperColorEl.value.replace(/^#/, '');
+    const r = parseInt(hex.substr(0, 2), 16) / 255;
+    const g = parseInt(hex.substr(2, 2), 16) / 255;
+    const b = parseInt(hex.substr(4, 2), 16) / 255;
+    wc.paperColor(r, g, b);
+    // Also update the page body background to match (matches v0.26.2).
+    document.documentElement.style.setProperty('--canvas-bg', paperColorEl.value);
+    // Rebuild swatches so they show the new paper color underneath
+    // their KM-rendered pigment (the same way v0.26.2 did).
+    rebuildSwatches();
+  });
+}
+
+// ----- Text painting ----------------------------------------------------
+const textField = document.getElementById('text-input');
+const textBtn   = document.getElementById('text-paint-btn');
+function doTextPaint() {
+  if (!textField) return;
+  const t = textField.value;
+  if (!t) return;
+  wc.paintText(t);
+  flash(textBtn);
+}
+if (textBtn) textBtn.addEventListener('click', doTextPaint);
+if (textField) textField.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); doTextPaint(); }
+});
+
+// ----- SVG tracing ------------------------------------------------------
+const svgFileInput = document.getElementById('svg-file-input');
+const svgLoadBtn   = document.getElementById('svg-load-btn');
+if (svgLoadBtn && svgFileInput) {
+  svgLoadBtn.addEventListener('click', () => svgFileInput.click());
+  svgFileInput.addEventListener('change', async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const text = await file.text();
+    try {
+      wc.traceSVG(text);
+      flash(svgLoadBtn);
+    } catch (err) {
+      console.error('SVG trace failed:', err);
+    }
+    svgFileInput.value = '';  // allow re-loading same file
+  });
+}
+
+// ----- UI visibility toggle ---------------------------------------------
+const uiToggle = document.getElementById('ui-toggle');
+if (uiToggle) {
+  let hidden = false;
+  function syncUI() {
+    document.body.classList.toggle('ui-hidden', hidden);
+    uiToggle.textContent = hidden ? '+' : '−';
+    uiToggle.setAttribute('aria-pressed', String(hidden));
+    uiToggle.setAttribute('aria-label', hidden ? 'Show controls' : 'Hide controls');
+  }
+  uiToggle.addEventListener('click', () => { hidden = !hidden; syncUI(); });
+  // 'H' shortcut to match v0.26.2
+  document.addEventListener('keydown', (e) => {
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+    if (e.key === 'h' || e.key === 'H') { hidden = !hidden; syncUI(); }
+  });
+}
+
+// ----- Perf overlay -----------------------------------------------------
+// The HTML for the overlay already exists in the page (carried over
+// from v0.26.2). Toggle visibility + poll wc.perfMetrics() to update
+// the readouts. Also honors ?perf=1 URL parameter to match v0.26.2.
+const perfOverlay = document.getElementById('perf-overlay');
+let perfPollTimer = null;
+function fmtMs(v) { return v.toFixed(2) + 'ms'; }
+function setText(id, text) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = text;
+}
+function updatePerfOverlay() {
+  const m = wc.perfMetrics();
+  setText('perf-fps',    m.fps.toFixed(1));
+  setText('perf-p50',    fmtMs(m.framep50));
+  setText('perf-p95',    fmtMs(m.framep95));
+  setText('perf-p99',    fmtMs(m.framep99));
+  setText('perf-sim',    fmtMs(m.sim));
+  setText('perf-render', fmtMs(m.render));
+  setText('perf-extra',  fmtMs(m.extra));
+  setText('perf-wash',   fmtMs(m.wash));
+  setText('perf-active',
+    m.activeCells.toLocaleString() + ' (' + m.activePct.toFixed(1) + '%)');
+  if (m.heapDeltaMB != null) {
+    const sign = m.heapDeltaMB >= 0 ? '+' : '';
+    setText('perf-heap', sign + m.heapDeltaMB.toFixed(1) + ' MB');
+  } else {
+    setText('perf-heap', 'n/a');
+  }
+  setText('perf-loaf',
+    m.longAnimationFrames != null ? String(m.longAnimationFrames) : 'n/a');
+}
+function setPerfOn(on) {
+  wc.perf(on);
+  if (perfOverlay) perfOverlay.hidden = !on;
+  if (on) {
+    if (!perfPollTimer) perfPollTimer = setInterval(updatePerfOverlay, 150);
+    updatePerfOverlay();
+  } else {
+    if (perfPollTimer) { clearInterval(perfPollTimer); perfPollTimer = null; }
+  }
+}
+setPerfOn(false);   // start hidden
+
+// Wire the perf-overlay toggle button. The HTML for v0.27 has
+// id="toggle-perf" sitting in the toggles row alongside the others.
+const perfToggleBtn = document.getElementById('toggle-perf');
+if (perfToggleBtn) {
+  function syncPerfToggle() {
+    const v = wc.perf();
+    perfToggleBtn.classList.toggle('on', v);
+    perfToggleBtn.setAttribute('aria-pressed', String(v));
+  }
+  syncPerfToggle();
+  perfToggleBtn.addEventListener('click', () => {
+    setPerfOn(!wc.perf());
+    syncPerfToggle();
+  });
+}
+
+// Honor ?perf=1 URL parameter (same as v0.26.2).
+if (new URLSearchParams(location.search).get('perf') === '1') {
+  setPerfOn(true);
+  if (perfToggleBtn) {
+    perfToggleBtn.classList.add('on');
+    perfToggleBtn.setAttribute('aria-pressed', 'true');
+  }
+}
+
+// ----- Dryness indicator + pigment readout ------------------------------
+// Poll the lib's state() every ~250ms to update the bottom bar and the
+// pigment readout label. Same visual feel as v0.26.2.
+const dryFill = document.getElementById('dryness-fill');
+const pigFill = document.getElementById('pigment-fill');
+const pigReadout = document.getElementById('pigment-readout');
+
+function updateReadouts() {
+  const s = wc.state();
+  const pNames = ['Quinacridone Rose', 'Hansa Yellow', 'Cerulean Blue'];
+  const specialNames = { '-1': 'Water', '-2': 'Lift', '-3': 'Rainbow', '-4': 'Mask' };
+  const name = s.pigment >= 0 ? pNames[s.pigment] : specialNames[String(s.pigment)];
+  if (pigReadout) pigReadout.textContent = name || '';
+
+  // Crude indicator: full when something is happening, partial otherwise.
+  const running = s.backgroundRunning || s.animationMode !== 'off' || s.visualizationMode !== 'off';
+  if (dryFill) dryFill.style.width = running ? '100%' : '30%';
+}
+setInterval(updateReadouts, 250);
+updateReadouts();
+
+// ----- Console hint -----------------------------------------------------
+console.log(
+  '%cWatercolor v0.27 %c· lib v2 · %c' + Object.keys(wc).filter(k => typeof wc[k] === 'function').length + ' methods on window.Watercolor',
+  'color:#d4a373;font-weight:bold', 'color:#888', 'color:#888'
+);
+
+</script>
+</body>
+</html>

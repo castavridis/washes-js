@@ -1,0 +1,3995 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Watercolor v0.14.1 — meandering tornado, after Curtis et al. 1997</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Crimson+Pro:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f5efe2;
+    --canvas-bg: #fbf7ed;
+    --ink: #2a2620;
+    --ink-soft: #6a6356;
+    --ink-faded: #a39885;
+    --panel-bg: rgba(245, 239, 226, 0.78);
+    --panel-border: rgba(42, 38, 32, 0.10);
+    --panel-shadow: 0 6px 28px rgba(60, 40, 20, 0.10), 0 2px 4px rgba(60, 40, 20, 0.05);
+    --dryness-bg: rgba(42, 38, 32, 0.06);
+    --dryness-fg: rgba(42, 38, 32, 0.4);
+    --slider-track: rgba(42, 38, 32, 0.18);
+    --btn-border: rgba(42, 38, 32, 0.2);
+    --btn-border-hover: rgba(42, 38, 32, 0.4);
+    --tooltip-bg: rgba(42, 38, 32, 0.92);
+    --tooltip-text: #f5efe2;
+  }
+
+  [data-theme="dark"] {
+    --canvas-bg: #1a1816;
+    --ink: #e8e2d4;
+    --ink-soft: #b3a999;
+    --ink-faded: #6a6356;
+    --panel-bg: rgba(38, 34, 28, 0.80);
+    --panel-border: rgba(245, 239, 226, 0.08);
+    --panel-shadow: 0 6px 28px rgba(0, 0, 0, 0.45), 0 2px 4px rgba(0, 0, 0, 0.25);
+    --dryness-bg: rgba(245, 239, 226, 0.08);
+    --dryness-fg: rgba(245, 239, 226, 0.45);
+    --slider-track: rgba(245, 239, 226, 0.18);
+    --btn-border: rgba(245, 239, 226, 0.2);
+    --btn-border-hover: rgba(245, 239, 226, 0.4);
+    --tooltip-bg: rgba(245, 239, 226, 0.92);
+    --tooltip-text: #2a2620;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    width: 100vw;
+    height: 100vh;
+    background: var(--body-bg, var(--canvas-bg));
+    color: var(--ink);
+    font-family: 'Crimson Pro', 'Georgia', serif;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    transition: background-color 0.25s ease;
+  }
+
+  /* The painting surface itself. Extended 2.5vw/2.5vh past every edge
+     of the viewport so that simulation-boundary artifacts (edge-pinned
+     pigment, the band where bleed runs into grid edges) stay outside
+     the visible area. body overflow: hidden clips the extension. */
+  #canvas {
+    position: fixed;
+    inset: -2.5vh -2.5vw;
+    display: block;
+    cursor: none;
+    z-index: 1;
+  }
+
+  /* Custom brush cursor — fixed-positioned, follows pointer */
+  .cursor-preview {
+    position: fixed;
+    pointer-events: none;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 20;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+    display: none;
+  }
+
+  /* Dryness indicator — 2px bar at the very top of viewport */
+  .dryness {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--dryness-bg);
+    z-index: 5;
+    pointer-events: none;
+  }
+  .dryness-fill {
+    height: 100%;
+    width: 0%;
+    background: var(--dryness-fg);
+    transition: width 0.25s ease-out, background-color 0.25s ease;
+  }
+
+  /* Pigment indicator — 2px bar at the very bottom of viewport, symmetric
+     with the dryness bar at top. Reuses the same theme colors so both
+     bars invert together when the paper goes dark. */
+  .pigment-indicator {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--dryness-bg);
+    z-index: 5;
+    pointer-events: none;
+  }
+  .pigment-indicator-fill {
+    height: 100%;
+    width: 0%;
+    background: var(--dryness-fg);
+    transition: width 0.25s ease-out, background-color 0.25s ease;
+  }
+
+  /* Numerical pigment readout, just above the bar at the right edge */
+  .pigment-readout {
+    position: fixed;
+    bottom: 6px;
+    right: 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: var(--ink-soft);
+    pointer-events: none;
+    z-index: 6;
+    transition: color 0.25s ease;
+  }
+
+  /* Floating control panel at bottom center */
+  .controls {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--panel-bg);
+    backdrop-filter: blur(14px) saturate(120%);
+    -webkit-backdrop-filter: blur(14px) saturate(120%);
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    padding: 14px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    z-index: 10;
+    box-shadow: var(--panel-shadow);
+    min-width: 420px;
+    max-width: calc(100vw - 32px);
+  }
+
+  /* Pigment + tool swatches */
+  .pigments-wrap {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .paper-sep {
+    width: 1px;
+    height: 24px;
+    background: var(--btn-border);
+    margin: 0 2px;
+  }
+  .pigments {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: center;
+  }
+  /* Native color input styled as a circular swatch to match .pigment-swatch */
+  .paper-color-input {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    padding: 0;
+    appearance: none;
+    -webkit-appearance: none;
+    box-shadow:
+      inset 0 -2px 5px rgba(0,0,0,0.18),
+      inset 0 1px 2px rgba(255,255,255,0.15),
+      0 1px 3px rgba(0,0,0,0.08);
+    transition: transform 0.15s ease;
+  }
+  .paper-color-input::-webkit-color-swatch-wrapper { padding: 0; border-radius: 50%; }
+  .paper-color-input::-webkit-color-swatch { border: none; border-radius: 50%; }
+  .paper-color-input::-moz-color-swatch { border: none; border-radius: 50%; }
+  .paper-control:hover .paper-color-input { transform: scale(1.15); }
+  .pigment {
+    position: relative;
+    width: 34px;
+    height: 34px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .pigment-swatch {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    box-shadow:
+      inset 0 -2px 5px rgba(0,0,0,0.18),
+      inset 0 1px 2px rgba(255,255,255,0.15),
+      0 1px 3px rgba(0,0,0,0.08);
+    transition: transform 0.15s ease;
+    overflow: hidden;
+  }
+  .pigment-swatch canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+  }
+  .pigment:hover .pigment-swatch { transform: scale(1.15); }
+  .pigment.active .pigment-swatch {
+    box-shadow:
+      inset 0 -2px 5px rgba(0,0,0,0.18),
+      inset 0 1px 2px rgba(255,255,255,0.15),
+      0 0 0 1.5px var(--paper),
+      0 0 0 3px var(--ink);
+  }
+
+  /* Swatch label — hidden by default, surfaces as a tooltip on hover */
+  .pigment-label {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 4px 8px;
+    background: var(--tooltip-bg);
+    color: var(--tooltip-text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    border-radius: 2px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+    z-index: 30;
+  }
+  .pigment:hover .pigment-label { opacity: 1; }
+
+  /* Brush slider — its own full-width row */
+  .brush-control {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .brush-label,
+  .brush-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+  .brush-value {
+    color: var(--ink);
+    min-width: 44px;
+    text-align: right;
+  }
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    flex: 1;
+    height: 2px;
+    background: var(--slider-track);
+    outline: none;
+    cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px; height: 14px;
+    background: var(--ink);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: transform 0.1s ease;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 14px; height: 14px;
+    background: var(--ink);
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+  }
+  input[type="range"]:hover::-webkit-slider-thumb { transform: scale(1.2); }
+
+  /* Animation preset dropdown — styled to read like the toggle buttons
+     while behaving like a native select. We hide the browser chevron and
+     draw our own via a background-image SVG, so the appearance stays
+     consistent across platforms. */
+  .select-control {
+    flex: 1;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background: transparent;
+    border: 1px solid var(--btn-border);
+    border-radius: 2px;
+    color: var(--ink);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 6px 26px 6px 10px;
+    cursor: pointer;
+    transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+    /* SVG chevron sized so it sits to the right of the text label */
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="%23808080"/></svg>');
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 8px 5px;
+  }
+  .select-control:hover {
+    color: var(--ink);
+    border-color: var(--btn-border-hover);
+  }
+  .select-control:focus {
+    outline: none;
+    border-color: var(--btn-border-hover);
+  }
+  .select-control option {
+    /* Native option list — color the popover so it matches the theme
+       on platforms where authors can style this (most modern Chromium
+       and Firefox builds honor background-color and color). */
+    background: var(--panel-bg-solid, #f5e9d6);
+    color: var(--ink);
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 12px;
+  }
+
+  /* Toggle + button row */
+  .controls-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .toggle,
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: transparent;
+    border: 1px solid var(--btn-border);
+    color: var(--ink-soft);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: all 0.15s ease;
+  }
+  .toggle::before {
+    content: "";
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    border: 1px solid currentColor;
+    background: transparent;
+    transition: background 0.15s ease;
+  }
+  .toggle:hover,
+  .btn:hover {
+    color: var(--ink);
+    border-color: var(--btn-border-hover);
+  }
+  .toggle.on {
+    background: var(--ink);
+    color: var(--canvas-bg);
+    border-color: var(--ink);
+  }
+  .toggle.on::before { background: var(--canvas-bg); }
+
+  /* v0.12.3 — infocon + custom tooltip system. The "ⓘ" marker is an
+     inline span inside each control; it's visible but subtle. Hover on
+     the control (anywhere — marker or label) triggers the tooltip via
+     a ::after pseudo-element on the control. The tooltip is anchored
+     above the control, themed to match the panel, and accommodates
+     multi-line text so descriptions can be longer than a single line. */
+  .info-marker {
+    display: inline-block;
+    margin-left: 5px;
+    font-size: 10px;
+    opacity: 0.55;
+    transition: opacity 0.15s ease;
+    /* Keep the marker out of the click target's path semantically;
+       pointer events still fall through to the parent button. */
+    pointer-events: none;
+  }
+  .toggle:hover .info-marker,
+  .btn:hover .info-marker { opacity: 1; }
+  .toggle.on .info-marker  { opacity: 0.7; }
+  .toggle.on:hover .info-marker { opacity: 1; }
+
+  /* Tooltip — appears above the control on hover. Positioned via the
+     control's own relative-positioning context (.toggle and .btn are
+     already display:inline-flex which establishes containing block
+     for absolute descendants). */
+  .toggle, .btn, .select-control, .brush-control {
+    position: relative;
+  }
+  [data-tip]::after {
+    content: attr(data-tip);
+    position: absolute;
+    bottom: calc(100% + 10px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--ink);
+    color: var(--canvas-bg);
+    padding: 8px 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    text-transform: none;
+    line-height: 1.45;
+    white-space: normal;
+    /* width: max-content with a cap keeps short tips compact while
+       letting longer ones wrap rather than spilling off-screen. */
+    width: max-content;
+    max-width: 240px;
+    border-radius: 4px;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+    z-index: 30;
+  }
+  [data-tip]:hover::after {
+    opacity: 1;
+  }
+
+  /* v0.10 — floating UI-hide button, always visible. Top-right corner,
+     small enough to not interfere with a normal stroke, themed to match
+     the rest of the chrome. When the panel is hidden the bars and
+     readouts vanish too (body.ui-hidden rules below), leaving only the
+     canvas + this button. The button itself stays. */
+  .ui-toggle {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    z-index: 20;
+    width: 30px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    background: var(--panel-bg);
+    backdrop-filter: blur(14px) saturate(120%);
+    -webkit-backdrop-filter: blur(14px) saturate(120%);
+    border: 1px solid var(--panel-border);
+    color: var(--ink-soft);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+    box-shadow: var(--panel-shadow);
+  }
+  .ui-toggle:hover {
+    color: var(--ink);
+    border-color: var(--btn-border-hover);
+  }
+  /* Fade transitions for the chrome elements. Each rule preserves the
+     element's existing per-property transition (e.g. .pigment-readout's
+     color transition that follows the paper theme) by listing opacity
+     in addition. */
+  .controls           { transition: opacity 0.18s ease; }
+  .dryness            { transition: opacity 0.18s ease; }
+  .pigment-indicator  { transition: opacity 0.18s ease; }
+  .pigment-readout    { transition: color 0.25s ease, opacity 0.18s ease; }
+  /* Hide every chrome element when body.ui-hidden is set. The ui-toggle
+     itself is intentionally NOT included — it needs to stay clickable so
+     the user can bring everything back. Pointer events on hidden elements
+     get suppressed too, so a hidden panel can't intercept brush strokes. */
+  body.ui-hidden .controls,
+  body.ui-hidden .dryness,
+  body.ui-hidden .pigment-indicator,
+  body.ui-hidden .pigment-readout {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  @media (max-width: 520px) {
+    .controls {
+      min-width: 0;
+      width: calc(100vw - 24px);
+      bottom: 12px;
+      padding: 10px 12px;
+    }
+    .pigment, .pigment-swatch { width: 30px; height: 30px; }
+  }
+</style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div class="cursor-preview" id="cursor"></div>
+
+  <button class="ui-toggle" id="ui-toggle" type="button"
+          aria-label="Hide controls" aria-pressed="false"
+          title="Hide controls (press H)">−</button>
+
+  <div class="dryness" title="Paper dryness — fills as water evaporates">
+    <div class="dryness-fill" id="dryness-fill"></div>
+  </div>
+
+  <div class="pigment-indicator" title="Pigment on paper">
+    <div class="pigment-indicator-fill" id="pigment-fill"></div>
+  </div>
+  <div class="pigment-readout" id="pigment-readout">0.0%</div>
+
+  <div class="controls">
+    <div class="pigments-wrap">
+      <div class="pigments" id="pigments"></div>
+      <div class="paper-sep" aria-hidden="true"></div>
+      <div class="pigment paper-control">
+        <input type="color" id="paper-color" class="paper-color-input" aria-label="Paper color">
+        <div class="pigment-label">Paper</div>
+      </div>
+    </div>
+
+    <div class="brush-control">
+      <span class="brush-label">Brush</span>
+      <input type="range" id="size" min="4" max="200" value="28">
+      <span class="brush-value"><span id="size-value">28</span> px</span>
+    </div>
+
+    <div class="brush-control">
+      <span class="brush-label">Resolution</span>
+      <input type="range" id="scale-slider" min="1" max="6" step="0.25" value="1.75">
+      <span class="brush-value"><span id="scale-value">2.0</span> px/cell</span>
+    </div>
+
+    <div class="brush-control" id="fade-control" hidden>
+      <span class="brush-label">Fade half-life</span>
+      <input type="range" id="fade-halflife" min="500" max="30000" step="100" value="4000">
+      <span class="brush-value"><span id="fade-value">4000</span> ms</span>
+    </div>
+
+    <div class="brush-control" data-tip="Autonomous painting presets — weather and ambient scenes that paint through the same simulation your brush uses.">
+      <span class="brush-label">Animation</span>
+      <select id="animation-mode" class="select-control">
+        <option value="off" selected>Off</option>
+        <option value="ai">AI painter</option>
+        <option value="rainy">Rainy</option>
+        <option value="sunny">Sunny</option>
+        <option value="windy">Windy</option>
+        <option value="thunderstorm">Thunderstorm</option>
+        <option value="partlyCloudy">Partly cloudy</option>
+        <option value="snowing">Snowing</option>
+        <option value="snowingAdditive">Snowing (additive)</option>
+        <option value="tornado">Tornado</option>
+      </select>
+    </div>
+
+    <div class="brush-control" data-tip="Paints a one-shot sky wash in real pigment across the canvas. Mixes with everything else via the watercolor simulation.">
+      <span class="brush-label">Time of day</span>
+      <select id="time-of-day" class="select-control">
+        <option value="day" selected>Day</option>
+        <option value="dawn">Dawn</option>
+        <option value="sunset">Sunset</option>
+        <option value="night">Night</option>
+      </select>
+    </div>
+
+    <div class="controls-row">
+      <button class="toggle on" id="toggle-edge"        aria-pressed="true"
+              data-tip="Concentrates pigment at the edges of wet regions — the way real watercolor pools at boundaries when the water dries.">Edge darkening<span class="info-marker" aria-hidden="true">ⓘ</span></button>
+      <button class="toggle"    id="toggle-drying"      aria-pressed="false"
+              data-tip="Stops evaporation. Pigment stays suspended in the wet layer indefinitely instead of settling.">Pause drying<span class="info-marker" aria-hidden="true">ⓘ</span></button>
+      <button class="toggle"    id="toggle-fade"        aria-pressed="false"
+              data-tip="Slowly fades deposited pigment back toward paper. Half-life is adjustable with the slider above.">Fade painting<span class="info-marker" aria-hidden="true">ⓘ</span></button>
+      <button class="toggle"    id="toggle-transparent" aria-pressed="false"
+              data-tip="Makes the body background transparent so the canvas can layer over another page or image when embedded.">Transparent<span class="info-marker" aria-hidden="true">ⓘ</span></button>
+      <button class="btn"       id="rewet-btn"
+              data-tip="Restores wetness across the whole canvas and lifts 30% of deposited pigment back into suspension so dried strokes become mobile again.">Re-wet<span class="info-marker" aria-hidden="true">ⓘ</span></button>
+      <button class="btn"       id="dry-btn"
+              data-tip="Instantly evaporates all water. Any suspended pigment locks in place as deposited.">Dry<span class="info-marker" aria-hidden="true">ⓘ</span></button>
+      <button class="btn"       id="remove-mask-btn"
+              data-tip="Removes all masking fluid in one go — like rubbing it off a dry painting. Reveals whatever was frozen underneath.">Remove mask<span class="info-marker" aria-hidden="true">ⓘ</span></button>
+      <button class="btn"       id="export-btn"
+              data-tip="Saves the current canvas as a PNG. Composites the paper color underneath unless Transparent is on.">Export PNG<span class="info-marker" aria-hidden="true">ⓘ</span></button>
+      <button class="btn"       id="reset"
+              data-tip="Clears all pigment and returns the canvas to fresh wet paper.">Reset<span class="info-marker" aria-hidden="true">ⓘ</span></button>
+    </div>
+  </div>
+
+<script>
+"use strict";
+
+// ============================================================
+// PIGMENT DATA — from Figure 5 of Curtis et al. 1997
+// K, S coefficients given per RGB channel; rho = density,
+// omega = staining power, gamma = granulation.
+// ============================================================
+const PIGMENTS = [
+  {
+    name: 'Quinacridone Rose',
+    K: [0.22, 1.47, 0.57],
+    S: [0.05, 0.003, 0.03],
+    density: 0.02, staining: 5.5, granulation: 0.81
+  },
+  {
+    name: 'Hansa Yellow',
+    K: [0.06, 0.21, 1.78],
+    S: [0.50, 0.88, 0.009],
+    density: 0.06, staining: 1.0, granulation: 0.08
+  },
+  {
+    name: 'Cerulean Blue',
+    K: [1.52, 0.32, 0.25],
+    S: [0.06, 0.26, 0.40],
+    // Note: Figure 5 of the paper lists Cerulean Blue with staining ω=1.0
+    // and granulation γ=0.31. That's physically authentic — real cerulean
+    // is famously a non-staining "lifting" pigment that walks out to the
+    // edges of a wash, leaving a ring. For visual consistency with
+    // Quinacridone Rose (ω=5.5, γ=0.81), we raise both here so deposited
+    // blue stays where it lands rather than migrating. K, S, density
+    // unchanged, so the color and overall deposition rate match the
+    // paper's Cerulean. If you want an authentic *staining* blue
+    // instead, the paper's French Ultramarine (ω=3.1, γ=0.91) is a
+    // drop-in candidate.
+    density: 0.01, staining: 5.0, granulation: 0.75
+  }
+];
+
+// A sentinel for the water brush — selectable like a pigment, but adds
+// only water + pressure + a localized lift of deposited pigment. Kept
+// out of the PIGMENTS array so KM compositing and swatch loops aren't
+// forced to special-case a non-pigment entry.
+const WATER_INDEX = -1;
+// A sentinel for the lift (subtract) brush — removes pigment from the
+// paper at touched cells, leaving water and pressure alone. The water
+// brush already lifts in the sense of re-suspending d → g, but it
+// doesn't reduce the total pigment on the page; this one does.
+const LIFT_INDEX  = -2;
+// A sentinel for the rainbow brush — deposits a time-varying mixture
+// of all three pigments. The deposit weights cycle rose → yellow →
+// blue → rose with one stop every RAINBOW_STOP_MS, so a continuous
+// stroke smears through the full pigment cycle. See rainbowWeights().
+const RAINBOW_INDEX = -3;
+const RAINBOW_PERIOD_MS = 2250;
+const RAINBOW_STOP_MS   = 750;
+// A sentinel for the masking-fluid brush (v0.13). Real-world masking
+// fluid is liquid latex that paints on, dries to a rubbery film, and
+// resists water/pigment until rubbed off. Painting reveals the paper
+// underneath. In this sim we model it as a binary-ish layer:
+//   • paintAt with this index deposits mask into a `mask[]` array.
+//   • Cells where mask[i] > MASK_THRESHOLD are FROZEN — every sim
+//     pass (paint, flow, evaporation, fade) skips them, preserving
+//     whatever state was there when the mask landed.
+//   • Render shows masked cells with a pale-yellow tint so the user
+//     can see what they've reserved.
+//   • A "Remove mask" button zeroes the array, revealing the frozen
+//     state — pristine paper if mask was painted first, or whatever
+//     pigment was there if it was painted over.
+// maskActive is set whenever mask is deposited and cleared when the
+// array is zeroed. Hot loops check maskActive first so the per-cell
+// mask read is skipped entirely when no mask exists.
+const MASK_INDEX = -4;
+const MASK_THRESHOLD = 0.1;          // cell considered masked above this
+// v0.13.1 — visual ramp constants. The mask render no longer uses a
+// hard threshold; instead the on-canvas tint scales smoothly with the
+// per-cell mask value, giving soft edges where a brush stamp's falloff
+// produced smaller mask deposits. MASK_VISUAL_FULL is the mask value
+// at which the tint reaches its peak intensity, MASK_TINT_PEAK.
+// The freeze decision in the sim is still binary (above THRESHOLD or
+// not) — but THRESHOLD and the visual ramp's start are the same value,
+// so every visible tint corresponds to an actually-frozen cell. No
+// "tinted but not frozen" zone, no visual lie.
+const MASK_VISUAL_FULL = 0.6;
+const MASK_TINT_PEAK = 0.30;         // max yellow blend over underlying
+// mask[] and maskActive declared after N is initialized — see the
+// state-arrays block below.
+// Shared output array to avoid per-call allocation. Read after each
+// updateRainbowWeights call.
+const rainbowW = [0, 0, 0];
+function updateRainbowWeights(t_ms) {
+  // Three linear segments: rose→yellow, yellow→blue, blue→rose.
+  // The wraparound (blue→rose) closes the loop so a continuous stroke
+  // doesn't have a discontinuity at the cycle boundary.
+  const t = t_ms % RAINBOW_PERIOD_MS;
+  if (t < RAINBOW_STOP_MS) {
+    const f = t / RAINBOW_STOP_MS;
+    rainbowW[0] = 1 - f; rainbowW[1] = f; rainbowW[2] = 0;
+  } else if (t < 2 * RAINBOW_STOP_MS) {
+    const f = (t - RAINBOW_STOP_MS) / RAINBOW_STOP_MS;
+    rainbowW[0] = 0; rainbowW[1] = 1 - f; rainbowW[2] = f;
+  } else {
+    const f = (t - 2 * RAINBOW_STOP_MS) / RAINBOW_STOP_MS;
+    rainbowW[0] = f; rainbowW[1] = 0; rainbowW[2] = 1 - f;
+  }
+}
+let currentPigment = 0;
+let brushSize = 28; // diameter in display pixels
+
+// ============================================================
+// GRID — sized to fit the viewport. SCALE display pixels per cell.
+// Computed once at module load; window resize is not handled (would
+// require reallocating every Float32Array below).
+//
+// SCALE is the QUALITY KNOB. Changing it adjusts resolution + all
+// scale-dependent constants together so the painting behavior stays
+// visually consistent — just sharper or chunkier:
+//   SCALE=1    →  native resolution, ~4x sim cost vs SCALE=2
+//   SCALE=1.5  →  middle ground, ~1.78x sim cost vs SCALE=2
+//   SCALE=2    →  half-resolution, the v0.7-0.8 baseline (REFERENCE)
+//   SCALE=3    →  coarse middle ground
+//   SCALE=4    →  fast, original v0.6 default
+//   SCALE=6+   →  very coarse, useful on low-power devices
+//
+// SCALE_REF is the reference where the simulation constants were
+// hand-tuned (v0.8 baseline). Everything else derives from it via the
+// ratio `s = SCALE / SCALE_REF`:
+//   - Diffusion coefficients scale as 1/s² (with stability cap at 0.20)
+//   - Edge kernel sizes scale as 1/s (rounded, min 1)
+//   - Paper texture frequency scales as s
+//   - VEL_CLAMP scales as 1/s (with stability cap at 1.5)
+// Intentionally NOT scaled (would require ~1/s³ scaling, complex with
+// other interactions; second-order visual impact accepted at non-ref SCALE):
+//   - DT, DRAG, VISCOSITY, PAPER_TILT — velocity-update internals
+//   - EDGE_ETA — edge darkening intensity (per-step)
+//   - Evaporation rate, pressure decay — per-step rates
+//
+// Non-integer SCALE is allowed; DISPLAY_W/H are rounded to keep
+// canvas dimensions integer.
+//
+// CANVAS_OVERSCAN extends the simulated region past the visible viewport
+// (see #canvas CSS — inset: -2.5vh -2.5vw). The hidden margin absorbs
+// the edge-of-grid artifacts of the sim so the visible area only shows
+// the interior. 1.05 ↔ 2.5% past each side, matching the CSS.
+// ============================================================
+// SCALE can be set via the ?scale= URL query parameter. The UI slider
+// at the bottom of the page reads it and writes it (via page reload —
+// changing SCALE requires reallocating every Float32Array below, so a
+// reload is the cleanest way to get a fresh sim at a new resolution).
+const _urlScale = parseFloat(new URLSearchParams(location.search).get('scale'));
+let SCALE = (isFinite(_urlScale) && _urlScale >= 1 && _urlScale <= 6) ? _urlScale : 1.75;
+const SCALE_REF = 2;                   // reference scale where constants were tuned
+let s_scale = SCALE / SCALE_REF;       // dimensionless ratio
+let inv_s = 1 / s_scale;
+let inv_s2 = inv_s * inv_s;
+const CANVAS_OVERSCAN = 1.05;
+let GW = Math.max(120, Math.floor(window.innerWidth  * CANVAS_OVERSCAN / SCALE));
+let GH = Math.max(80,  Math.floor(window.innerHeight * CANVAS_OVERSCAN / SCALE));
+let N = GW * GH;
+let DISPLAY_W = Math.round(GW * SCALE);
+let DISPLAY_H = Math.round(GH * SCALE);
+
+// ============================================================
+// STATE ARRAYS (flat Float32Arrays for speed)
+// ============================================================
+let wet      = new Float32Array(N); // water amount per cell, 0..1
+let wetBlur  = new Float32Array(N);
+let wetBlurTmp = new Float32Array(N);
+let u        = new Float32Array(N); // x-velocity
+let v        = new Float32Array(N); // y-velocity
+let u_new    = new Float32Array(N);
+let v_new    = new Float32Array(N);
+let pressure = new Float32Array(N);
+let paperH   = new Float32Array(N); // paper height field, 0..1
+
+// 3 pigments × 2 layers (suspended in water, deposited on paper)
+let g = [new Float32Array(N), new Float32Array(N), new Float32Array(N)];
+let d = [new Float32Array(N), new Float32Array(N), new Float32Array(N)];
+let g_tmp = [new Float32Array(N), new Float32Array(N), new Float32Array(N)];
+// Masking fluid layer (v0.13) — one float per cell, 0 = clean, 1 = fully
+// masked. Cells above MASK_THRESHOLD are frozen by every sim function.
+// See the MASK_INDEX block above for the full design rationale.
+let mask = new Float32Array(N);
+let maskActive = false;
+// Wet diffusion temp buffer — used by diffuseWet() to read previous-step
+// values while writing this-step values into wet[].
+let wet_tmp = new Float32Array(N);
+
+// ============================================================
+// IDLE-SKIP STATE — declared early so paintAt / resetSim / rewet can
+// reference markCanvasActive at init without hitting a TDZ on the
+// let bindings below. The actual idle-decision logic lives next to
+// the loop further down; this block is just storage + the wake helper.
+// ============================================================
+let framesSincePaint = 9999;          // start "settled" — first paint wakes
+let framesSinceIdleCheck = 0;
+let framesSinceBars = 999;            // start large so first frame updates bars
+let simIsIdle = false;                // start active so initial state renders
+let lastTotalWet = 0;
+let lastTotalSuspended = 0;
+function markCanvasActive() {
+  framesSincePaint = 0;
+  simIsIdle = false;
+}
+
+// ============================================================
+// ACTIVE REGION TRACKING (v1.0)
+// ============================================================
+// Bounding rectangle of "where dynamics matter" — i.e., cells where
+// suspended pigment (g > 0) or pressure (> 0) exists. Outside this
+// rect, wet is uniform, no pigment, no flow — the per-step passes
+// would produce no change, so we skip the empty paper entirely.
+//
+// This is the biggest single perf win since v0.7's fused passes:
+// typical paintings cover 10-40% of canvas, so simStep does 60-90%
+// less per-cell work.
+//
+// Tracking:
+//   expandActiveRect — paintAt calls this on every brush stamp,
+//     growing the rect to cover the stamp + ACTIVE_MARGIN cells.
+//     The margin absorbs diffusion + advection spread between scans.
+//   shrinkActiveRect — runs every ACTIVE_SHRINK_INTERVAL frames in
+//     the main loop. Scans the current rect for cells above the
+//     activity threshold and tightens to that bounding box + margin.
+//     Lets the rect tighten as pigment dries / fades / lifts.
+//
+// Empty rect (activeMaxX < activeMinX, i.e. -1): simStep functions
+// early-return. This is the initial state (resetSim leaves uniform
+// wet but no pigment/pressure) and the post-dry state.
+let activeMinX = 0, activeMaxX = -1;  // -1 marker = empty
+let activeMinY = 0, activeMaxY = -1;
+let framesSinceShrink = 0;
+const ACTIVE_SHRINK_INTERVAL = 30;    // frames between shrink scans
+const ACTIVE_MARGIN = 24;             // cells of padding around tracked content
+const ACTIVE_THRESHOLD = 0.001;       // pigment/pressure threshold for "active"
+
+function activeRectIsEmpty() {
+  return activeMaxX < activeMinX || activeMaxY < activeMinY;
+}
+
+function setActiveRectFull() {
+  activeMinX = 0; activeMaxX = GW - 1;
+  activeMinY = 0; activeMaxY = GH - 1;
+}
+
+function setActiveRectEmpty() {
+  activeMinX = 0; activeMaxX = -1;
+  activeMinY = 0; activeMaxY = -1;
+}
+
+function expandActiveRect(centerX, centerY, radius) {
+  const lx = Math.max(0, Math.floor(centerX - radius - ACTIVE_MARGIN));
+  const rx = Math.min(GW - 1, Math.ceil(centerX + radius + ACTIVE_MARGIN));
+  const ty = Math.max(0, Math.floor(centerY - radius - ACTIVE_MARGIN));
+  const by = Math.min(GH - 1, Math.ceil(centerY + radius + ACTIVE_MARGIN));
+  if (activeRectIsEmpty()) {
+    activeMinX = lx; activeMaxX = rx;
+    activeMinY = ty; activeMaxY = by;
+  } else {
+    if (lx < activeMinX) activeMinX = lx;
+    if (rx > activeMaxX) activeMaxX = rx;
+    if (ty < activeMinY) activeMinY = ty;
+    if (by > activeMaxY) activeMaxY = by;
+  }
+}
+
+function shrinkActiveRect() {
+  if (activeRectIsEmpty()) return;
+  const g0 = g[0], g1 = g[1], g2 = g[2];
+  const thr = ACTIVE_THRESHOLD;
+  let newMinX = activeMaxX + 1, newMaxX = activeMinX - 1;
+  let newMinY = activeMaxY + 1, newMaxY = activeMinY - 1;
+  for (let y = activeMinY; y <= activeMaxY; y++) {
+    const yo = y * GW;
+    for (let x = activeMinX; x <= activeMaxX; x++) {
+      const i = yo + x;
+      if (g0[i] > thr || g1[i] > thr || g2[i] > thr || pressure[i] > thr) {
+        if (x < newMinX) newMinX = x;
+        if (x > newMaxX) newMaxX = x;
+        if (y < newMinY) newMinY = y;
+        if (y > newMaxY) newMaxY = y;
+      }
+    }
+  }
+  if (newMaxX < newMinX) {
+    setActiveRectEmpty();
+    return;
+  }
+  activeMinX = Math.max(0, newMinX - ACTIVE_MARGIN);
+  activeMaxX = Math.min(GW - 1, newMaxX + ACTIVE_MARGIN);
+  activeMinY = Math.max(0, newMinY - ACTIVE_MARGIN);
+  activeMaxY = Math.min(GH - 1, newMaxY + ACTIVE_MARGIN);
+}
+
+// ============================================================
+// PAPER GENERATION — multi-octave hash noise, scaled 0..1
+// ============================================================
+function hash2(x, y) {
+  const s = Math.sin(x * 12.9898 + y * 78.233 + 1.0) * 43758.5453;
+  return s - Math.floor(s);
+}
+function smoothNoise(x, y) {
+  const ix = Math.floor(x), iy = Math.floor(y);
+  const fx = x - ix,        fy = y - iy;
+  const a = hash2(ix,     iy);
+  const b = hash2(ix + 1, iy);
+  const c = hash2(ix,     iy + 1);
+  const d = hash2(ix + 1, iy + 1);
+  const ux = fx * fx * (3 - 2 * fx);
+  const uy = fy * fy * (3 - 2 * fy);
+  return a * (1 - ux) * (1 - uy)
+       + b * ux       * (1 - uy)
+       + c * (1 - ux) * uy
+       + d * ux       * uy;
+}
+// 1.0 = full noise range (~0.08 .. 0.97); 0.5 halves the variation around mean (~0.29 .. 0.73).
+// Lower values produce subtler granulation and less distinct low spots on the paper.
+const TEXTURE_AMPLITUDE = 0.5;
+
+function generatePaper() {
+  for (let y = 0; y < GH; y++) {
+    for (let x = 0; x < GW; x++) {
+      // SCALE-derived: freq scales as `s` to keep texture feature size
+      // in display pixels constant. At SCALE_REF (s=1) → 12.0 (v0.8
+      // baseline). Dominant feature wavelength ≈ SCALE/freq display px.
+      let h = 0, amp = 0.5, freq = 12.0 * s_scale;
+      for (let o = 0; o < 4; o++) {
+        h += amp * smoothNoise(x * freq + 17, y * freq + 53);
+        amp *= 0.55;
+        freq *= 2.1;
+      }
+      // High-frequency fiber speckle
+      h += (hash2(x, y) - 0.5) * 0.04;
+      // Normalize roughly into 0..1
+      h = Math.max(0, Math.min(1, h));
+      // Compress range around the mean to reduce distinctness of low spots
+      h = 0.5 + (h - 0.5) * TEXTURE_AMPLITUDE;
+      paperH[y * GW + x] = h;
+    }
+  }
+}
+
+// ============================================================
+// BOX BLUR — separable, used for FlowOutward distance approximation
+// ============================================================
+function boxBlur(src, dst, radius) {
+  const inv = 1 / (2 * radius + 1);
+  const r = radius;
+  const gw = GW, gh = GH;
+  const tmp = wetBlurTmp;
+
+  // ---- HORIZONTAL PASS: src -> wetBlurTmp ----
+  // Each row's inner loop is split into three regions so the clamps
+  // can be hoisted out of the hot middle iteration. Middle covers the
+  // vast majority of cells — the edges are only `radius` wide each.
+  for (let y = 0; y < gh; y++) {
+    const yo = y * gw;
+    let sum = 0;
+    // Initialize the window: -r..+r, clamped to row bounds
+    for (let xx = -r; xx <= r; xx++) {
+      const ix = xx < 0 ? 0 : xx > gw - 1 ? gw - 1 : xx;
+      sum += src[yo + ix];
+    }
+    // Left region: x < r, "sub" side clamps to 0
+    let x = 0;
+    const leftEnd = r < gw ? r : gw;
+    while (x < leftEnd) {
+      tmp[yo + x] = sum * inv;
+      const addX = x + r + 1;
+      sum += src[yo + (addX > gw - 1 ? gw - 1 : addX)];
+      sum -= src[yo]; // sub clamps to 0
+      x++;
+    }
+    // Middle: both indices in bounds — no clamps
+    const midEnd = gw - r - 1 > 0 ? gw - r - 1 : 0;
+    while (x < midEnd) {
+      tmp[yo + x] = sum * inv;
+      sum += src[yo + x + r + 1] - src[yo + x - r];
+      x++;
+    }
+    // Right region: "add" side clamps to gw - 1
+    const lastIdx = yo + gw - 1;
+    while (x < gw) {
+      tmp[yo + x] = sum * inv;
+      const subX = x - r;
+      sum += src[lastIdx] - src[yo + (subX < 0 ? 0 : subX)];
+      x++;
+    }
+  }
+
+  // ---- VERTICAL PASS: wetBlurTmp -> dst ----
+  // Same 3-region split. Note this pass strides by gw between reads,
+  // so it's less cache-friendly than the horizontal pass; the clamp
+  // elimination is the cheap win we can take here without restructuring
+  // memory layout.
+  for (let x = 0; x < gw; x++) {
+    let sum = 0;
+    for (let yy = -r; yy <= r; yy++) {
+      const iy = yy < 0 ? 0 : yy > gh - 1 ? gh - 1 : yy;
+      sum += tmp[iy * gw + x];
+    }
+    let y = 0;
+    const topEnd = r < gh ? r : gh;
+    while (y < topEnd) {
+      dst[y * gw + x] = sum * inv;
+      const addY = y + r + 1;
+      sum += tmp[(addY > gh - 1 ? gh - 1 : addY) * gw + x];
+      sum -= tmp[x]; // sub clamps to row 0
+      y++;
+    }
+    const midEnd = gh - r - 1 > 0 ? gh - r - 1 : 0;
+    while (y < midEnd) {
+      dst[y * gw + x] = sum * inv;
+      sum += tmp[(y + r + 1) * gw + x] - tmp[(y - r) * gw + x];
+      y++;
+    }
+    const lastRowOff = (gh - 1) * gw;
+    while (y < gh) {
+      dst[y * gw + x] = sum * inv;
+      const subY = y - r;
+      sum += tmp[lastRowOff + x] - tmp[(subY < 0 ? 0 : subY) * gw + x];
+      y++;
+    }
+  }
+}
+
+// ============================================================
+// EDGE DARKENING (FlowOutward, §4.3.3)
+// p -= eta * (1 - M') * M, where M is the *binary* wet mask and M' its blur.
+// We blur a binarized version so that uniformly wet areas don't spuriously
+// drain pressure — only real boundaries between wet and dry should reduce p.
+// We additionally blur with a much LARGER kernel to detect whether the
+// wet region is big or just a small isolated patch (like a fresh
+// brushstroke on dry paper). Small patches dry too fast for full
+// contact-line migration to develop, so we attenuate edge darkening
+// there — keeps pigment near the brush contact instead of pooling at
+// the patch perimeter as a ring.
+// SCALE-derived: 1/s scaling keeps display-pixel kernel extent constant.
+// Running-sum box blur is O(N) regardless of kernel size, so these can
+// scale freely without performance impact.
+let EDGE_KERNEL = Math.max(1, Math.round(4 * inv_s));
+let EDGE_KERNEL_LARGE = Math.max(1, Math.round(20 * inv_s));
+const EDGE_ETA = 0.045;
+// EDGE_WET_ACTIVE / EDGE_WET_OFF define a smooth ramp on edge darkening
+// intensity as cells dry. Above EDGE_WET_ACTIVE, full strength. Below
+// EDGE_WET_OFF, off entirely. Linear ramp between. Without this, the
+// moving wet/dry boundary fires edge darkening at every position it
+// passes through during the long late drying phase, laying down a
+// trail of pigment as visible concentric "tide lines" inside what
+// should be a uniform dry wash. Real contact-line migration only
+// happens while there's enough water left to sustain the outward
+// replenishing flow — once a cell is mostly dry, the mechanism quietly
+// switches off and pigment locks in place where it last was. This
+// ramp models that timing.
+const EDGE_WET_ACTIVE = 0.40;
+const EDGE_WET_OFF    = 0.10;
+// MAX_PIGMENT caps how much pigment any single cell can hold. The paper
+// caps both g and d at 1 inside §4.5 (TransferPigment), but paintAt,
+// advection convergence, and the evaporation dump-to-deposited all
+// previously bypassed that cap — letting endpoint cells accumulate
+// unbounded pigment, which then read as near-black after KM compositing.
+const MAX_PIGMENT = 1.0;
+let wetBinary = new Float32Array(N);
+let wetBlurLarge = new Float32Array(N);
+function applyEdgeDarkening() {
+  for (let i = 0; i < N; i++) wetBinary[i] = wet[i] > 0.04 ? 1 : 0;
+  boxBlur(wetBinary, wetBlur, EDGE_KERNEL);
+  boxBlur(wetBinary, wetBlurLarge, EDGE_KERNEL_LARGE);
+  if (activeRectIsEmpty()) return;
+  const activeRange = EDGE_WET_ACTIVE - EDGE_WET_OFF;
+  const y0 = Math.max(0, activeMinY);
+  const y1 = Math.min(GH - 1, activeMaxY);
+  const x0 = Math.max(0, activeMinX);
+  const x1 = Math.min(GW - 1, activeMaxX);
+  for (let y = y0; y <= y1; y++) {
+    const yo = y * GW;
+    for (let x = x0; x <= x1; x++) {
+      const i = yo + x;
+      // Masked cells: edges shouldn't darken into the mask boundary —
+      // no pressure changes at frozen cells.
+      if (maskActive && mask[i] > MASK_THRESHOLD) continue;
+      if (wet[i] > 0.04) {
+        const deficit = 1 - wetBlur[i];          // 0 in interior, → 1 near boundary
+        if (deficit > 0) {
+          const w = wet[i];
+          // Smooth fade: 1 above EDGE_WET_ACTIVE, 0 below EDGE_WET_OFF, linear between.
+          const activation = w >= EDGE_WET_ACTIVE ? 1
+                           : w <= EDGE_WET_OFF    ? 0
+                           : (w - EDGE_WET_OFF) / activeRange;
+          // wetBlurLarge ≈ 1 in big wet regions, ≈ 0.1 in small wet patches.
+          // The product attenuates edge darkening in small islands so a
+          // fresh stroke on dry paper doesn't lose all its pigment to a ring.
+          pressure[i] -= EDGE_ETA * deficit * wetBlurLarge[i] * w * activation;
+        }
+      }
+    }
+  }
+}
+
+// ============================================================
+// VELOCITY UPDATE (simplified shallow water, §4.3.1)
+// ============================================================
+const DT       = 0.42;
+const VISCOSITY = 0.10;
+const DRAG     = 0.014;
+const PAPER_TILT = 0.06;   // reduced from 0.32 — paper height is now pixel-fine,
+                           // so its gradient is essentially noise; keep its
+                           // contribution to velocity small to avoid jitter
+// SCALE-derived: 1/s scaling makes max display-pixel velocity invariant.
+// Capped at 1.5 — the upwind advection in movePigment has a CFL bound
+// VEL_CLAMP * (DT * 0.7) * 2 < 1, so VEL_CLAMP must stay below ~1.7.
+// Cap engages at SCALE < ~1.33 (e.g. at SCALE=1, ideal is 2.0).
+let VEL_CLAMP  = Math.min(1.5, 1.0 * inv_s);
+
+function updateVelocity() {
+  if (activeRectIsEmpty()) {
+    // No active dynamics anywhere: pressure is already ≈ 0 outside the
+    // (empty) rect by definition. Skip entirely.
+    return;
+  }
+  const y0 = Math.max(1, activeMinY);
+  const y1 = Math.min(GH - 2, activeMaxY);
+  const x0 = Math.max(1, activeMinX);
+  const x1 = Math.min(GW - 2, activeMaxX);
+  for (let y = y0; y <= y1; y++) {
+    const yo = y * GW;
+    for (let x = x0; x <= x1; x++) {
+      const i = yo + x;
+      // Masked cells have no flow — treat them like dry walls.
+      if (maskActive && mask[i] > MASK_THRESHOLD) {
+        u_new[i] = 0; v_new[i] = 0; continue;
+      }
+      if (wet[i] < 0.04) { u_new[i] = 0; v_new[i] = 0; continue; }
+      // pressure gradient
+      const dpdx = pressure[i + 1] - pressure[i - 1];
+      const dpdy = pressure[i + GW] - pressure[i - GW];
+      // paper slope (gradient of height field)
+      const dhdx = paperH[i + 1] - paperH[i - 1];
+      const dhdy = paperH[i + GW] - paperH[i - GW];
+      // viscous diffusion (laplacian)
+      const lapU = u[i - 1] + u[i + 1] + u[i - GW] + u[i + GW] - 4 * u[i];
+      const lapV = v[i - 1] + v[i + 1] + v[i - GW] + v[i + GW] - 4 * v[i];
+
+      let nu = u[i] + DT * (-dpdx * 0.5 - dhdx * PAPER_TILT + VISCOSITY * lapU - DRAG * u[i]);
+      let nv = v[i] + DT * (-dpdy * 0.5 - dhdy * PAPER_TILT + VISCOSITY * lapV - DRAG * v[i]);
+      if (nu >  VEL_CLAMP) nu =  VEL_CLAMP; else if (nu < -VEL_CLAMP) nu = -VEL_CLAMP;
+      if (nv >  VEL_CLAMP) nv =  VEL_CLAMP; else if (nv < -VEL_CLAMP) nv = -VEL_CLAMP;
+      u_new[i] = nu; v_new[i] = nv;
+    }
+  }
+  // Copy u_new/v_new back to u/v, restricted to the rect. Float32Array's
+  // set(subarray, offset) is a fast memcpy under the hood. Cells outside
+  // the rect retain their previous u/v values (which are ≈ 0 since the
+  // shrink scan tracks pressure too).
+  for (let y = y0; y <= y1; y++) {
+    const yo = y * GW;
+    const start = yo + x0;
+    const end = yo + x1 + 1;
+    u.set(u_new.subarray(start, end), start);
+    v.set(v_new.subarray(start, end), start);
+  }
+  // v0.10 — pressure decay restricted to active rect. Pressure is only
+  // injected by paintAt (which always grows the rect to cover the stamp)
+  // and only consumed by updateVelocity + applyEdgeDarkening (both rect-
+  // restricted). Cells outside the rect have pressure ≈ 0 from initial
+  // state; multiplying them by 0.94 was burning N writes per simStep for
+  // no behavioral effect.
+  for (let y = y0; y <= y1; y++) {
+    const yo = y * GW;
+    for (let x = x0; x <= x1; x++) pressure[yo + x] *= 0.94;
+  }
+}
+
+// ============================================================
+// MOVE PIGMENT (upwind advection + small diffusion)
+// ============================================================
+// SCALE-derived: 1/s² scaling preserves display-pixel diffusion rate.
+// Capped at 0.20 (below 0.25 stability bound for explicit 4-neighbor
+// Laplacian) — the cap engages at very small SCALE values.
+let PIGMENT_DIFFUSION = Math.min(0.20, 0.045 * inv_s2);
+
+function movePigment() {
+  if (activeRectIsEmpty()) return;
+  for (let k = 0; k < 3; k++) g_tmp[k].set(g[k]);
+
+  const y0 = Math.max(1, activeMinY);
+  const y1 = Math.min(GH - 2, activeMaxY);
+  const x0 = Math.max(1, activeMinX);
+  const x1 = Math.min(GW - 2, activeMaxX);
+  for (let y = y0; y <= y1; y++) {
+    const yo = y * GW;
+    for (let x = x0; x <= x1; x++) {
+      const i = yo + x;
+      // Masked cells freeze pigment in place — neither source nor sink
+      // for advective flux. Skip them; their g_tmp[k][i] starts equal
+      // to g[k][i] (from the .set above), so the copyback preserves
+      // the frozen state intact.
+      if (maskActive && mask[i] > MASK_THRESHOLD) continue;
+      if (wet[i] < 0.04) continue;
+      const ux = u[i], vy = v[i];
+      const adt = DT * 0.7;
+
+      for (let k = 0; k < 3; k++) {
+        const gk = g[k][i];
+        if (gk < 0.0008) continue;
+        let outFlux = 0;
+        if (ux > 0) {
+          const f = ux * gk * adt;
+          g_tmp[k][i + 1] += f; outFlux += f;
+        } else if (ux < 0) {
+          const f = -ux * gk * adt;
+          g_tmp[k][i - 1] += f; outFlux += f;
+        }
+        if (vy > 0) {
+          const f = vy * gk * adt;
+          g_tmp[k][i + GW] += f; outFlux += f;
+        } else if (vy < 0) {
+          const f = -vy * gk * adt;
+          g_tmp[k][i - GW] += f; outFlux += f;
+        }
+        g_tmp[k][i] -= outFlux;
+      }
+    }
+  }
+  for (let k = 0; k < 3; k++) {
+    const arr = g[k];
+    const src = g_tmp[k];
+    for (let i = 0; i < N; i++) {
+      const vv = src[i];
+      arr[i] = vv > MAX_PIGMENT ? MAX_PIGMENT : vv;
+    }
+  }
+
+  // Isotropic diffusion (smooths sharp pixel artifacts, gives soft wet-in-wet feel)
+  // Fused single pass: all 3 pigments handled inline per cell, so we
+  // pay the loop overhead and the wet[i] check once instead of 3x.
+  // Same Laplacian math as before, applied to each pigment.
+  const tmp0 = g_tmp[0], tmp1 = g_tmp[1], tmp2 = g_tmp[2];
+  const arr0 = g[0], arr1 = g[1], arr2 = g[2];
+  tmp0.set(arr0); tmp1.set(arr1); tmp2.set(arr2);
+  const PD = PIGMENT_DIFFUSION;
+  for (let y = y0; y <= y1; y++) {
+    const yo = y * GW;
+    for (let x = x0; x <= x1; x++) {
+      const i = yo + x;
+      // Masked cells: no pigment movement out, and tmp[i] is already
+      // equal to arr[i] from the .set, so leaving arr[i] alone keeps
+      // the frozen value. Skipping also stops neighbor pigment from
+      // "leaking into" the masked cell because the masked cell isn't
+      // written to.
+      if (maskActive && mask[i] > MASK_THRESHOLD) continue;
+      if (wet[i] < 0.04) continue;
+      const im1 = i - 1, ip1 = i + 1, im_g = i - GW, ip_g = i + GW;
+      const c0 = tmp0[i], c1 = tmp1[i], c2 = tmp2[i];
+      arr0[i] = c0 + PD * (tmp0[im1] + tmp0[ip1] + tmp0[im_g] + tmp0[ip_g] - 4 * c0);
+      arr1[i] = c1 + PD * (tmp1[im1] + tmp1[ip1] + tmp1[im_g] + tmp1[ip_g] - 4 * c1);
+      arr2[i] = c2 + PD * (tmp2[im1] + tmp2[ip1] + tmp2[im_g] + tmp2[ip_g] - 4 * c2);
+    }
+  }
+}
+
+// ============================================================
+// TRANSFER PIGMENT (§4.5) — adsorption / desorption with granulation γ
+// ============================================================
+function transferPigment() {
+  if (activeRectIsEmpty()) return;
+  // Fused single pass: 3 pigments handled inline per cell.
+  // The pigment-specific constants are hoisted to locals so V8 can keep
+  // them in registers across the inner loop instead of refetching from
+  // the PIGMENTS array on every iteration.
+  const p0 = PIGMENTS[0], p1 = PIGMENTS[1], p2 = PIGMENTS[2];
+  const den0 = p0.density, sta0 = p0.staining, gra0 = p0.granulation;
+  const den1 = p1.density, sta1 = p1.staining, gra1 = p1.granulation;
+  const den2 = p2.density, sta2 = p2.staining, gra2 = p2.granulation;
+  const g0 = g[0], g1 = g[1], g2 = g[2];
+  const d0 = d[0], d1 = d[1], d2 = d[2];
+  const y0 = Math.max(0, activeMinY);
+  const y1 = Math.min(GH - 1, activeMaxY);
+  const x0 = Math.max(0, activeMinX);
+  const x1 = Math.min(GW - 1, activeMaxX);
+  for (let y = y0; y <= y1; y++) {
+    const yo = y * GW;
+    for (let x = x0; x <= x1; x++) {
+      const i = yo + x;
+      // Masked cells: no g↔d transfer. Frozen.
+      if (maskActive && mask[i] > MASK_THRESHOLD) continue;
+      if (wet[i] < 0.04) continue;
+      const h = paperH[i];
+      const hg0 = 1 - h * gra0, hg1 = 1 - h * gra1, hg2 = 1 - h * gra2;
+      const hu0 = 1 + (h - 1) * gra0, hu1 = 1 + (h - 1) * gra1, hu2 = 1 + (h - 1) * gra2;
+
+      // pigment 0
+      let gi = g0[i], di = d0[i];
+      let down = gi * hg0 * den0;
+      let up   = di * hu0 * den0 / sta0;
+      if (down < 0) down = 0;
+      if (up   < 0) up   = 0;
+      if (di + down > 1) down = 1 - di > 0 ? 1 - di : 0;
+      if (gi + up   > 1) up   = 1 - gi > 0 ? 1 - gi : 0;
+      d0[i] = di + down - up;
+      g0[i] = gi + up   - down;
+
+      // pigment 1
+      gi = g1[i]; di = d1[i];
+      down = gi * hg1 * den1;
+      up   = di * hu1 * den1 / sta1;
+      if (down < 0) down = 0;
+      if (up   < 0) up   = 0;
+      if (di + down > 1) down = 1 - di > 0 ? 1 - di : 0;
+      if (gi + up   > 1) up   = 1 - gi > 0 ? 1 - gi : 0;
+      d1[i] = di + down - up;
+      g1[i] = gi + up   - down;
+
+      // pigment 2
+      gi = g2[i]; di = d2[i];
+      down = gi * hg2 * den2;
+      up   = di * hu2 * den2 / sta2;
+      if (down < 0) down = 0;
+      if (up   < 0) up   = 0;
+      if (di + down > 1) down = 1 - di > 0 ? 1 - di : 0;
+      if (gi + up   > 1) up   = 1 - gi > 0 ? 1 - gi : 0;
+      d2[i] = di + down - up;
+      g2[i] = gi + up   - down;
+    }
+  }
+}
+
+// ============================================================
+// EVAPORATION — water slowly leaves the paper
+// When a cell goes dry, any suspended pigment locks in as deposited.
+// ============================================================
+function evaporate() {
+  for (let i = 0; i < N; i++) {
+    // Masked cells preserve their wet+pigment exactly as captured.
+    if (maskActive && mask[i] > MASK_THRESHOLD) continue;
+    let w = wet[i] * 0.9988;
+    if (w < 0.025) {
+      // dump suspended -> deposited
+      for (let k = 0; k < 3; k++) {
+        let nd = d[k][i] + g[k][i];
+        if (nd > MAX_PIGMENT) nd = MAX_PIGMENT;
+        d[k][i] = nd;
+        g[k][i] = 0;
+      }
+      w = 0;
+      u[i] = 0; v[i] = 0;
+    }
+    wet[i] = w;
+  }
+}
+
+// ============================================================
+// SIM STEP
+// Two toggles (see UI wiring below) gate the relevant sub-steps:
+//   edgeDarkeningEnabled — when off, the §4.3.3 outward-flow pressure
+//     reduction is skipped entirely. Useful for isolating which marks
+//     come from edge darkening vs. natural diffusion/advection.
+//   dryingPaused         — when on, evaporation is skipped, so the
+//     canvas holds its current wetness indefinitely (whatever that
+//     happens to be — fully wet, partially dry, or anywhere between).
+// ============================================================
+let edgeDarkeningEnabled = true;
+let dryingPaused = false;
+
+// ============================================================
+// WET DIFFUSION (added v0.8) — water spreads to adjacent cells
+// over time, modeling capillary action through paper fibers.
+// ============================================================
+// Without this, paintAt's wet bump stays confined to the brush
+// footprint, so on dry paper each brush stamp creates an island
+// of wet trapped inside dry surroundings. Pigment can move within
+// the island but can't cross the wet→dry boundary, so brush stamps
+// show as hard-edged stamps. With wet diffusion, the wet itself
+// expands outward, creating a soft halo ahead of the pigment so
+// dry-paper strokes get the same soft falloff as wet-on-wet strokes.
+//
+// Standard Laplacian diffusion: each cell exchanges with its 4
+// neighbors based on the local gradient. Conserves total wet
+// (in the interior); boundary cells are skipped. Coefficient 0.10
+// is tuned so that a 0.45-wet brush center transfers 0.045 to each
+// neighbor per step, just clearing the wet >= 0.04 threshold so
+// the rest of the sim picks up those cells as active. Stability
+// bound for an explicit 4-neighbor scheme is 0.25; we're well under.
+// SCALE-derived: same scaling as PIGMENT_DIFFUSION. At SCALE_REF (s=1)
+// gives 0.10, the v0.8 baseline tuned so a 0.45 wet brush stamp
+// transfers ~0.045 to neighbors per step — just clearing the wet >= 0.04
+// threshold needed for the rest of the sim to flow pigment into them.
+let WET_DIFFUSION = Math.min(0.20, 0.10 * inv_s2);
+
+function diffuseWet() {
+  if (activeRectIsEmpty()) return;
+  wet_tmp.set(wet);
+  const k = WET_DIFFUSION;
+  const y0 = Math.max(1, activeMinY);
+  const y1 = Math.min(GH - 2, activeMaxY);
+  const x0 = Math.max(1, activeMinX);
+  const x1 = Math.min(GW - 2, activeMaxX);
+  for (let y = y0; y <= y1; y++) {
+    const yo = y * GW;
+    for (let x = x0; x <= x1; x++) {
+      const i = yo + x;
+      // Masked cells are frozen — wet can't diffuse into or out of them.
+      if (maskActive && mask[i] > MASK_THRESHOLD) continue;
+      // Skip cells with no wet anywhere in the 5-cell stencil — the
+      // Laplacian is zero, no change would result. This is the common
+      // case in unpainted areas.
+      const c  = wet_tmp[i];
+      const wa = wet_tmp[i - 1],  wb = wet_tmp[i + 1];
+      const wc = wet_tmp[i - GW], wd = wet_tmp[i + GW];
+      if (c < 1e-6 && wa < 1e-6 && wb < 1e-6 && wc < 1e-6 && wd < 1e-6) continue;
+      wet[i] = c + k * (wa + wb + wc + wd - 4 * c);
+    }
+  }
+}
+
+function simStep() {
+  // v0.10 — top-level early return when nothing is active. Each sub-step
+  // already early-returns on empty rect, but the function-call overhead
+  // for 5 dispatched calls × 2 simSteps × 60 fps adds up at idle. This
+  // one check skips them all. evaporate is intentionally NOT gated:
+  // global drying continues even with no active region so the "wet
+  // canvas" surface dries down over time as expected.
+  if (activeRectIsEmpty()) {
+    if (!dryingPaused) evaporate();
+    return;
+  }
+  diffuseWet();
+  if (edgeDarkeningEnabled) applyEdgeDarkening();
+  updateVelocity();
+  movePigment();
+  transferPigment();
+  if (!dryingPaused) evaporate();
+}
+
+// ============================================================
+// KUBELKA–MUNK COMPOSITING (§5)
+// Returns reflectance R of a layer of given thickness x with
+// weighted K and S, composited over a paper background of
+// reflectance Rbg, for a single wavelength channel.
+// ============================================================
+function kmReflect(K, S, x, Rbg) {
+  if (S < 1e-5) S = 1e-5;
+  const a = 1 + K / S;
+  const b = Math.sqrt(Math.max(0, a * a - 1));
+  let bSx = b * S * x;
+  if (bSx > 12) bSx = 12; // prevents sinh/cosh overflow; visually equivalent
+  const sh = Math.sinh(bSx);
+  const ch = Math.cosh(bSx);
+  const denom = a * sh + b * ch;
+  if (denom < 1e-9) return 0;
+  const Rlayer = sh / denom;
+  const Tlayer = b  / denom;
+  let R = Rlayer + (Tlayer * Tlayer * Rbg) / (1 - Rlayer * Rbg);
+  if (R < 0) R = 0; else if (R > 1) R = 1;
+  return R;
+}
+
+// ============================================================
+// RENDER — KM compositing per cell, then upscale to display canvas
+// ============================================================
+const renderCanvas = document.createElement('canvas');
+renderCanvas.width  = GW;
+renderCanvas.height = GH;
+const renderCtx = renderCanvas.getContext('2d');
+let imgData = renderCtx.createImageData(GW, GH);
+
+const canvas = document.getElementById('canvas');
+canvas.width  = DISPLAY_W;
+canvas.height = DISPLAY_H;
+const ctx = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = true;
+ctx.imageSmoothingQuality = 'high';
+
+// Paper base colors per channel (warm cream). Mutable so the paper
+// picker UI can change them at runtime — every site that uses them
+// (the render loop's KM substrate, the swatch canvases, the cursor
+// color computation) re-reads on demand, so a reassignment plus a
+// swatch rebuild is all that's needed to recolor the paper.
+let PAPER_R_BASE = 0.985;
+let PAPER_G_BASE = 0.965;
+let PAPER_B_BASE = 0.918;
+
+// render(forceFull=false) — write RGBA pixels to imgData, then push to
+// renderCanvas and scale to the display canvas.
+//
+// v0.10 localization: when the active rect is non-empty and forceFull
+// is false, the per-cell KM/alpha loop iterates only over the active
+// rect. Cells outside the rect have frozen state (active rect tracks
+// all dynamics by definition), so the imgData bytes left over from
+// when they WERE rendered still match their current sim state.
+//
+// putImageData transfers the full imgData buffer each call regardless
+// — its cost is a memcpy, dwarfed by the per-cell KM math we just
+// avoided. The scale to the display canvas is GPU work, also fixed.
+//
+// forceFull is set by callers that change something which affects
+// pixels outside the active rect — currently just paper color change.
+// The "Transparent" toggle only changes body CSS, not canvas pixels.
+function render(forceFull) {
+  const data = imgData.data;
+  const P0 = PIGMENTS[0], P1 = PIGMENTS[1], P2 = PIGMENTS[2];
+
+  // Alpha fade-in for the lowest pigment amounts. Cells with xt above
+  // this threshold render fully opaque (so painted regions look exactly
+  // the way they would over an opaque cream canvas — KM math unchanged);
+  // cells with xt = 0 go fully transparent (body color shows through);
+  // a thin transition band gives anti-aliased edges instead of a hard cut.
+  const ALPHA_FULL_AT = 0.012;
+  const ALPHA_SCALE = 255 / ALPHA_FULL_AT;
+
+  // Determine iteration bounds. Empty rect + !forceFull = skip the per-cell
+  // loop entirely; imgData is already correct for the frozen state, so
+  // pushing it again would just waste a memcpy + draw.
+  let yStart, yEnd, xStart, xEnd, isFull;
+  if (forceFull) {
+    yStart = 0; yEnd = GH - 1;
+    xStart = 0; xEnd = GW - 1;
+    isFull = true;
+  } else if (activeRectIsEmpty()) {
+    return;
+  } else {
+    yStart = Math.max(0, activeMinY);
+    yEnd   = Math.min(GH - 1, activeMaxY);
+    xStart = Math.max(0, activeMinX);
+    xEnd   = Math.min(GW - 1, activeMaxX);
+    isFull = (yStart === 0 && yEnd === GH - 1 && xStart === 0 && xEnd === GW - 1);
+  }
+
+  // Hoist the array refs once. The original loop accessed g[k][i] via
+  // two-level lookup; localized or not, the cached refs help.
+  const g0 = g[0], g1 = g[1], g2 = g[2];
+  const d0 = d[0], d1 = d[1], d2 = d[2];
+
+  for (let y = yStart; y <= yEnd; y++) {
+    const yo = y * GW;
+    for (let x = xStart; x <= xEnd; x++) {
+      const i = yo + x;
+
+      const x0 = g0[i] + d0[i];
+      const x1 = g1[i] + d1[i];
+      const x2 = g2[i] + d2[i];
+      const xt = x0 + x1 + x2;
+      const ph = paperH[i];
+
+      // Paper texture: subtle warm variation
+      const tex = (ph - 0.5) * 0.06;
+      const PR = PAPER_R_BASE + tex;
+      const PG = PAPER_G_BASE + tex;
+      const PB = PAPER_B_BASE + tex;
+
+      let R, G, B;
+
+      if (xt < 0.004) {
+        // Just paper (with possible dampness sheen)
+        const dampSheen = wet[i] * 0.018;
+        R = PR + dampSheen;
+        G = PG + dampSheen;
+        B = PB + dampSheen * 1.2;
+      } else {
+        const inv = 1 / xt;
+        const w0 = x0 * inv, w1 = x1 * inv, w2 = x2 * inv;
+        // Weighted K and S
+        const Kr = P0.K[0]*w0 + P1.K[0]*w1 + P2.K[0]*w2;
+        const Kg = P0.K[1]*w0 + P1.K[1]*w1 + P2.K[1]*w2;
+        const Kb = P0.K[2]*w0 + P1.K[2]*w1 + P2.K[2]*w2;
+        const Sr = P0.S[0]*w0 + P1.S[0]*w1 + P2.S[0]*w2;
+        const Sg = P0.S[1]*w0 + P1.S[1]*w1 + P2.S[1]*w2;
+        const Sb = P0.S[2]*w0 + P1.S[2]*w1 + P2.S[2]*w2;
+
+        const thickness = xt < 4 ? xt : 4;
+
+        R = kmReflect(Kr, Sr, thickness, PR);
+        G = kmReflect(Kg, Sg, thickness, PG);
+        B = kmReflect(Kb, Sb, thickness, PB);
+      }
+
+      // Alpha: pigment thickness determines opacity in the body-bg-shows-
+      // through scheme. Saturated cells are fully opaque, sparse cells
+      // anti-alias against the page background.
+      let alpha = xt >= ALPHA_FULL_AT ? 255 : (xt * ALPHA_SCALE);
+
+      // v0.13.1 — translucent diffused masking-fluid tint. Computed AFTER
+      // the normal KM/paper render so the user sees through the mask to
+      // whatever pigment + paper is underneath, with a warm yellow shift.
+      //
+      // The blend amount ramps continuously with mask[i]: very lightly
+      // masked cells (just over threshold) get a faint hint; fully masked
+      // cells get the strongest tint, capped at MASK_TINT_PEAK so even
+      // dense mask never fully obscures the pigment beneath. Soft edges
+      // fall out of the brush stamp's natural falloff — neighboring cells
+      // have smoothly varying mask values, and the visual scales with them.
+      if (maskActive && mask[i] > MASK_THRESHOLD) {
+        const maskVis = Math.min(1,
+          (mask[i] - MASK_THRESHOLD) / (MASK_VISUAL_FULL - MASK_THRESHOLD));
+        const tb = maskVis * MASK_TINT_PEAK;
+        // Pale warm yellow (masking-fluid amber). Same hue as the swatch.
+        R = R * (1 - tb) + 0.96 * tb;
+        G = G * (1 - tb) + 0.86 * tb;
+        B = B * (1 - tb) + 0.42 * tb;
+        // Boost alpha so masked-but-unpainted cells stay visible — but
+        // cap below 255 so the mask itself reads as slightly translucent
+        // (body bg shows through faintly when in transparent-canvas mode).
+        const maskAlpha = maskVis * 215;
+        if (maskAlpha > alpha) alpha = maskAlpha;
+      }
+
+      const j = i * 4;
+      data[j]     = R * 255;
+      data[j + 1] = G * 255;
+      data[j + 2] = B * 255;
+      data[j + 3] = alpha;
+    }
+  }
+
+  // Push to renderCanvas. dirtyRect form of putImageData transfers only
+  // the active sub-region — useful when localized, no-op when full.
+  if (isFull) {
+    renderCtx.putImageData(imgData, 0, 0);
+  } else {
+    const dw = xEnd - xStart + 1;
+    const dh = yEnd - yStart + 1;
+    renderCtx.putImageData(imgData, 0, 0, xStart, yStart, dw, dh);
+  }
+  // Clear the display canvas so transparent regions of the new frame
+  // don't blend over stale pixels from the previous frame.
+  ctx.clearRect(0, 0, DISPLAY_W, DISPLAY_H);
+  ctx.drawImage(renderCanvas, 0, 0, DISPLAY_W, DISPLAY_H);
+}
+
+// ============================================================
+// PAINT BRUSH
+// ============================================================
+function paintAt(gx, gy, gridRadius, pigmentIdx, strength) {
+  markCanvasActive();  // wake the sim if it was idle
+  expandActiveRect(gx, gy, gridRadius);  // grow active region to cover this stamp
+  const r = gridRadius;
+  const r2 = r * r;
+  const minX = Math.max(0, Math.floor(gx - r));
+  const maxX = Math.min(GW - 1, Math.ceil(gx + r));
+  const minY = Math.max(0, Math.floor(gy - r));
+  const maxY = Math.min(GH - 1, Math.ceil(gy + r));
+
+  // Masking fluid (v0.13). Deposits mask into the mask[] array.
+  // Doesn't add wet, doesn't add pressure — masking fluid is a passive
+  // resist applied on top of the paper. Once any cell crosses
+  // MASK_THRESHOLD, maskActive is set so sim functions know to test.
+  if (pigmentIdx === MASK_INDEX) {
+    let anyAboveThreshold = false;
+    for (let py = minY; py <= maxY; py++) {
+      for (let px = minX; px <= maxX; px++) {
+        const dx = px - gx, dy = py - gy;
+        const d2 = dx * dx + dy * dy;
+        if (d2 > r2) continue;
+        const i = py * GW + px;
+        const falloff = 1 - Math.sqrt(d2) / r;
+        // Accumulate mask deposit, capped at 1. Strength scales how
+        // quickly a single stamp builds — at strength=0.5, two dabs at
+        // the brush center push above threshold.
+        const m = mask[i] + falloff * strength;
+        mask[i] = m > 1 ? 1 : m;
+        if (mask[i] > MASK_THRESHOLD) anyAboveThreshold = true;
+      }
+    }
+    if (anyAboveThreshold) maskActive = true;
+    return;
+  }
+
+  // Water brush: no pigment added. Adds water + pressure (drives bleed)
+  // and lifts a fraction of deposited pigment back into suspension at
+  // each touched cell — same desorption shortcut the global re-wet
+  // button uses, but localized. This lets a clean wet brush re-mobilize
+  // dry pigment for blending, softening edges, or washing out.
+  if (pigmentIdx === WATER_INDEX) {
+    for (let py = minY; py <= maxY; py++) {
+      for (let px = minX; px <= maxX; px++) {
+        const dx = px - gx, dy = py - gy;
+        const d2 = dx * dx + dy * dy;
+        if (d2 > r2) continue;
+        const i = py * GW + px;
+        // Masked cells resist water — masking fluid is hydrophobic.
+        if (maskActive && mask[i] > MASK_THRESHOLD) continue;
+        const falloff = 1 - Math.sqrt(d2) / r;
+        const f2 = falloff * falloff;
+        // Wet bump slightly stronger than a pigment brush — this brush
+        // is intentionally wetter.
+        const ww = wet[i] + 0.55 * falloff;
+        wet[i] = ww > 1 ? 1 : ww;
+        pressure[i] += 0.18 * f2;
+        // Localized lift of deposited pigment. Per-frame fraction is
+        // gentler than the global re-wet (which is one-shot at 0.30);
+        // here the user can hold/drag to escalate.
+        const liftFrac = 0.18 * f2;
+        if (liftFrac > 0) {
+          for (let k = 0; k < 3; k++) {
+            const dval = d[k][i];
+            if (dval < 0.001) continue;
+            const lift = dval * liftFrac;
+            d[k][i] = dval - lift;
+            const nv = g[k][i] + lift;
+            g[k][i] = nv > MAX_PIGMENT ? MAX_PIGMENT : nv;
+          }
+        }
+      }
+    }
+    return;
+  }
+
+  // Lift brush: removes pigment (both suspended g and deposited d) from
+  // each touched cell. Leaves wet and pressure alone — that way a drag
+  // doesn't create dry islands or drive flow; the cell's surroundings
+  // stay intact and only the pigment in the touched area fades. Drag
+  // and the subtraction compounds: at the brush center (f²=1) a single
+  // dab keeps 1 − 0.22 = 78%, five dabs keep 28%, ten dabs keep 8%.
+  if (pigmentIdx === LIFT_INDEX) {
+    for (let py = minY; py <= maxY; py++) {
+      for (let px = minX; px <= maxX; px++) {
+        const dx = px - gx, dy = py - gy;
+        const d2 = dx * dx + dy * dy;
+        if (d2 > r2) continue;
+        const i = py * GW + px;
+        // Masked cells keep their pigment frozen — lift can't reach it.
+        if (maskActive && mask[i] > MASK_THRESHOLD) continue;
+        const falloff = 1 - Math.sqrt(d2) / r;
+        const f2 = falloff * falloff;
+        const subFrac = 0.22 * f2;
+        if (subFrac <= 0) continue;
+        const keep = 1 - subFrac;
+        for (let k = 0; k < 3; k++) {
+          g[k][i] *= keep;
+          d[k][i] *= keep;
+        }
+      }
+    }
+    return;
+  }
+
+  // Rainbow brush — same dynamics as a regular pigment brush, but the
+  // strength is split across all three g[] arrays weighted by the
+  // current cycle position. Weights are computed once per paintAt call
+  // (not per cell), so every cell in this stamp gets the same color
+  // mix; the color cycles between stamps over time.
+  if (pigmentIdx === RAINBOW_INDEX) {
+    updateRainbowWeights(performance.now());
+    const w0 = rainbowW[0], w1 = rainbowW[1], w2 = rainbowW[2];
+    const g0 = g[0], g1 = g[1], g2 = g[2];
+    for (let py = minY; py <= maxY; py++) {
+      for (let px = minX; px <= maxX; px++) {
+        const dx = px - gx, dy = py - gy;
+        const d2 = dx * dx + dy * dy;
+        if (d2 > r2) continue;
+        const i = py * GW + px;
+        // Masked cells reject pigment.
+        if (maskActive && mask[i] > MASK_THRESHOLD) continue;
+        const falloff = 1 - Math.sqrt(d2) / r;
+        const f2 = falloff * falloff;
+        const add = strength * f2;
+        // Per-pigment deposit, weighted. Each pigment is independently
+        // clamped to MAX_PIGMENT — a saturated cell of one pigment
+        // doesn't block deposits of the other two.
+        let na = g0[i] + add * w0; if (na > MAX_PIGMENT) na = MAX_PIGMENT; g0[i] = na;
+            na = g1[i] + add * w1; if (na > MAX_PIGMENT) na = MAX_PIGMENT; g1[i] = na;
+            na = g2[i] + add * w2; if (na > MAX_PIGMENT) na = MAX_PIGMENT; g2[i] = na;
+        const ww = wet[i] + 0.45 * falloff;
+        wet[i] = ww > 1 ? 1 : ww;
+        pressure[i] += 0.18 * f2;
+      }
+    }
+    return;
+  }
+
+  const arr = g[pigmentIdx];
+  for (let py = minY; py <= maxY; py++) {
+    for (let px = minX; px <= maxX; px++) {
+      const dx = px - gx, dy = py - gy;
+      const d2 = dx * dx + dy * dy;
+      if (d2 > r2) continue;
+      const i = py * GW + px;
+      // Masked cells reject pigment — that's the whole point of mask.
+      if (maskActive && mask[i] > MASK_THRESHOLD) continue;
+      const falloff = 1 - Math.sqrt(d2) / r;
+      const f2 = falloff * falloff;
+      let na = arr[i] + strength * f2;
+      if (na > MAX_PIGMENT) na = MAX_PIGMENT;
+      arr[i] = na;
+      const ww = wet[i] + 0.45 * falloff;
+      wet[i] = ww > 1 ? 1 : ww;
+      pressure[i] += 0.18 * f2;   // raised from 0.06 — gives paint dabs an
+                                  // immediate, strong pressure gradient so
+                                  // bleeding starts on the first frame
+    }
+  }
+}
+
+// ============================================================
+// INITIAL STATE — wet canvas + two splotches close but separate
+// ============================================================
+function placeInitialSplotch(cx, cy, radius, pigmentIdx) {
+  const r2 = radius * radius;
+  for (let py = Math.max(0, cy - radius); py <= Math.min(GH - 1, cy + radius); py++) {
+    for (let px = Math.max(0, cx - radius); px <= Math.min(GW - 1, cx + radius); px++) {
+      const dx = px - cx, dy = py - cy;
+      const dd = dx * dx + dy * dy;
+      if (dd > r2) continue;
+      const i = py * GW + px;
+      const falloff = 1 - Math.sqrt(dd) / radius;
+      const ff = falloff * falloff;
+      g[pigmentIdx][i] += 0.62 * ff;
+      wet[i] = Math.max(wet[i], 0.92);
+      pressure[i] += 0.08 * ff;
+    }
+  }
+}
+
+function resetSim() {
+  markCanvasActive();
+  for (let i = 0; i < N; i++) {
+    // The whole canvas is uniformly wet — this is the "wet" canvas
+    wet[i] = 0.62;
+    u[i] = 0; v[i] = 0; pressure[i] = 0;
+    g[0][i] = g[1][i] = g[2][i] = 0;
+    d[0][i] = d[1][i] = d[2][i] = 0;
+    mask[i] = 0;
+  }
+  maskActive = false;
+  // Uniform wet + zero pigment + zero pressure = no dynamics anywhere.
+  // Empty active rect → simStep functions early-return until paintAt grows it.
+  setActiveRectEmpty();
+  // v0.10 — clear cached imgData and display canvas. With localized render,
+  // the imgData buffer retains pixels from cells that were last rendered
+  // while inside the active rect. Without this clear, putImageData on the
+  // next localized render would push those stale pixels back onto
+  // renderCanvas, where they'd remain visible outside the new active rect.
+  // The display canvas needs clearing too — drawImage doesn't repaint the
+  // pixels we're not putting imgData into.
+  imgData.data.fill(0);
+  renderCtx.clearRect(0, 0, GW, GH);
+  ctx.clearRect(0, 0, DISPLAY_W, DISPLAY_H);
+  // Canvas starts blank. placeInitialSplotch() remains available for
+  // library users who want to seed pigment programmatically at startup.
+}
+
+// rebuildScale — live resolution change. Reallocates every state array
+// at the new grid size, re-derives the scale-dependent constants, and
+// resizes the canvases. Called by the Resolution slider on `change`.
+// The rAF loop is single-threaded with the event handler, so this runs
+// safely between frames; the next loop tick picks up the new state.
+function rebuildScale(newScale) {
+  SCALE = newScale;
+  s_scale = SCALE / SCALE_REF;
+  inv_s = 1 / s_scale;
+  inv_s2 = inv_s * inv_s;
+
+  GW = Math.max(120, Math.floor(window.innerWidth  * CANVAS_OVERSCAN / SCALE));
+  GH = Math.max(80,  Math.floor(window.innerHeight * CANVAS_OVERSCAN / SCALE));
+  N = GW * GH;
+  DISPLAY_W = Math.round(GW * SCALE);
+  DISPLAY_H = Math.round(GH * SCALE);
+
+  // Re-derive the scale-dependent constants. These mirror the inline
+  // initializations at the top of the script — keep the formulas in sync.
+  PIGMENT_DIFFUSION = Math.min(0.20, 0.045 * inv_s2);
+  WET_DIFFUSION     = Math.min(0.20, 0.10 * inv_s2);
+  EDGE_KERNEL       = Math.max(1, Math.round(4 * inv_s));
+  EDGE_KERNEL_LARGE = Math.max(1, Math.round(20 * inv_s));
+  VEL_CLAMP         = Math.min(1.5, 1.0 * inv_s);
+
+  // Reallocate every state array at the new size. JS GC will collect
+  // the old ones once nothing references them; closures inside functions
+  // resolve identifiers at call time so they'll pick up the new arrays.
+  wet      = new Float32Array(N);
+  wet_tmp  = new Float32Array(N);
+  wetBlur  = new Float32Array(N);
+  wetBlurLarge = new Float32Array(N);
+  wetBlurTmp = new Float32Array(N);
+  wetBinary = new Float32Array(N);
+  u        = new Float32Array(N);
+  v        = new Float32Array(N);
+  u_new    = new Float32Array(N);
+  v_new    = new Float32Array(N);
+  pressure = new Float32Array(N);
+  paperH   = new Float32Array(N);
+  g     = [new Float32Array(N), new Float32Array(N), new Float32Array(N)];
+  d     = [new Float32Array(N), new Float32Array(N), new Float32Array(N)];
+  g_tmp = [new Float32Array(N), new Float32Array(N), new Float32Array(N)];
+  mask  = new Float32Array(N);
+  maskActive = false;
+
+  // Resize the render and display canvases, then reallocate imgData.
+  renderCanvas.width  = GW;
+  renderCanvas.height = GH;
+  imgData = renderCtx.createImageData(GW, GH);
+  canvas.width  = DISPLAY_W;
+  canvas.height = DISPLAY_H;
+
+  // Any paint event queued at the old grid coordinates is stale; clear
+  // it. lastGX/Y referenced the old grid too — reset to 0.
+  pendingX = null; pendingY = null;
+  lastGX = 0; lastGY = 0;
+
+  // Regenerate paper texture at the new resolution and reset state.
+  generatePaper();
+  resetSim();
+  // Force a render so the new canvas is visible immediately, even if
+  // the sim is currently idle.
+  render();
+  // Rebuild pigment swatches: the cursor color preview, paper-color-
+  // dependent swatches, and the rainbow swatch all use PAPER_*_BASE
+  // which doesn't change here, but the call is cheap and keeps the
+  // active-pigment indicator in the right place.
+  applyCursorColor();
+}
+
+// Re-wet: raise water saturation back to a high baseline everywhere, and
+// lift a fraction of deposited pigment back into suspension so dried
+// strokes become mobile again. The §4.5 desorption rate is too slow to
+// feel responsive on its own, so we shortcut by moving 30% of d → g.
+const REWET_LEVEL = 0.85;
+const REWET_LIFT  = 0.30;
+function rewet() {
+  markCanvasActive();
+  // d→g transfer happens wherever d>0 — could be anywhere on the canvas.
+  // Set rect full and let the next periodic shrink scan tighten it back
+  // to the actual bounding box of newly-suspended pigment.
+  setActiveRectFull();
+  for (let i = 0; i < N; i++) {
+    // Masked cells: stay frozen. Mask is waterproof; re-wet washes
+    // around them.
+    if (maskActive && mask[i] > MASK_THRESHOLD) continue;
+    if (wet[i] < REWET_LEVEL) wet[i] = REWET_LEVEL;
+    for (let k = 0; k < 3; k++) {
+      const dval = d[k][i];
+      if (dval < 0.001) continue;
+      const lift = dval * REWET_LIFT;
+      d[k][i] = dval - lift;
+      const nv = g[k][i] + lift;
+      g[k][i] = nv > MAX_PIGMENT ? MAX_PIGMENT : nv;
+    }
+  }
+}
+
+// Instant-dry: the inverse of rewet. Applies evaporate's dry-out rule
+// unconditionally to every cell — all suspended pigment settles to
+// deposited, water and flow zero out. After this, all cells are below
+// the simulation's wet-threshold so the sim will idle out within a
+// frame. We render+updateBars explicitly so the damp-sheen disappears
+// from unpainted cells and the dryness bar fills immediately, without
+// needing to wake the sim for 60 grace frames just to flush a visual
+// that won't change again.
+function dryPaper() {
+  for (let i = 0; i < N; i++) {
+    // Masked cells: frozen. Dry button can't reach them.
+    if (maskActive && mask[i] > MASK_THRESHOLD) continue;
+    // Settle suspended → deposited (same rule evaporate uses)
+    for (let k = 0; k < 3; k++) {
+      let nd = d[k][i] + g[k][i];
+      if (nd > MAX_PIGMENT) nd = MAX_PIGMENT;
+      d[k][i] = nd;
+      g[k][i] = 0;
+    }
+    wet[i] = 0;
+    u[i] = 0; v[i] = 0;
+    pressure[i] = 0;
+  }
+  // No wet, no suspended pigment, no pressure → no dynamics anywhere.
+  setActiveRectEmpty();
+  render();
+  updateBars();
+}
+
+// Clear all masking-fluid in one pass. Real-world masking fluid is
+// rubbed off when the painting dries — this is the digital equivalent.
+// The frozen state under the mask is revealed (paper if mask was the
+// first thing painted, or pigment if mask was painted over wet paint).
+// Forces a full re-render because previously-masked cells need their
+// pixels rewritten from the underlying state, and they may sit outside
+// the current active rect.
+function removeMask() {
+  if (!maskActive) return;
+  for (let i = 0; i < N; i++) mask[i] = 0;
+  maskActive = false;
+  // Force-full re-render: ex-masked cells reveal whatever was frozen
+  // underneath, which the active-rect-localized render wouldn't catch
+  // if those cells sit outside the rect.
+  render(true);
+}
+
+// ============================================================
+// INPUT
+// ============================================================
+const cursor = document.getElementById('cursor');
+
+let isPainting = false;
+let lastGX = 0, lastGY = 0;
+let pendingX = null, pendingY = null;
+
+function clientToCanvas(e) {
+  const rect = canvas.getBoundingClientRect();
+  const cx = (e.clientX - rect.left) / rect.width;
+  const cy = (e.clientY - rect.top)  / rect.height;
+  return {
+    // Viewport coordinates — used to position the (also fixed) cursor
+    // element. NB: with the canvas extended past the viewport these
+    // are NOT equal to canvas-relative coords; use rect.left/top if
+    // you need those.
+    rectX: e.clientX,
+    rectY: e.clientY,
+    rectW: rect.width,
+    rectH: rect.height,
+    // Grid coordinates — for the simulation. cx/cy are fractions of
+    // the canvas's full extent, which still correctly maps to GW × GH
+    // cells regardless of how far the canvas extends past the viewport.
+    gx: cx * GW,
+    gy: cy * GH
+  };
+}
+
+function updateCursor(rectX, rectY) {
+  // Cursor is position: fixed, so its left/top are viewport coords.
+  // We pass viewport coords (e.clientX/Y) directly — see clientToCanvas.
+  cursor.style.left = rectX + 'px';
+  cursor.style.top  = rectY + 'px';
+}
+
+function applyCursorColor() {
+  if (currentPigment === WATER_INDEX) {
+    // Water cursor: near-transparent fill, cool-gray outline.
+    cursor.style.background = 'rgba(180, 210, 220, 0.18)';
+    cursor.style.border = '1.5px solid rgba(110, 145, 160, 0.65)';
+    return;
+  }
+  if (currentPigment === LIFT_INDEX) {
+    // Lift cursor: faint warm fill, dashed charcoal outline to signal
+    // a subtractive action (vs the solid outlines used by adding tools).
+    cursor.style.background = 'rgba(245, 240, 232, 0.22)';
+    cursor.style.border = '1.5px dashed rgba(95, 85, 75, 0.78)';
+    return;
+  }
+  if (currentPigment === RAINBOW_INDEX) {
+    // Rainbow cursor: time-varying color. Set a placeholder here; the
+    // main loop calls updateRainbowCursor() each frame to keep it in
+    // sync with the cycle.
+    cursor.style.border = '1.5px solid rgba(95, 85, 75, 0.55)';
+    updateRainbowCursor();
+    return;
+  }
+  if (currentPigment === MASK_INDEX) {
+    // Mask cursor: pale yellow fill with a darker amber dashed outline
+    // — dashed matches Lift's "this is a special tool" cue, and the
+    // yellow matches the on-canvas mask tint so the user immediately
+    // associates the cursor with what they're about to paint.
+    cursor.style.background = 'rgba(245, 220, 130, 0.32)';
+    cursor.style.border = '1.5px dashed rgba(170, 130, 50, 0.85)';
+    return;
+  }
+  const p = PIGMENTS[currentPigment];
+  // Render a representative color using KM with a thin layer for the cursor fill
+  const R = kmReflect(p.K[0], p.S[0], 0.6, PAPER_R_BASE);
+  const G = kmReflect(p.K[1], p.S[1], 0.6, PAPER_G_BASE);
+  const B = kmReflect(p.K[2], p.S[2], 0.6, PAPER_B_BASE);
+  const r = Math.round(R * 255), gg = Math.round(G * 255), b = Math.round(B * 255);
+  cursor.style.background = `rgba(${r},${gg},${b},0.35)`;
+  cursor.style.border = `1.5px solid rgba(${Math.round(r*0.55)},${Math.round(gg*0.55)},${Math.round(b*0.55)},0.85)`;
+}
+
+// Lightweight per-frame cursor update for rainbow brush. Reuses
+// rainbowW (set by updateRainbowWeights) and uses the same KM math
+// applyCursorColor does for regular pigments, but with K and S
+// computed as the weighted blend of the three pigments' values.
+function updateRainbowCursor() {
+  updateRainbowWeights(performance.now());
+  const w0 = rainbowW[0], w1 = rainbowW[1], w2 = rainbowW[2];
+  const P0 = PIGMENTS[0], P1 = PIGMENTS[1], P2 = PIGMENTS[2];
+  const Kr = P0.K[0]*w0 + P1.K[0]*w1 + P2.K[0]*w2;
+  const Kg = P0.K[1]*w0 + P1.K[1]*w1 + P2.K[1]*w2;
+  const Kb = P0.K[2]*w0 + P1.K[2]*w1 + P2.K[2]*w2;
+  const Sr = P0.S[0]*w0 + P1.S[0]*w1 + P2.S[0]*w2;
+  const Sg = P0.S[1]*w0 + P1.S[1]*w1 + P2.S[1]*w2;
+  const Sb = P0.S[2]*w0 + P1.S[2]*w1 + P2.S[2]*w2;
+  const R = kmReflect(Kr, Sr, 0.6, PAPER_R_BASE);
+  const G = kmReflect(Kg, Sg, 0.6, PAPER_G_BASE);
+  const B = kmReflect(Kb, Sb, 0.6, PAPER_B_BASE);
+  const r  = Math.round(R * 255);
+  const gg = Math.round(G * 255);
+  const b  = Math.round(B * 255);
+  cursor.style.background = `rgba(${r},${gg},${b},0.45)`;
+}
+
+function applyCursorSize() {
+  cursor.style.width  = brushSize + 'px';
+  cursor.style.height = brushSize + 'px';
+}
+
+canvas.addEventListener('pointerenter', () => { cursor.style.display = 'block'; });
+canvas.addEventListener('pointerleave', () => { cursor.style.display = 'none'; isPainting = false; });
+
+canvas.addEventListener('pointermove', (e) => {
+  const c = clientToCanvas(e);
+  updateCursor(c.rectX, c.rectY);
+  if (isPainting) { pendingX = c.gx; pendingY = c.gy; }
+});
+
+canvas.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  canvas.setPointerCapture(e.pointerId);
+  isPainting = true;
+  const c = clientToCanvas(e);
+  lastGX = c.gx; lastGY = c.gy;
+  pendingX = c.gx; pendingY = c.gy;
+  // Single tap dab
+  const rect = canvas.getBoundingClientRect();
+  const gridRadius = (brushSize / 2) * (GW / rect.width);
+  paintAt(c.gx, c.gy, gridRadius, currentPigment, 0.38);
+});
+
+window.addEventListener('pointerup', (e) => {
+  isPainting = false;
+  pendingX = null; pendingY = null;
+  try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+});
+
+// Apply pending paint inside the rAF loop for smooth strokes
+function applyPendingPaint() {
+  if (!isPainting || pendingX === null) return;
+  const rect = canvas.getBoundingClientRect();
+  const gridRadius = (brushSize / 2) * (GW / rect.width);
+  const dx = pendingX - lastGX, dy = pendingY - lastGY;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  const steps = Math.max(1, Math.ceil(dist / Math.max(1, gridRadius * 0.45)));
+  for (let s = 1; s <= steps; s++) {
+    const t = s / steps;
+    paintAt(lastGX + dx * t, lastGY + dy * t, gridRadius, currentPigment, 0.34);
+  }
+  lastGX = pendingX; lastGY = pendingY;
+  pendingX = null; pendingY = null;
+}
+
+// ============================================================
+// PIGMENT SWATCHES — rendered with the actual KM compositor
+// ============================================================
+function buildPigmentSwatches() {
+  const root = document.getElementById('pigments');
+  // Idempotent — clear any existing children so calling this again
+  // (e.g. after a paper-color change) replaces rather than appends.
+  root.replaceChildren();
+  PIGMENTS.forEach((p, idx) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'pigment' + (idx === currentPigment ? ' active' : '');
+    wrap.title = p.name;
+    wrap.dataset.idx = idx;
+
+    const swatchDiv = document.createElement('div');
+    swatchDiv.className = 'pigment-swatch';
+
+    const sc = document.createElement('canvas');
+    sc.width = 56; sc.height = 56;
+    const sctx = sc.getContext('2d');
+    const sd = sctx.createImageData(56, 56);
+    // Render swatch using KM with varying thickness for a natural look
+    for (let y = 0; y < 56; y++) {
+      for (let x = 0; x < 56; x++) {
+        const dx = x - 28, dy = y - 28;
+        const d2 = dx*dx + dy*dy;
+        if (d2 > 28*28) {
+          const j = (y * 56 + x) * 4;
+          sd.data[j] = 0; sd.data[j+1] = 0; sd.data[j+2] = 0; sd.data[j+3] = 0;
+          continue;
+        }
+        // Thickness varies a bit across the swatch — thicker bottom, thinner top
+        const grad = 1 - (y / 56) * 0.4;
+        const speckle = 0.85 + 0.3 * smoothNoise(x * 0.3, y * 0.3);
+        const xk = 1.1 * grad * speckle;
+        const R = kmReflect(p.K[0], p.S[0], xk, PAPER_R_BASE);
+        const G = kmReflect(p.K[1], p.S[1], xk, PAPER_G_BASE);
+        const B = kmReflect(p.K[2], p.S[2], xk, PAPER_B_BASE);
+        const j = (y * 56 + x) * 4;
+        sd.data[j]     = R * 255;
+        sd.data[j + 1] = G * 255;
+        sd.data[j + 2] = B * 255;
+        sd.data[j + 3] = 255;
+      }
+    }
+    sctx.putImageData(sd, 0, 0);
+    swatchDiv.appendChild(sc);
+
+    const lbl = document.createElement('div');
+    lbl.className = 'pigment-label';
+    // Two-line label: short name
+    const parts = p.name.split(' ');
+    lbl.innerHTML = parts.join('<br>');
+
+    wrap.appendChild(swatchDiv);
+    wrap.appendChild(lbl);
+
+    wrap.addEventListener('click', () => {
+      currentPigment = idx;
+      document.querySelectorAll('.pigment').forEach(el => el.classList.remove('active'));
+      wrap.classList.add('active');
+      applyCursorColor();
+    });
+
+    root.appendChild(wrap);
+  });
+
+  // Water swatch — not a pigment but a tool that adds wetness + pressure
+  // and lifts a fraction of deposited pigment back into suspension.
+  // Rendered as bare paper with a subtle cool tint (suggesting wet
+  // paper) and the same speckle as the pigment swatches.
+  {
+    const wrap = document.createElement('div');
+    wrap.className = 'pigment' + (currentPigment === WATER_INDEX ? ' active' : '');
+    wrap.title = 'Water — wets the paper and lifts pigment, no color added';
+    wrap.dataset.idx = WATER_INDEX;
+
+    const swatchDiv = document.createElement('div');
+    swatchDiv.className = 'pigment-swatch';
+
+    const sc = document.createElement('canvas');
+    sc.width = 56; sc.height = 56;
+    const sctx = sc.getContext('2d');
+    const sd = sctx.createImageData(56, 56);
+    for (let y = 0; y < 56; y++) {
+      for (let x = 0; x < 56; x++) {
+        const dx = x - 28, dy = y - 28;
+        const d2 = dx*dx + dy*dy;
+        const j = (y * 56 + x) * 4;
+        if (d2 > 28*28) {
+          sd.data[j] = 0; sd.data[j+1] = 0; sd.data[j+2] = 0; sd.data[j+3] = 0;
+          continue;
+        }
+        const speckle = 0.92 + 0.12 * smoothNoise(x * 0.3, y * 0.3);
+        // Wet paper looks slightly darker and a touch cooler than dry paper.
+        // Use the same paper base color so the swatch matches its surroundings,
+        // then nudge it toward blue-gray.
+        const grad = 0.94 - (y / 56) * 0.04;     // mild top-to-bottom shading
+        const R = PAPER_R_BASE * speckle * grad * 0.94;
+        const G = PAPER_G_BASE * speckle * grad * 0.96;
+        const B = PAPER_B_BASE * speckle * grad * 1.02;
+        sd.data[j]     = Math.min(255, R * 255);
+        sd.data[j + 1] = Math.min(255, G * 255);
+        sd.data[j + 2] = Math.min(255, B * 255);
+        sd.data[j + 3] = 255;
+      }
+    }
+    sctx.putImageData(sd, 0, 0);
+    swatchDiv.appendChild(sc);
+
+    const lbl = document.createElement('div');
+    lbl.className = 'pigment-label';
+    lbl.innerHTML = 'Water';
+
+    wrap.appendChild(swatchDiv);
+    wrap.appendChild(lbl);
+
+    wrap.addEventListener('click', () => {
+      currentPigment = WATER_INDEX;
+      document.querySelectorAll('.pigment').forEach(el => el.classList.remove('active'));
+      wrap.classList.add('active');
+      applyCursorColor();
+    });
+
+    root.appendChild(wrap);
+  }
+
+  // Lift swatch — subtractive brush. Rendered as paper with a slightly
+  // brighter center (the "absorbed spot" left by a tissue blot) and a
+  // gentle warm tint, so it visually contrasts the water swatch's cool
+  // tint and reads as removal rather than addition.
+  {
+    const wrap = document.createElement('div');
+    wrap.className = 'pigment' + (currentPigment === LIFT_INDEX ? ' active' : '');
+    wrap.title = 'Lift — removes pigment from the paper, water level unchanged';
+    wrap.dataset.idx = LIFT_INDEX;
+
+    const swatchDiv = document.createElement('div');
+    swatchDiv.className = 'pigment-swatch';
+
+    const sc = document.createElement('canvas');
+    sc.width = 56; sc.height = 56;
+    const sctx = sc.getContext('2d');
+    const sd = sctx.createImageData(56, 56);
+    for (let y = 0; y < 56; y++) {
+      for (let x = 0; x < 56; x++) {
+        const dx = x - 28, dy = y - 28;
+        const d2 = dx*dx + dy*dy;
+        const j = (y * 56 + x) * 4;
+        if (d2 > 28*28) {
+          sd.data[j] = 0; sd.data[j+1] = 0; sd.data[j+2] = 0; sd.data[j+3] = 0;
+          continue;
+        }
+        const speckle = 0.92 + 0.12 * smoothNoise(x * 0.3, y * 0.3);
+        const dist = Math.sqrt(d2) / 28;
+        // Brighter near center, gently dimmer near edge — like the
+        // lighter spot a blotted tissue leaves on a wet wash.
+        const liftBright = 1.04 - 0.06 * dist;
+        const R = PAPER_R_BASE * speckle * liftBright;
+        const G = PAPER_G_BASE * speckle * liftBright * 0.99;
+        const B = PAPER_B_BASE * speckle * liftBright * 0.96;  // slight warm
+        sd.data[j]     = Math.min(255, R * 255);
+        sd.data[j + 1] = Math.min(255, G * 255);
+        sd.data[j + 2] = Math.min(255, B * 255);
+        sd.data[j + 3] = 255;
+      }
+    }
+    sctx.putImageData(sd, 0, 0);
+    swatchDiv.appendChild(sc);
+
+    const lbl = document.createElement('div');
+    lbl.className = 'pigment-label';
+    lbl.innerHTML = 'Lift';
+
+    wrap.appendChild(swatchDiv);
+    wrap.appendChild(lbl);
+
+    wrap.addEventListener('click', () => {
+      currentPigment = LIFT_INDEX;
+      document.querySelectorAll('.pigment').forEach(el => el.classList.remove('active'));
+      wrap.classList.add('active');
+      applyCursorColor();
+    });
+
+    root.appendChild(wrap);
+  }
+
+  // Rainbow swatch — horizontal sweep through the three pigments
+  // using the same KM math that paintAt's rainbow branch will deposit.
+  // Shows rose at the left edge through yellow in the middle to blue
+  // at the right edge; the blue→rose wrap part of the cycle is not
+  // drawn here since the user can already see all three primaries.
+  {
+    const wrap = document.createElement('div');
+    wrap.className = 'pigment' + (currentPigment === RAINBOW_INDEX ? ' active' : '');
+    wrap.title = 'Rainbow — cycles rose → yellow → blue → rose over 2.25s';
+    wrap.dataset.idx = RAINBOW_INDEX;
+
+    const swatchDiv = document.createElement('div');
+    swatchDiv.className = 'pigment-swatch';
+
+    const sc = document.createElement('canvas');
+    sc.width = 56; sc.height = 56;
+    const sctx = sc.getContext('2d');
+    const sd = sctx.createImageData(56, 56);
+    const P0 = PIGMENTS[0], P1 = PIGMENTS[1], P2 = PIGMENTS[2];
+    for (let y = 0; y < 56; y++) {
+      for (let x = 0; x < 56; x++) {
+        const dx = x - 28, dy = y - 28;
+        const d2 = dx*dx + dy*dy;
+        const j = (y * 56 + x) * 4;
+        if (d2 > 28*28) {
+          sd.data[j] = 0; sd.data[j+1] = 0; sd.data[j+2] = 0; sd.data[j+3] = 0;
+          continue;
+        }
+        // Map x position to first 2/3 of the rainbow cycle so we get
+        // rose → yellow → blue across the swatch width. Three weights
+        // computed inline with the same shape as updateRainbowWeights
+        // but parameterized by x instead of time.
+        const frac = x / 55; // 0..1 across width
+        let w0, w1, w2;
+        if (frac < 0.5) {
+          const f = frac / 0.5;
+          w0 = 1 - f; w1 = f; w2 = 0;
+        } else {
+          const f = (frac - 0.5) / 0.5;
+          w0 = 0; w1 = 1 - f; w2 = f;
+        }
+        const Kr = P0.K[0]*w0 + P1.K[0]*w1 + P2.K[0]*w2;
+        const Kg = P0.K[1]*w0 + P1.K[1]*w1 + P2.K[1]*w2;
+        const Kb = P0.K[2]*w0 + P1.K[2]*w1 + P2.K[2]*w2;
+        const Sr = P0.S[0]*w0 + P1.S[0]*w1 + P2.S[0]*w2;
+        const Sg = P0.S[1]*w0 + P1.S[1]*w1 + P2.S[1]*w2;
+        const Sb = P0.S[2]*w0 + P1.S[2]*w1 + P2.S[2]*w2;
+        // Slight thickness variation by y for an organic swatch feel,
+        // matching the speckle treatment of the pigment swatches.
+        const thickness = 0.55 + 0.4 * smoothNoise(x * 0.3, y * 0.3);
+        const R = kmReflect(Kr, Sr, thickness, PAPER_R_BASE);
+        const G = kmReflect(Kg, Sg, thickness, PAPER_G_BASE);
+        const B = kmReflect(Kb, Sb, thickness, PAPER_B_BASE);
+        sd.data[j]     = Math.min(255, Math.max(0, R * 255));
+        sd.data[j + 1] = Math.min(255, Math.max(0, G * 255));
+        sd.data[j + 2] = Math.min(255, Math.max(0, B * 255));
+        sd.data[j + 3] = 255;
+      }
+    }
+    sctx.putImageData(sd, 0, 0);
+    swatchDiv.appendChild(sc);
+
+    const lbl = document.createElement('div');
+    lbl.className = 'pigment-label';
+    lbl.innerHTML = 'Rainbow';
+
+    wrap.appendChild(swatchDiv);
+    wrap.appendChild(lbl);
+
+    wrap.addEventListener('click', () => {
+      currentPigment = RAINBOW_INDEX;
+      document.querySelectorAll('.pigment').forEach(el => el.classList.remove('active'));
+      wrap.classList.add('active');
+      applyCursorColor();
+    });
+
+    root.appendChild(wrap);
+  }
+
+  // Masking-fluid swatch (v0.13). Painted on first to reserve paper —
+  // any subsequent pigment/water/lift skips masked cells. Rendered as
+  // a pale yellow blob with a darker yellow speckled rim to match the
+  // visual appearance of real masking fluid (which is typically a
+  // yellowish-amber liquid latex). Active state still picks it up via
+  // the .active class so the user can see which brush is selected.
+  {
+    const wrap = document.createElement('div');
+    wrap.className = 'pigment' + (currentPigment === MASK_INDEX ? ' active' : '');
+    wrap.title = 'Mask — paints masking fluid that reserves paper from any subsequent painting. Remove with the "Remove mask" button.';
+    wrap.dataset.idx = MASK_INDEX;
+
+    const swatchDiv = document.createElement('div');
+    swatchDiv.className = 'pigment-swatch';
+
+    const sc = document.createElement('canvas');
+    sc.width = 56; sc.height = 56;
+    const sctx = sc.getContext('2d');
+    const sd = sctx.createImageData(56, 56);
+    for (let y = 0; y < 56; y++) {
+      for (let x = 0; x < 56; x++) {
+        const dx = x - 28, dy = y - 28;
+        const d2 = dx*dx + dy*dy;
+        const j = (y * 56 + x) * 4;
+        if (d2 > 28*28) {
+          sd.data[j] = 0; sd.data[j+1] = 0; sd.data[j+2] = 0; sd.data[j+3] = 0;
+          continue;
+        }
+        // Soft pale-yellow with darker speckle around the edge ring.
+        // The speckle helps it read as a special/non-pigment tool
+        // similar to how Water and Lift have textured appearances.
+        const speckle = 0.90 + 0.18 * smoothNoise(x * 0.32, y * 0.32);
+        const dist = Math.sqrt(d2);
+        const edgeRing = dist > 22 ? (dist - 22) / 6 : 0;  // 0 inner, 1 outer
+        // Blend pale yellow (center) → darker amber-yellow (edge)
+        const R = (0.96 - edgeRing * 0.10) * speckle;
+        const G = (0.90 - edgeRing * 0.14) * speckle;
+        const B = (0.55 - edgeRing * 0.22) * speckle;
+        sd.data[j]     = Math.min(255, R * 255);
+        sd.data[j + 1] = Math.min(255, G * 255);
+        sd.data[j + 2] = Math.min(255, B * 255);
+        sd.data[j + 3] = 255;
+      }
+    }
+    sctx.putImageData(sd, 0, 0);
+    swatchDiv.appendChild(sc);
+
+    const lbl = document.createElement('div');
+    lbl.className = 'pigment-label';
+    lbl.innerHTML = 'Mask';
+
+    wrap.appendChild(swatchDiv);
+    wrap.appendChild(lbl);
+
+    wrap.addEventListener('click', () => {
+      currentPigment = MASK_INDEX;
+      document.querySelectorAll('.pigment').forEach(el => el.classList.remove('active'));
+      wrap.classList.add('active');
+      applyCursorColor();
+    });
+
+    root.appendChild(wrap);
+  }
+}
+
+// ============================================================
+// BRUSH SIZE CONTROLS — range adapts to viewport
+// ============================================================
+const MIN_BRUSH = 4;
+const MAX_BRUSH = 240;
+const sizeInput = document.getElementById('size');
+const sizeValue = document.getElementById('size-value');
+sizeInput.min = MIN_BRUSH;
+sizeInput.max = MAX_BRUSH;
+function setBrushSize(s) {
+  brushSize = Math.max(MIN_BRUSH, Math.min(MAX_BRUSH, s));
+  sizeInput.value = brushSize;
+  sizeValue.textContent = brushSize;
+  applyCursorSize();
+}
+sizeInput.addEventListener('input', () => setBrushSize(parseInt(sizeInput.value, 10)));
+window.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT') return;
+  // Step is proportional — 2% of the range — so [/] still feels useful
+  // when the slider spans hundreds of pixels.
+  const step = Math.max(2, Math.round((MAX_BRUSH - MIN_BRUSH) * 0.02));
+  if (e.key === '[') setBrushSize(brushSize - step);
+  else if (e.key === ']') setBrushSize(brushSize + step);
+});
+
+// Reset button
+document.getElementById('reset').addEventListener('click', resetSim);
+
+// Toggle buttons — flip the boolean, sync the .on class and aria-pressed.
+function wireToggle(id, getValue, setValue) {
+  const el = document.getElementById(id);
+  el.addEventListener('click', () => {
+    const next = !getValue();
+    setValue(next);
+    el.classList.toggle('on', next);
+    el.setAttribute('aria-pressed', next ? 'true' : 'false');
+  });
+}
+// Fade half-life slider — only meaningful when the Fade painting toggle
+// is on, but the slider is always wired so its value persists across
+// toggle on/off. Recomputing fadeFactor is one Math.pow per change.
+const fadeControl = document.getElementById('fade-control');
+const fadeSlider = document.getElementById('fade-halflife');
+const fadeValueLabel = document.getElementById('fade-value');
+fadeSlider.addEventListener('input', () => {
+  const ms = parseInt(fadeSlider.value, 10);
+  setFadeHalfLifeMs(ms);
+  fadeValueLabel.textContent = fadeHalfLifeMs;
+});
+
+// Resolution slider — controls SCALE live via rebuildScale(). The URL
+// query parameter (?scale=) is still honored at page load as the
+// initial value, so links remain shareable.
+const scaleSlider = document.getElementById('scale-slider');
+const scaleValueLabel = document.getElementById('scale-value');
+scaleSlider.value = SCALE;
+scaleValueLabel.textContent = SCALE.toString();
+scaleSlider.addEventListener('input', () => {
+  scaleValueLabel.textContent = parseFloat(scaleSlider.value).toString();
+});
+scaleSlider.addEventListener('change', () => {
+  const newScale = parseFloat(scaleSlider.value);
+  if (newScale === SCALE) return;  // dragged but landed on same value
+  rebuildScale(newScale);
+});
+
+wireToggle('toggle-edge',
+  () => edgeDarkeningEnabled,
+  (v) => { edgeDarkeningEnabled = v; });
+wireToggle('toggle-drying',
+  () => dryingPaused,
+  (v) => { dryingPaused = v; });
+wireToggle('toggle-fade',
+  () => fadeEnabled,
+  (v) => {
+    fadeEnabled = v;
+    framesSinceFade = 0;
+    // Slider row only relevant when fade is active — hide otherwise so
+    // the control panel doesn't carry an inert slider.
+    fadeControl.hidden = !v;
+  });
+
+// Re-wet button — momentary action, not a stateful toggle. Briefly flashes
+// the .on appearance to confirm the click registered, then returns to off.
+const rewetBtn = document.getElementById('rewet-btn');
+rewetBtn.addEventListener('click', () => {
+  rewet();
+  rewetBtn.classList.add('on');
+  setTimeout(() => rewetBtn.classList.remove('on'), 220);
+});
+
+// Dry button — inverse of Re-wet. Same momentary-flash treatment.
+const dryBtn = document.getElementById('dry-btn');
+dryBtn.addEventListener('click', () => {
+  dryPaper();
+  dryBtn.classList.add('on');
+  setTimeout(() => dryBtn.classList.remove('on'), 220);
+});
+
+// Remove mask button (v0.13) — clears all masking fluid in one pass.
+// Real-world equivalent: rubbing the dried latex off the painting.
+const removeMaskBtn = document.getElementById('remove-mask-btn');
+removeMaskBtn.addEventListener('click', () => {
+  removeMask();
+  removeMaskBtn.classList.add('on');
+  setTimeout(() => removeMaskBtn.classList.remove('on'), 220);
+});
+
+// ============================================================
+// PNG EXPORT (v0.10.1)
+// ============================================================
+// Snapshots the current canvas to a downloadable PNG file. Two
+// subtleties make this more than a one-liner:
+//
+//   1. The localized render only writes pixels for cells in the active
+//      rect — cells that have never been painted have zero alpha in
+//      imgData / renderCanvas. We force a full render first so blank
+//      paper picks up its texture and dampness sheen and exports as
+//      proper opaque paper, not transparent holes.
+//
+//   2. When the Transparent toggle is off, the user sees the painting
+//      sitting on the body-bg paper color. The display canvas itself
+//      has alpha holes wherever pigment is sparse; the paper color
+//      shines through via CSS, not via the canvas pixels. For an
+//      export that looks like what the user sees, we composite the
+//      paper color underneath before encoding. Transparent toggle on:
+//      preserve alpha so the export can be layered elsewhere.
+function exportPng() {
+  // Force a full render — bypass the active-rect optimization so every
+  // cell has fresh, accurate pixels. This temporarily costs one full-
+  // grid render pass (a few ms at 1.5M cells); cheap for an export.
+  render(true);
+
+  // Offscreen canvas at display dimensions. Using display rather than
+  // grid resolution gives the export the same size the user sees on
+  // screen; the upscale uses the same imageSmoothing the live canvas
+  // does, so the look matches.
+  const out = document.createElement('canvas');
+  out.width  = DISPLAY_W;
+  out.height = DISPLAY_H;
+  const octx = out.getContext('2d');
+  octx.imageSmoothingEnabled = true;
+  octx.imageSmoothingQuality = 'high';
+
+  if (!transparentBg) {
+    // Paint paper color underneath so the export is self-contained.
+    // Uses the same hex form the body-bg CSS variable uses, so the
+    // background tone matches the on-screen rendering exactly.
+    octx.fillStyle = rgbToHex(PAPER_R_BASE, PAPER_G_BASE, PAPER_B_BASE);
+    octx.fillRect(0, 0, DISPLAY_W, DISPLAY_H);
+  }
+
+  // Draw the freshly-rendered low-res canvas, scaled to display size.
+  // Same drawImage path the live preview uses inside render().
+  octx.drawImage(renderCanvas, 0, 0, DISPLAY_W, DISPLAY_H);
+
+  // Encode to PNG and trigger a download via a temporary <a>. The
+  // timestamp in the filename keeps successive saves from clobbering
+  // each other in the user's download folder.
+  out.toBlob((blob) => {
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    a.href = url;
+    a.download = `watercolor-${stamp}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    // Defer revoke briefly so the browser has time to start the
+    // download stream — immediate revoke can race on some engines.
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }, 'image/png');
+}
+
+const exportBtn = document.getElementById('export-btn');
+exportBtn.addEventListener('click', () => {
+  exportPng();
+  // Brief flash for visual confirmation — same convention as Re-wet/Dry.
+  exportBtn.classList.add('on');
+  setTimeout(() => exportBtn.classList.remove('on'), 220);
+});
+
+// ============================================================
+// ANIMATION PRESETS — autonomous painting loops (v0.11)
+// ============================================================
+// Selectable via the Animation dropdown. Each mode is a self-contained
+// step function called from the rAF loop; all modes share the user-
+// facing paintAt path, so they can't bypass or desync from the sim.
+//
+// Modes:
+//   'off'   — no animation
+//   'ai'    — original AI painter (weighted stroke strategies; one
+//             stroke at a time on a PLAN → STROKE → REST loop)
+//   'rainy' — pool of up to RAIN_MAX_DROPS concurrent drops falling
+//             from above; cool palette with occasional water lifts
+//
+// Adding a new preset: define a state variable + a `*Step` function,
+// add a dispatch arm to animationStep(), and add an <option> to the
+// dropdown. The dispatcher routes by string so additions stay local.
+
+let animationMode = 'off';
+
+// ----- AI PAINTER preset ------------------------------------------------
+// Simple state machine: PLAN → STROKE → REST → PLAN.
+// Each stroke picks a weighted strategy that constrains brush size,
+// stroke length in grid cells, frame duration, and tool/pigment. The
+// path is a quadratic Bezier with a perpendicular control-point offset
+// so strokes have some natural curve.
+
+let aiState = null;
+// Average pigment per cell — updated each frame by updateBars.
+// Shared with the AI planner so it can switch behavior based on canvas
+// saturation without re-computing the sum.
+let currentAvgPigment = 0;
+// Above this saturation, the AI stops adding pigment and exclusively
+// uses the water brush ('soften' strategy) — pushing existing paint
+// around rather than piling more on a saturated canvas.
+const AI_WATER_THRESHOLD = 0.75;
+
+const AI_STRATEGIES = [
+  // brushPx is display pixels (clamped to MAX_BRUSH at plan time).
+  // dist is a fraction of min(GW, GH) → stroke length in grid cells.
+  // dur is frame count for the whole stroke. pigment: null = random pigment.
+  { name: 'mark',   weight: 3.0, brushPx: [ 20,  60], dist: [0.10, 0.35], dur: [25, 55], strength: 0.34, pigment: null         },
+  { name: 'wash',   weight: 2.0, brushPx: [ 80, 200], dist: [0.20, 0.50], dur: [40, 80], strength: 0.30, pigment: null         },
+  { name: 'detail', weight: 1.6, brushPx: [  8,  22], dist: [0.00, 0.05], dur: [ 8, 20], strength: 0.40, pigment: null         },
+  { name: 'soften', weight: 1.0, brushPx: [ 40, 100], dist: [0.05, 0.25], dur: [25, 45], strength: 0.30, pigment: WATER_INDEX  },
+  { name: 'lift',   weight: 0.6, brushPx: [ 30,  70], dist: [0.00, 0.10], dur: [15, 30], strength: 0.30, pigment: LIFT_INDEX   },
+];
+// Pre-cached soften strategy so we don't .find() it on every stroke
+// once the canvas is saturated.
+const AI_SOFTEN_STRATEGY = AI_STRATEGIES.find(s => s.name === 'soften');
+
+function aiPickWeighted(items) {
+  let total = 0;
+  for (const it of items) total += it.weight;
+  let r = Math.random() * total;
+  for (const it of items) {
+    r -= it.weight;
+    if (r <= 0) return it;
+  }
+  return items[items.length - 1];
+}
+
+function aiGridRadius(brushPx) {
+  // Same conversion the user's pointer handlers use, so AI strokes
+  // and user strokes use identical brush footprints.
+  const rect = canvas.getBoundingClientRect();
+  return (brushPx / 2) * (GW / rect.width);
+}
+
+function aiPlanStroke() {
+  // Saturated canvas → exclusively water brush. Dynamic: if pigment
+  // later drops below threshold (lift brush, reset), AI returns to
+  // normal weighted strategy selection.
+  const strat = currentAvgPigment >= AI_WATER_THRESHOLD
+    ? AI_SOFTEN_STRATEGY
+    : aiPickWeighted(AI_STRATEGIES);
+
+  // Brush size in display px, clamped to the slider's viewport max
+  const bpMin = Math.min(strat.brushPx[0], MAX_BRUSH);
+  const bpMax = Math.min(strat.brushPx[1], MAX_BRUSH);
+  const brushPx = bpMin + Math.random() * (bpMax - bpMin);
+
+  // Stroke endpoints in grid coordinates
+  const minDim = Math.min(GW, GH);
+  const distF = strat.dist[0] + Math.random() * (strat.dist[1] - strat.dist[0]);
+  const distGrid = distF * minDim;
+
+  // Bias the start point toward the canvas interior so strokes don't
+  // always sail out off the edge
+  const margin = 0.12;
+  const sx = margin * GW + Math.random() * (1 - 2 * margin) * GW;
+  const sy = margin * GH + Math.random() * (1 - 2 * margin) * GH;
+
+  // Random direction; clamp the end inside canvas
+  const angle = Math.random() * Math.PI * 2;
+  let ex = sx + Math.cos(angle) * distGrid;
+  let ey = sy + Math.sin(angle) * distGrid;
+  ex = Math.max(0, Math.min(GW - 1, ex));
+  ey = Math.max(0, Math.min(GH - 1, ey));
+
+  // Perpendicular control-point offset → curved Bezier path
+  const dx = ex - sx, dy = ey - sy;
+  const curve = (Math.random() - 0.5) * 0.35;
+  const cx = (sx + ex) / 2 + (-dy) * curve;
+  const cy = (sy + ey) / 2 + ( dx) * curve;
+
+  const duration = Math.floor(
+    strat.dur[0] + Math.random() * (strat.dur[1] - strat.dur[0])
+  );
+
+  const pigment = strat.pigment !== null
+    ? strat.pigment
+    : Math.floor(Math.random() * PIGMENTS.length);
+
+  return {
+    phase: 'stroke',
+    progress: 0,
+    duration,
+    sx, sy, cx, cy, ex, ey,
+    pigment, brushPx,
+    strength: strat.strength,
+  };
+}
+
+function aiStep() {
+  if (animationMode !== 'ai') return;
+  if (!aiState) { aiState = aiPlanStroke(); return; }
+
+  if (aiState.phase === 'stroke') {
+    aiState.progress++;
+    if (aiState.progress > aiState.duration) {
+      // ~18% of strokes are followed by a long pause so the canvas has
+      // time to dry between bursts of activity; the rest are short rests.
+      const longRest = Math.random() < 0.18;
+      aiState = {
+        phase: 'rest',
+        framesLeft: longRest
+          ? 120 + Math.floor(Math.random() * 240)
+          : 8   + Math.floor(Math.random() *  60),
+      };
+      return;
+    }
+    const t = aiState.progress / aiState.duration;
+    const u = 1 - t;
+    const x = u*u*aiState.sx + 2*u*t*aiState.cx + t*t*aiState.ex;
+    const y = u*u*aiState.sy + 2*u*t*aiState.cy + t*t*aiState.ey;
+    paintAt(x, y, aiGridRadius(aiState.brushPx), aiState.pigment, aiState.strength);
+  } else if (aiState.phase === 'rest') {
+    aiState.framesLeft--;
+    if (aiState.framesLeft <= 0) aiState = null;
+  }
+}
+
+// ----- RAINY preset -----------------------------------------------------
+// A pool of independent "drops" that spawn just above the canvas, fall
+// downward with a slight horizontal drift, and paint along the way. The
+// preset uses paintAt the same way the user's pointer does, so every
+// drop participates in the watercolor sim — wet bleed, edge darkening,
+// granulation all apply per drop.
+//
+// Tuning notes:
+//   • RAIN_MAX_DROPS caps concurrency so the active rect stays bounded
+//     and the canvas doesn't saturate instantly. 12 feels like steady
+//     rain without obliterating the surface.
+//   • Per-frame spawn probability is RAIN_SPAWN_PER_SEC / 60, capped by
+//     the max. The math is loose — a Bernoulli trial per frame, not a
+//     true Poisson — which is fine for visual density.
+//   • Palette is cool: cerulean dominates, water-brush drops produce
+//     lift highlights, occasional rose breaks the monotony. The cool
+//     bias reads as a rainy mood whatever paper color is selected.
+//   • Drops drift slightly horizontally (vx) and fall fast (vy), with
+//     randomness so they don't all march in lockstep.
+
+const RAIN_MAX_DROPS = 12;
+const RAIN_SPAWN_PER_SEC = 30;   // average new drops per second (capped by MAX)
+
+// Each entry: [pigmentConstant, weight, [strengthLo, strengthHi], [brushPxLo, brushPxHi]]
+const RAIN_DROP_TYPES = [
+  // pigmentConstant uses the same indexing paintAt accepts:
+  // 0/1/2 are real pigments; WATER_INDEX is the water brush.
+  // The cerulean index (2) and rose index (0) are hard-coded — they map to the
+  // PIGMENTS array defined at the top of the script.
+  [2,            0.60, [0.18, 0.30], [10, 22]],   // cerulean — dominant
+  [WATER_INDEX,  0.30, [0.15, 0.28], [10, 20]],   // water — lifts existing paint
+  [0,            0.10, [0.10, 0.20], [ 8, 14]],   // rose — occasional warmth
+];
+
+let rainDrops = [];
+
+function rainSpawnDrop() {
+  // Weighted pick. Sum once and walk; cheap enough at 3 entries.
+  let total = 0;
+  for (const t of RAIN_DROP_TYPES) total += t[1];
+  let r = Math.random() * total;
+  let chosen = RAIN_DROP_TYPES[0];
+  for (const t of RAIN_DROP_TYPES) {
+    r -= t[1];
+    if (r <= 0) { chosen = t; break; }
+  }
+  const [pigment, , [sLo, sHi], [bLo, bHi]] = chosen;
+  return {
+    // Start above the top edge so the drop fades in via the falling
+    // motion rather than popping into existence at y=0.
+    x: Math.random() * GW,
+    y: -10 - Math.random() * 20,
+    vx: (Math.random() - 0.5) * 0.6,            // slight horizontal drift
+    vy: 4.0 + Math.random() * 5.0,              // grid cells per frame
+    brushPx: bLo + Math.random() * (bHi - bLo),
+    pigment,
+    strength: sLo + Math.random() * (sHi - sLo),
+  };
+}
+
+function rainStep() {
+  // Spawn up to MAX with per-frame Bernoulli probability. The while-loop
+  // can spawn multiple per frame if probability is high; with
+  // RAIN_SPAWN_PER_SEC=30 at 60fps it averages 0.5 spawn-attempts/frame.
+  const spawnProb = RAIN_SPAWN_PER_SEC / 60;
+  while (rainDrops.length < RAIN_MAX_DROPS && Math.random() < spawnProb) {
+    rainDrops.push(rainSpawnDrop());
+  }
+
+  // Cache the px→grid conversion once per frame. paintAt uses grid
+  // coordinates; the slider/UI works in display pixels.
+  const rect = canvas.getBoundingClientRect();
+  const pxToGridRadius = (GW / rect.width) * 0.5;
+
+  // Step each drop. Walk backward so splice doesn't disturb indices.
+  for (let i = rainDrops.length - 1; i >= 0; i--) {
+    const d = rainDrops[i];
+    d.x += d.vx;
+    d.y += d.vy;
+
+    // Cull drops that have run off the canvas (mostly through the
+    // bottom; sideways too, in case the drift carried them off).
+    if (d.y > GH + 10 || d.x < -10 || d.x > GW + 10) {
+      rainDrops.splice(i, 1);
+      continue;
+    }
+
+    // Paint only when the drop is actually on-canvas. The above-canvas
+    // segment is a "spawn delay" so drops appear to fall in from off-screen.
+    if (d.y >= 0 && d.y < GH) {
+      paintAt(d.x, d.y, d.brushPx * pxToGridRadius, d.pigment, d.strength);
+    }
+  }
+}
+
+// ----- SUNNY preset -----------------------------------------------------
+// Calm, slow horizontal sweeps in the upper portion of the canvas. Reads
+// as soft sunlight rather than literal sunbeams — large brush, warm
+// palette (yellow primary, rose accent), low strength so accumulated
+// strokes wash rather than stack into a solid mark. Spawn interval is
+// deliberately long; sunny is the quietest preset.
+const SUNNY_MAX = 2;
+const SUNNY_SPAWN_INTERVAL_MIN = 150;
+const SUNNY_SPAWN_INTERVAL_RAND = 120;
+
+let sunnyStrokes = [];
+let sunnySpawnTimer = 30;  // small initial delay so the first stroke isn't instant
+
+function sunnySpawn() {
+  // Bezier sweep across canvas, biased toward the top third. Direction
+  // alternates randomly so strokes don't all go the same way.
+  const direction = Math.random() < 0.5 ? 1 : -1;
+  const sx = direction > 0 ? -GW * 0.1 : GW * 1.1;
+  const ex = direction > 0 ? GW * 1.1 : -GW * 0.1;
+  const sy = GH * (0.05 + Math.random() * 0.35);
+  const ey = sy + (Math.random() - 0.5) * GH * 0.15;
+  const cx = (sx + ex) / 2;
+  const cy = (sy + ey) / 2 + (Math.random() - 0.5) * GH * 0.25;
+  return {
+    progress: 0,
+    duration: 80 + Math.floor(Math.random() * 80),
+    sx, sy, cx, cy, ex, ey,
+    pigment: Math.random() < 0.75 ? 1 : 0,        // 75% yellow, 25% rose
+    strength: 0.16 + Math.random() * 0.10,
+    brushPx: 80 + Math.random() * 100,
+  };
+}
+
+function sunnyStep() {
+  sunnySpawnTimer--;
+  if (sunnySpawnTimer <= 0 && sunnyStrokes.length < SUNNY_MAX) {
+    sunnyStrokes.push(sunnySpawn());
+    sunnySpawnTimer = SUNNY_SPAWN_INTERVAL_MIN + Math.floor(Math.random() * SUNNY_SPAWN_INTERVAL_RAND);
+  }
+  const rect = canvas.getBoundingClientRect();
+  const pxToGridRadius = (GW / rect.width) * 0.5;
+  for (let i = sunnyStrokes.length - 1; i >= 0; i--) {
+    const s = sunnyStrokes[i];
+    s.progress++;
+    if (s.progress > s.duration) { sunnyStrokes.splice(i, 1); continue; }
+    const t = s.progress / s.duration;
+    const u = 1 - t;
+    const x = u*u*s.sx + 2*u*t*s.cx + t*t*s.ex;
+    const y = u*u*s.sy + 2*u*t*s.cy + t*t*s.ey;
+    paintAt(x, y, s.brushPx * pxToGridRadius, s.pigment, s.strength);
+  }
+}
+
+// ----- WINDY preset -----------------------------------------------------
+// Many fast horizontal streaks. The wind has a dominant direction that
+// occasionally gusts the other way — a small probability per frame of
+// flipping windDirection produces irregular shifts rather than the
+// strict left/right alternation you'd get with a sine wave.
+const WINDY_MAX = 8;
+const WINDY_GUST_PROB = 0.0008;
+
+let windyStreaks = [];
+let windDirection = 1;
+
+function windySpawn() {
+  // Spawn just off the upwind edge so streaks "blow in"
+  return {
+    x: windDirection > 0 ? -10 - Math.random() * 30 : GW + 10 + Math.random() * 30,
+    y: Math.random() * GH,
+    vx: windDirection * (5 + Math.random() * 6),
+    vy: (Math.random() - 0.5) * 0.3,
+    brushPx: 6 + Math.random() * 14,
+    // Cool-air cerulean dominates, occasional warm yellow streak. Water
+    // adds variation by lifting deposited paint (visible only where the
+    // canvas already has pigment, but that's the point — wind erodes).
+    pigment: (() => {
+      const r = Math.random();
+      if (r < 0.70) return 2;            // cerulean
+      if (r < 0.85) return WATER_INDEX;  // water lift
+      return 1;                          // yellow
+    })(),
+    strength: 0.10 + Math.random() * 0.10,
+    life: 200,
+  };
+}
+
+function windyStep() {
+  if (Math.random() < WINDY_GUST_PROB) windDirection *= -1;
+  while (windyStreaks.length < WINDY_MAX && Math.random() < 0.35) {
+    windyStreaks.push(windySpawn());
+  }
+  const rect = canvas.getBoundingClientRect();
+  const pxToGridRadius = (GW / rect.width) * 0.5;
+  for (let i = windyStreaks.length - 1; i >= 0; i--) {
+    const s = windyStreaks[i];
+    s.x += s.vx;
+    s.y += s.vy;
+    s.life--;
+    if (s.life <= 0 || s.x < -20 || s.x > GW + 20) { windyStreaks.splice(i, 1); continue; }
+    if (s.y >= 0 && s.y < GH) {
+      paintAt(s.x, s.y, s.brushPx * pxToGridRadius, s.pigment, s.strength);
+    }
+  }
+}
+
+// ----- THUNDERSTORM preset ---------------------------------------------
+// Heavy rain (faster, more drops than the rainy preset) plus periodic
+// lightning. Lightning is a single-frame burst of small paintAt calls
+// along a jagged vertical path — not a separate visual primitive,
+// just dense small strokes in bright yellow that read as a bolt
+// against the dark/wet canvas.
+const STORM_MAX_DROPS = 18;
+const STORM_SPAWN_PER_SEC = 60;
+const STORM_LIGHTNING_MIN_COOLDOWN = 90;     // frames; ~1.5 sec min between flashes
+const STORM_LIGHTNING_RAND_COOLDOWN = 360;   // additional random delay
+
+let stormDrops = [];
+let stormLightningCooldown = 120;            // initial delay before first flash
+
+function stormSpawnDrop() {
+  const r = Math.random();
+  let pigment;
+  if (r < 0.65) pigment = 2;              // cerulean — dominant
+  else if (r < 0.85) pigment = WATER_INDEX; // water lift
+  else pigment = 0;                       // rose
+  return {
+    x: Math.random() * GW,
+    y: -10 - Math.random() * 30,
+    vx: (Math.random() - 0.5) * 1.0,    // more turbulent than rainy
+    vy: 6 + Math.random() * 6,          // harder rain
+    brushPx: 10 + Math.random() * 18,
+    pigment,
+    strength: 0.20 + Math.random() * 0.20,
+  };
+}
+
+function stormFlashLightning() {
+  // Build a jagged vertical path top → bottom; paint many small dabs
+  // along each segment so the bolt reads as a continuous stroke. Yellow
+  // at high strength against the wet, cool canvas pops cleanly.
+  const segments = 6 + Math.floor(Math.random() * 5);
+  const startX = GW * 0.15 + Math.random() * GW * 0.7;
+  const jitter = GW * 0.04;
+  let cx = startX;
+  let cy = -2;
+  const segDY = GH / segments;
+  for (let s = 0; s < segments; s++) {
+    const nx = cx + (Math.random() - 0.5) * jitter * 2;
+    const ny = cy + segDY * (0.8 + Math.random() * 0.4);
+    // Walk the segment with small steps — denser steps for a more
+    // solid-looking bolt.
+    const stepsPer = 8;
+    for (let i = 0; i < stepsPer; i++) {
+      const t = i / stepsPer;
+      const px = cx + (nx - cx) * t;
+      const py = cy + (ny - cy) * t;
+      if (py >= 0 && py < GH) {
+        // Small brush, very high strength so the bolt stays bright
+        // even after the rain washes over it.
+        paintAt(px, py, 1.5, 1, 0.65);
+      }
+    }
+    cx = nx;
+    cy = ny;
+  }
+}
+
+function thunderstormStep() {
+  // Rain phase
+  const spawnProb = STORM_SPAWN_PER_SEC / 60;
+  while (stormDrops.length < STORM_MAX_DROPS && Math.random() < spawnProb) {
+    stormDrops.push(stormSpawnDrop());
+  }
+  const rect = canvas.getBoundingClientRect();
+  const pxToGridRadius = (GW / rect.width) * 0.5;
+  for (let i = stormDrops.length - 1; i >= 0; i--) {
+    const d = stormDrops[i];
+    d.x += d.vx;
+    d.y += d.vy;
+    if (d.y > GH + 10 || d.x < -10 || d.x > GW + 10) { stormDrops.splice(i, 1); continue; }
+    if (d.y >= 0 && d.y < GH) {
+      paintAt(d.x, d.y, d.brushPx * pxToGridRadius, d.pigment, d.strength);
+    }
+  }
+  // Lightning phase — fires on cooldown, then resets timer to a randomized
+  // delay. Random cooldown spread makes flashes feel natural rather than
+  // metronomic.
+  stormLightningCooldown--;
+  if (stormLightningCooldown <= 0) {
+    stormFlashLightning();
+    stormLightningCooldown = STORM_LIGHTNING_MIN_COOLDOWN
+                           + Math.floor(Math.random() * STORM_LIGHTNING_RAND_COOLDOWN);
+  }
+}
+
+// ----- PARTLY CLOUDY preset --------------------------------------------
+// A few large slow soft "clouds" drift horizontally across the upper
+// half of the canvas. Each cloud paints multiple small dabs per frame
+// spread around its center, giving an irregular puffy footprint.
+// Water-brush dabs dominate so existing pigment gets lifted (reading as
+// brighter highlights); a minority of cerulean dabs adds shadow.
+const CLOUD_MAX = 3;
+
+let clouds = [];
+let cloudSpawnTimer = 60;
+
+function cloudSpawn() {
+  const direction = Math.random() < 0.5 ? 1 : -1;
+  return {
+    x: direction > 0 ? -GW * 0.15 : GW * 1.15,
+    y: GH * (0.10 + Math.random() * 0.40),
+    vx: direction * (0.4 + Math.random() * 0.5),
+    halfWidth: GW * (0.10 + Math.random() * 0.10),    // half-extent for dab spread
+    halfHeight: GH * (0.04 + Math.random() * 0.04),
+    brushPx: 70 + Math.random() * 60,
+    life: 600,
+  };
+}
+
+function cloudsStep() {
+  cloudSpawnTimer--;
+  if (cloudSpawnTimer <= 0 && clouds.length < CLOUD_MAX) {
+    clouds.push(cloudSpawn());
+    cloudSpawnTimer = 180 + Math.floor(Math.random() * 240);
+  }
+  const rect = canvas.getBoundingClientRect();
+  const pxToGridRadius = (GW / rect.width) * 0.5;
+  for (let i = clouds.length - 1; i >= 0; i--) {
+    const c = clouds[i];
+    c.x += c.vx;
+    c.life--;
+    if (c.life <= 0 || c.x < -GW * 0.25 || c.x > GW * 1.25) { clouds.splice(i, 1); continue; }
+    // 2-3 dabs per frame, scattered within the cloud's footprint, so
+    // each cloud lays down a wide soft band rather than a thin trail.
+    const dabs = 2 + Math.floor(Math.random() * 2);
+    for (let j = 0; j < dabs; j++) {
+      const ox = (Math.random() - 0.5) * 2 * c.halfWidth;
+      const oy = (Math.random() - 0.5) * 2 * c.halfHeight;
+      // Mostly water (lifts to highlight), occasional cerulean for shadow.
+      const pig = Math.random() < 0.75 ? WATER_INDEX : 2;
+      paintAt(c.x + ox, c.y + oy, c.brushPx * pxToGridRadius, pig, 0.07);
+    }
+  }
+}
+
+// ----- SNOWING preset (v0.12.3 — wash + lift) -------------------------
+// Two-phase preset:
+//   Phase 1 (first ~0.5 sec): cerulean wash painted across the canvas,
+//     same dab pattern as the time-of-day washes. Builds a blue sky
+//     for the snow to fall against.
+//   Phase 2 (after wash, ongoing): water-brush drops fall and flutter,
+//     each one LIFTING the deposited cerulean back into suspension.
+//     The cells where flakes land become less dense in pigment — paper
+//     color shows through more, reading as white-ish snow trails.
+//
+// The water brush also adds wet + pressure, which keeps the canvas
+// saturated and lets the lifted pigment bleed/spread naturally. The
+// granulation coefficient of cerulean (γ=0.75) makes the residual
+// pigment settle into paper crevices, giving the white trails a soft
+// textured edge instead of a hard line.
+//
+// 90% of drops are pure water (lift), 10% are small cerulean dabs at
+// low strength — these refresh the sky as flakes deplete it, keeping
+// the contrast alive over long sessions.
+
+const SNOW_WASH_FRAMES = 30;            // ~0.5 sec wash before flakes start
+const SNOW_WASH_DABS_PER_FRAME = 8;
+const SNOW_WASH_STRENGTH = 0.20;        // moderate blue, dense enough to lift visibly
+const SNOW_MAX_DROPS = 16;
+const SNOW_SPAWN_PER_SEC = 30;
+
+// State held in a single object so a mode switch can clear it via
+// snowState = null. lazy-init on the first step after mode start.
+let snowState = null;
+
+function snowingInit() {
+  snowState = { washFrame: 0, drops: [] };
+}
+
+function snowSpawnFlake() {
+  return {
+    x: Math.random() * GW,
+    y: -10 - Math.random() * 30,
+    vy: 0.9 + Math.random() * 1.3,
+    flutterPhase: Math.random() * Math.PI * 2,
+    flutterAmp: 0.3 + Math.random() * 0.5,
+    flutterFreq: 0.04 + Math.random() * 0.04,
+    brushPx: 6 + Math.random() * 10,
+    // 90% water (lifts cerulean → reveals paper-cream "white"),
+    // 10% tiny cerulean replenish dabs so the sky doesn't deplete.
+    pigment: Math.random() < 0.90 ? WATER_INDEX : 2,
+    strength: 0.10 + Math.random() * 0.10,    // only used by cerulean dabs
+  };
+}
+
+function snowingStep() {
+  if (!snowState) snowingInit();
+  const rect = canvas.getBoundingClientRect();
+  const pxToGridRadius = (GW / rect.width) * 0.5;
+
+  // Phase 1: blue wash. Pure-cerulean dabs scattered across the canvas
+  // at uniform strength — a flat blue sky. Reuses the same dab pattern
+  // and tuning as the time-of-day day preset.
+  if (snowState.washFrame < SNOW_WASH_FRAMES) {
+    for (let i = 0; i < SNOW_WASH_DABS_PER_FRAME; i++) {
+      const x = Math.random() * GW;
+      const y = Math.random() * GH;
+      const brushPx = 70 + Math.random() * 80;
+      paintAt(x, y, brushPx * pxToGridRadius, 2, SNOW_WASH_STRENGTH);
+    }
+    snowState.washFrame++;
+    return;  // hold off spawning flakes until wash is laid down
+  }
+
+  // Phase 2: flakes spawn and fall. Same spawn/step/cull shape as the
+  // other drop-based presets, but the per-drop pigment is mostly the
+  // water brush — the visible effect on the canvas is paper showing
+  // through where flakes pass, not pigment being added.
+  const spawnProb = SNOW_SPAWN_PER_SEC / 60;
+  while (snowState.drops.length < SNOW_MAX_DROPS && Math.random() < spawnProb) {
+    snowState.drops.push(snowSpawnFlake());
+  }
+  for (let i = snowState.drops.length - 1; i >= 0; i--) {
+    const d = snowState.drops[i];
+    d.flutterPhase += d.flutterFreq;
+    d.x += Math.sin(d.flutterPhase) * d.flutterAmp;
+    d.y += d.vy;
+    if (d.y > GH + 10 || d.x < -10 || d.x > GW + 10) { snowState.drops.splice(i, 1); continue; }
+    if (d.y >= 0 && d.y < GH) {
+      paintAt(d.x, d.y, d.brushPx * pxToGridRadius, d.pigment, d.strength);
+    }
+  }
+}
+
+// ----- SNOWING (ADDITIVE) preset --------------------------------------
+// The original snowing behavior, preserved as an alternative to the
+// wash-and-lift variant. Tiny cerulean dabs with occasional rose flecks
+// flutter down on whatever the canvas currently contains — additive
+// rather than subtractive. Reads as a faint blue speckle rather than
+// the "white snow against a blue sky" of the lift version. Works well
+// layered on top of a sunset or dawn wash where the rose flecks pick
+// up the warm tones.
+
+const SNOW_ADD_MAX_DROPS = 16;
+const SNOW_ADD_SPAWN_PER_SEC = 24;
+
+let snowAddDrops = [];
+
+function snowAddSpawnDrop() {
+  return {
+    x: Math.random() * GW,
+    y: -10 - Math.random() * 30,
+    vy: 0.9 + Math.random() * 1.3,
+    flutterPhase: Math.random() * Math.PI * 2,
+    flutterAmp: 0.3 + Math.random() * 0.4,
+    flutterFreq: 0.04 + Math.random() * 0.04,
+    brushPx: 4 + Math.random() * 8,
+    // Cerulean dominates with occasional rose for warm flecks; γ=0.75
+    // granulation makes the dabs settle into a snowflake-like speckle.
+    pigment: Math.random() < 0.88 ? 2 : 0,
+    strength: 0.10 + Math.random() * 0.10,
+  };
+}
+
+function snowingAdditiveStep() {
+  const spawnProb = SNOW_ADD_SPAWN_PER_SEC / 60;
+  while (snowAddDrops.length < SNOW_ADD_MAX_DROPS && Math.random() < spawnProb) {
+    snowAddDrops.push(snowAddSpawnDrop());
+  }
+  const rect = canvas.getBoundingClientRect();
+  const pxToGridRadius = (GW / rect.width) * 0.5;
+  for (let i = snowAddDrops.length - 1; i >= 0; i--) {
+    const d = snowAddDrops[i];
+    d.flutterPhase += d.flutterFreq;
+    d.x += Math.sin(d.flutterPhase) * d.flutterAmp;
+    d.y += d.vy;
+    if (d.y > GH + 10 || d.x < -10 || d.x > GW + 10) { snowAddDrops.splice(i, 1); continue; }
+    if (d.y >= 0 && d.y < GH) {
+      paintAt(d.x, d.y, d.brushPx * pxToGridRadius, d.pigment, d.strength);
+    }
+  }
+}
+
+// ----- TORNADO preset (v0.14) ------------------------------------------
+// Two-phase preset that captures the "tornado sky + funnel" picture:
+//
+//   Phase 1 (wash, ~30 frames): the famously sickly green-yellow
+//     tornado sky. Cerulean + yellow KM-mix into green, with rose
+//     darkening near the top to weight in storm clouds overhead.
+//
+//   Phase 2 (ongoing funnel): a pool of agents orbits a central
+//     vertical axis that travels left-to-right across the canvas.
+//     Each agent has its own height fraction, orbital radius
+//     (fraction of the funnel's max radius at that height), phase,
+//     rotation speed, and pigment choice. The funnel is wider at top
+//     (clouds) and narrower at bottom (touching ground) via a
+//     quadratic radius falloff. Agents are biased toward the base
+//     (heightFrac = sqrt(rand)) so the dense dark mass sits low —
+//     where a real tornado's debris concentrates.
+//
+//   Funnel center wobbles slightly via sin() and translates at a
+//   steady horizontal speed. When fully off-screen-right, agents
+//   respawn from the left without re-running the wash, so the
+//   established sky stays in place across passes.
+
+const TORNADO_WASH_FRAMES = 30;
+const TORNADO_WASH_DABS_PER_FRAME = 8;
+const TORNADO_NUM_AGENTS = 14;
+const TORNADO_HORIZONTAL_SPEED = 2.2;
+const TORNADO_RESPAWN_OFFSCREEN = 80;     // cells past right edge before respawn
+
+let tornadoState = null;
+
+function tornadoSpawnAgents() {
+  // Funnel anchor lines — base near the bottom (touching ground),
+  // top near the upper third where the funnel meets the storm cloud.
+  // Stored on state so the wobble + paint loop can read them without
+  // recomputing per frame.
+  tornadoState.baseY = GH * 0.85;
+  tornadoState.topY  = GH * 0.05;
+  tornadoState.centerX = -30;             // start just off the left edge
+  tornadoState.centerY = 0;               // vertical offset from baseline
+  tornadoState.t = 0;                     // frame counter for meander sines
+  const agents = [];
+  for (let a = 0; a < TORNADO_NUM_AGENTS; a++) {
+    agents.push({
+      // Initial orbital phase spread evenly so the funnel reads as a
+      // full revolution rather than a clumped arc.
+      phase: (a / TORNADO_NUM_AGENTS) * Math.PI * 2 + Math.random() * 0.4,
+      // sqrt() bias: heightFrac is uniform in area-of-funnel terms,
+      // which weights agents toward the base where the funnel is
+      // narrowest. Visually: dense paint at the ground, lighter
+      // toward the top where the funnel spreads.
+      heightFrac: Math.sqrt(Math.random()),
+      // Radius as a fraction of the funnel's max radius at the agent's
+      // height. 0.2-1.0 fills the funnel rather than leaving it hollow.
+      radiusFrac: 0.2 + Math.random() * 0.8,
+      // Independent rotation rates so the funnel doesn't look like a
+      // rigid disk spinning — different agents at different heights
+      // shear past each other.
+      rotSpeed: 0.20 + Math.random() * 0.10,
+      // Pigment mix biased toward cerulean for the dark column body;
+      // occasional rose adds the brownish debris tint, occasional
+      // yellow brings the sky-color back into the funnel where the
+      // funnel partly transmits the green wash through to the eye.
+      pigment: Math.random() < 0.65 ? 2
+             : Math.random() < 0.5  ? 0
+             : 1,
+    });
+  }
+  tornadoState.agents = agents;
+}
+
+function tornadoInit() {
+  tornadoState = { washFrame: 0 };
+}
+
+function tornadoWashDab() {
+  // Tornado-sky wash. Cerulean + yellow KM-mix into a sickly green
+  // through the middle of the canvas. Rose tapers in at the top for
+  // storm-cloud darkness. Bottom is yellower (the famous "glowing
+  // green-yellow tornado horizon").
+  const x = Math.random() * GW;
+  const y = Math.random() * GH;
+  const yFrac = y / GH;
+  const rect = canvas.getBoundingClientRect();
+  const pxToGridRadius = (GW / rect.width) * 0.5;
+  const brushPx = 70 + Math.random() * 80;
+  const gridRadius = brushPx * pxToGridRadius;
+  const ceruleanStr = 0.18 - 0.04 * yFrac;
+  const yellowStr   = 0.10 + 0.10 * yFrac;
+  const roseStr     = yFrac < 0.40 ? 0.10 * (1 - yFrac / 0.40) : 0;
+  if (ceruleanStr > 0.01) paintAt(x, y, gridRadius, 2, ceruleanStr);
+  if (yellowStr   > 0.01) paintAt(x, y, gridRadius, 1, yellowStr);
+  if (roseStr     > 0.01) paintAt(x, y, gridRadius, 0, roseStr);
+}
+
+function tornadoStep() {
+  if (!tornadoState) tornadoInit();
+
+  // Phase 1: tornado-sky wash
+  if (tornadoState.washFrame < TORNADO_WASH_FRAMES) {
+    for (let i = 0; i < TORNADO_WASH_DABS_PER_FRAME; i++) tornadoWashDab();
+    tornadoState.washFrame++;
+    // At wash completion, populate agents and position the funnel just
+    // off the left edge so it "drifts in" rather than popping into view.
+    if (tornadoState.washFrame >= TORNADO_WASH_FRAMES) tornadoSpawnAgents();
+    return;
+  }
+  if (!tornadoState.agents) return;
+
+  // Phase 2: funnel meander.
+  //
+  // Velocity is built from a constant rightward drift PLUS three sine
+  // waves at non-commensurate frequencies on each axis. The frequencies
+  // aren't simple ratios of each other, so the sum doesn't repeat
+  // visibly within any reasonable time window — the funnel reads as
+  // genuinely irregular rather than oscillating on a fixed cycle.
+  //
+  // Y has no constant drift (the funnel stays roughly along the same
+  // horizontal swath) plus a soft restoring force (~centerY * 0.015)
+  // that pulls back toward baseline. Without it, integrated sine
+  // velocities would slowly random-walk the funnel off the canvas.
+  // With it, vertical excursions stay bounded around ±25 cells.
+  //
+  // Result: the funnel drifts mostly rightward at 1-4 cells/frame,
+  // occasionally slowing nearly to a stop or briefly backing up, while
+  // weaving up and down by small amounts — close to how an actual
+  // tornado tracks across the ground as the parent storm rotates.
+  tornadoState.t++;
+  const t = tornadoState.t;
+  const vx = TORNADO_HORIZONTAL_SPEED
+           + Math.sin(t * 0.0180)         * 1.5
+           + Math.sin(t * 0.0430 + 1.7)   * 0.6
+           + Math.sin(t * 0.0970 + 0.3)   * 0.25;
+  let vy = Math.sin(t * 0.0220 + 0.4)   * 0.9
+         + Math.cos(t * 0.0390 + 2.1)   * 0.4
+         + Math.sin(t * 0.0710)         * 0.18;
+  vy -= tornadoState.centerY * 0.015;     // restoring toward baseline
+  tornadoState.centerX += vx;
+  tornadoState.centerY += vy;
+
+  // Off-canvas right → respawn from the left without re-doing the wash
+  // (the sky stays). Reusing the same agents object would also work but
+  // creating fresh ones randomizes the phase distribution again, giving
+  // each pass slightly different character.
+  if (tornadoState.centerX > GW + TORNADO_RESPAWN_OFFSCREEN) {
+    tornadoSpawnAgents();
+  }
+
+  const rect = canvas.getBoundingClientRect();
+  const pxToGridRadius = (GW / rect.width) * 0.5;
+  const baseY = tornadoState.baseY + tornadoState.centerY;
+  const topY  = tornadoState.topY  + tornadoState.centerY;
+  const funnelHeight = baseY - topY;
+
+  for (let i = 0; i < tornadoState.agents.length; i++) {
+    const agent = tornadoState.agents[i];
+    agent.phase += agent.rotSpeed;
+
+    // Y position along the funnel (top→bottom interpolation).
+    const y = topY + agent.heightFrac * funnelHeight;
+    // widthFrac: 1.0 at top (heightFrac=0), 0.0 at bottom (heightFrac=1).
+    // Square it for the classic tornado taper — falls off faster near
+    // the base than near the top.
+    const widthFrac = 1 - agent.heightFrac;
+    const maxRadius = 4 + widthFrac * widthFrac * 50;
+    const radius = maxRadius * agent.radiusFrac;
+    // Elliptical orbit (Y squashed to 0.25 of X) so the funnel reads as
+    // a 3D column projected onto 2D — rotation around a vertical axis
+    // means horizontal motion is much larger than vertical from the
+    // viewer's perspective.
+    const offsetX = Math.cos(agent.phase) * radius;
+    const offsetY = Math.sin(agent.phase) * radius * 0.25;
+    const px = tornadoState.centerX + offsetX;
+    const py = y + offsetY;
+    if (px < -20 || px > GW + 20) continue;
+    // Brush size scales with funnel width — bigger dabs at the top
+    // (debris cloud), tighter at the base.
+    const brushPx = 6 + widthFrac * 12;
+    const strength = 0.22 + Math.random() * 0.10;
+    paintAt(px, py, brushPx * pxToGridRadius, agent.pigment, strength);
+  }
+}
+
+// ----- dispatcher -------------------------------------------------------
+function animationStep() {
+  switch (animationMode) {
+    case 'ai':                aiStep();                break;
+    case 'rainy':             rainStep();              break;
+    case 'sunny':             sunnyStep();             break;
+    case 'windy':             windyStep();             break;
+    case 'thunderstorm':      thunderstormStep();      break;
+    case 'partlyCloudy':      cloudsStep();            break;
+    case 'snowing':           snowingStep();           break;
+    case 'snowingAdditive':   snowingAdditiveStep();   break;
+    case 'tornado':           tornadoStep();           break;
+    // 'off' falls through to no-op
+  }
+}
+
+function clearAllAnimationState() {
+  aiState = null;
+  rainDrops = [];
+  sunnyStrokes = [];
+  sunnySpawnTimer = 30;
+  windyStreaks = [];
+  windDirection = 1;
+  stormDrops = [];
+  stormLightningCooldown = 120;
+  clouds = [];
+  cloudSpawnTimer = 60;
+  snowState = null;
+  snowAddDrops = [];
+  tornadoState = null;
+}
+
+// ----- UI: animation mode dropdown --------------------------------------
+const animationSelect = document.getElementById('animation-mode');
+animationSelect.addEventListener('change', () => {
+  // Discard every preset's in-flight state. Switching modes mid-stroke
+  // shouldn't leave half-fallen rain or a curving sun-sweep continuing
+  // into the new scene.
+  clearAllAnimationState();
+  animationMode = animationSelect.value;
+});
+
+// ============================================================
+// TIME OF DAY — sky wash layer (v0.12.2)
+// ============================================================
+// Each time preset is a one-shot pigment wash painted across the
+// canvas using actual pigments, layered on top of whatever was there.
+// The wash mixes with subsequent painting via KM compositing — like
+// applying a real watercolor sky wash before painting a foreground.
+//
+// Preset structure (v0.12.2): each preset is a list of independent
+// pigment "layers". Each layer has a single pigment and a y→strength
+// curve. A dab at fractional position yFrac evaluates EVERY layer's
+// curve at yFrac and emits a paintAt for each non-zero contribution,
+// all at the same (x, y) and brush size. This lets pigments stack
+// on top of each other (e.g. cerulean + rose at the top of night for
+// a deeper purple-blue) while still supporting vertical gradients
+// (sunset's cerulean→rose→yellow falls out of three curves with
+// non-overlapping non-zero regions in the middle, overlapping at the
+// transition zones).
+//
+// The wash spreads dabs over ~0.75 sec so the user watches it apply,
+// and so the bleed sim has frame-spacing to smooth between dabs
+// instead of all dabs landing simultaneously. Many overlapping
+// low-strength dabs accumulate into a soft continuous tone — natural
+// wet-on-wet behavior since the canvas starts at wet=0.62.
+
+const TIME_WASH_FRAMES = 45;          // ~0.75 sec at 60 fps
+const TIME_WASH_DABS_PER_FRAME = 8;   // total ≈ 360 dab positions per wash
+
+// Each preset is an array of layers. Each layer is { pig, curve }
+// where curve is an array of [yFrac, strength] control points. The
+// curve is piecewise-linear; values of yFrac outside the curve's
+// range return 0 strength (so the layer doesn't contribute outside
+// its declared region).
+const TIME_WASHES = {
+  day: [
+    // Light uniform cerulean — gentle sky tint.
+    { pig: 2, curve: [[0.0, 0.08], [1.0, 0.08]] },
+  ],
+  night: [
+    // Cerulean base + rose darkening layer. The two pigments KM-mix
+    // into deep blue-purple. Cerulean is denser overall to read as a
+    // proper night sky. Rose is confined to the upper 67% of the
+    // canvas (zenith), tapering to zero by y=0.67 so the lower
+    // horizon area stays a cooler pure blue — like real night skies
+    // where the zenith is darker/purpler than the lower horizon.
+    { pig: 2, curve: [[0.0, 0.42], [1.0, 0.32]] },         // cerulean denser
+    { pig: 0, curve: [[0.0, 0.26], [0.67, 0.0]] },         // rose, top 67% only
+  ],
+  sunset: [
+    // Three-layer gradient: dusk-blue zenith → rose mid → yellow
+    // horizon. Each layer's non-zero region overlaps its neighbor
+    // at the transition zone so the bleed sim cross-fades cleanly.
+    { pig: 2, curve: [[0.0, 0.13], [0.45, 0.0]] },              // cerulean fading out
+    { pig: 0, curve: [[0.0, 0.0], [0.45, 0.16], [1.0, 0.0]] },  // rose peaks at 0.45
+    { pig: 1, curve: [[0.45, 0.0], [1.0, 0.20]] },              // yellow rising to horizon
+  ],
+  dawn: [
+    // Softer cousin of sunset — same shape, lower strengths, peak
+    // pushed slightly toward the top (sky still cool, not yet warm).
+    { pig: 2, curve: [[0.0, 0.09], [0.55, 0.0]] },
+    { pig: 0, curve: [[0.0, 0.0], [0.55, 0.11], [1.0, 0.0]] },
+    { pig: 1, curve: [[0.55, 0.0], [1.0, 0.11]] },
+  ],
+};
+
+let timeWash = null;  // { preset, frame }
+
+function startTimeWash(presetName) {
+  // Cancel any in-flight wash and start a new one. Switching presets
+  // (via Day → Night, etc.) interrupts mid-application — the partially-
+  // applied first wash stays on the canvas, and the new wash layers
+  // on top of it from a fresh start.
+  const spec = TIME_WASHES[presetName];
+  if (!spec) { timeWash = null; return; }
+  timeWash = { preset: presetName, frame: 0 };
+}
+
+// Piecewise-linear interpolation along a single layer's curve. yFrac
+// outside the curve's declared range returns 0 — the layer is absent
+// from that region of the canvas.
+function evalCurve(curve, yFrac) {
+  if (yFrac < curve[0][0] || yFrac > curve[curve.length - 1][0]) return 0;
+  for (let i = 0; i < curve.length - 1; i++) {
+    const y0 = curve[i][0], s0 = curve[i][1];
+    const y1 = curve[i + 1][0], s1 = curve[i + 1][1];
+    if (yFrac >= y0 && yFrac <= y1) {
+      const t = (yFrac - y0) / (y1 - y0);
+      return s0 + (s1 - s0) * t;
+    }
+  }
+  return 0;
+}
+
+// Called every frame from the main loop. Returns true if the wash
+// painted this frame (informational — paintAt already wakes the sim).
+function timeWashStep() {
+  if (!timeWash) return false;
+  const layers = TIME_WASHES[timeWash.preset];
+  const rect = canvas.getBoundingClientRect();
+  const pxToGridRadius = (GW / rect.width) * 0.5;
+  for (let i = 0; i < TIME_WASH_DABS_PER_FRAME; i++) {
+    const x = Math.random() * GW;
+    const y = Math.random() * GH;
+    const yFrac = y / GH;
+    const brushPx = 70 + Math.random() * 80;
+    const gridRadius = brushPx * pxToGridRadius;
+    // Evaluate every layer's curve at this y. Each non-zero result
+    // produces a paintAt at the same (x, y) — pigments stack into the
+    // same cells, KM compositing handles the visual mix.
+    for (let L = 0; L < layers.length; L++) {
+      const layer = layers[L];
+      const str = evalCurve(layer.curve, yFrac);
+      if (str > 0.001) paintAt(x, y, gridRadius, layer.pig, str);
+    }
+  }
+  timeWash.frame++;
+  if (timeWash.frame >= TIME_WASH_FRAMES) timeWash = null;
+  return true;
+}
+
+const timeOfDaySelect = document.getElementById('time-of-day');
+timeOfDaySelect.addEventListener('change', () => {
+  startTimeWash(timeOfDaySelect.value);
+});
+
+// ============================================================
+// THEME + BODY BACKGROUND
+// ============================================================
+// Two coupled controls drive the page's surrounding chrome:
+//
+//   • Paper luminance auto-themes the UI (panel, text, dryness bar
+//     etc.) so it stays readable whether the user picks cream or
+//     near-black paper. This sets data-theme on <html>; the existing
+//     [data-theme="dark"] CSS block does the rest.
+//   • The "Transparent" toggle controls whether the body background
+//     follows the paper color (default, so painting reads edge-to-edge
+//     as a single sheet) or goes transparent (for library embedding,
+//     where the host page provides the background).
+function applyTheme() {
+  // Standard luminance weighting (Rec. 601). Picked over Rec. 709 here
+  // because it slightly over-weights green, which matches how warm
+  // creams "feel" as light-mode paper.
+  const lum = 0.299 * PAPER_R_BASE + 0.587 * PAPER_G_BASE + 0.114 * PAPER_B_BASE;
+  document.documentElement.dataset.theme = lum < 0.5 ? 'dark' : 'light';
+}
+let transparentBg = false;
+function applyBodyBg() {
+  if (transparentBg) {
+    document.documentElement.style.setProperty('--body-bg', 'transparent');
+  } else {
+    document.documentElement.style.setProperty(
+      '--body-bg',
+      rgbToHex(PAPER_R_BASE, PAPER_G_BASE, PAPER_B_BASE)
+    );
+  }
+}
+const transparentToggle = document.getElementById('toggle-transparent');
+transparentToggle.addEventListener('click', () => {
+  transparentBg = !transparentBg;
+  transparentToggle.classList.toggle('on', transparentBg);
+  transparentToggle.setAttribute('aria-pressed', String(transparentBg));
+  applyBodyBg();
+});
+
+// ============================================================
+// UI VISIBILITY TOGGLE (v0.10)
+// ============================================================
+// Single small button in the top-right corner toggles every chrome
+// element (panel, bars, readout) via a `ui-hidden` class on <body>.
+// CSS handles the fade + pointer-events suppression. The button itself
+// is excluded from the hidden set so it stays clickable to restore.
+// Also bound to the "h" key as a quick hotkey — input fields ignore it
+// (so it doesn't fire while typing in the color picker, etc.).
+const uiToggleBtn = document.getElementById('ui-toggle');
+let uiHidden = false;
+function setUiHidden(hidden) {
+  uiHidden = hidden;
+  document.body.classList.toggle('ui-hidden', hidden);
+  // The button's glyph + accessibility labels flip so it always
+  // communicates the action it will perform on next click.
+  uiToggleBtn.textContent = hidden ? '+' : '−';
+  uiToggleBtn.setAttribute('aria-label', hidden ? 'Show controls' : 'Hide controls');
+  uiToggleBtn.setAttribute('aria-pressed', String(hidden));
+  uiToggleBtn.title = hidden ? 'Show controls (press H)' : 'Hide controls (press H)';
+}
+uiToggleBtn.addEventListener('click', () => setUiHidden(!uiHidden));
+document.addEventListener('keydown', (e) => {
+  // Ignore the hotkey while typing in form controls — color pickers,
+  // sliders, etc. shouldn't have their keystrokes hijacked.
+  const tag = e.target && e.target.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+  if (e.key === 'h' || e.key === 'H') {
+    e.preventDefault();
+    setUiHidden(!uiHidden);
+  }
+});
+
+// ============================================================
+// PAPER COLOR PICKER
+// ============================================================
+// Native <input type="color"> styled to match the pigment swatches.
+// Changing the paper color rewrites PAPER_R_BASE/G_BASE/B_BASE, which
+// every site re-reads on the next frame — render's KM substrate, the
+// swatch renderings, and the cursor color. We use the 'change' event
+// (fires on commit) rather than 'input' (fires continuously during
+// drag) so we don't rebuild swatches on every micro-update.
+const paperInput = document.getElementById('paper-color');
+function rgbToHex(r, g, b) {
+  const toByte = v => Math.round(Math.max(0, Math.min(1, v)) * 255);
+  return '#' + [r, g, b].map(toByte)
+    .map(n => n.toString(16).padStart(2, '0')).join('');
+}
+function hexToRgb(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+}
+function setPaperColor(r, g, b) {
+  PAPER_R_BASE = r;
+  PAPER_G_BASE = g;
+  PAPER_B_BASE = b;
+  applyTheme();    // UI theme follows paper luminance
+  applyBodyBg();   // body bg follows paper (or stays transparent)
+  // Pigment swatches (and the Water/Lift swatches) are rendered with KM
+  // against the paper, so they need to be redrawn whenever paper changes.
+  buildPigmentSwatches();
+  // Cursor fill is also KM-computed against paper for the pigment brushes.
+  applyCursorColor();
+  // Force a re-render so painted regions re-composite against the new
+  // substrate immediately, even if the sim is currently idle.
+  // Pass true to bypass active-rect localization: changing PAPER_*_BASE
+  // affects every cell's KM compositing (not just the painted region),
+  // so we have to repaint the whole canvas.
+  render(true);
+}
+// Initialize the input to reflect the current paper color, then apply
+// theme + body-bg for the initial state.
+paperInput.value = rgbToHex(PAPER_R_BASE, PAPER_G_BASE, PAPER_B_BASE);
+applyTheme();
+applyBodyBg();
+paperInput.addEventListener('change', () => {
+  const rgb = hexToRgb(paperInput.value);
+  if (rgb) setPaperColor(rgb[0], rgb[1], rgb[2]);
+});
+
+// ============================================================
+// INIT + LOOP
+// ============================================================
+generatePaper();
+resetSim();
+buildPigmentSwatches();
+applyCursorColor();
+applyCursorSize();
+
+// Dryness indicator — average wet across the canvas, normalized against
+// the initial 0.62 baseline, clamped to [0, 1]. Updates the bar fill width.
+const drynessFill = document.getElementById('dryness-fill');
+const DRYNESS_REFERENCE = 0.62;
+
+// Pigment indicator — average total pigment per cell (summing suspended
+// + deposited across all three pigments), normalized against a target
+// "substantially painted" reference. Empty canvas reads as 0%, a heavily
+// painted canvas pins at 100%. Tuned to feel responsive during normal
+// painting rather than chasing the theoretical 3.0/cell saturation.
+const pigmentFill = document.getElementById('pigment-fill');
+const pigmentReadout = document.getElementById('pigment-readout');
+const PIGMENT_REFERENCE = 0.3;
+
+// Note: lastTotalWet and lastTotalSuspended are declared up near the
+// state arrays alongside the idle-skip state. updateBars writes them.
+
+function updateBars() {
+  // Fused pass: compute everything the bars and the idle check need
+  // in a single iteration over N. Previously this was two separate
+  // O(N) loops (updateDrynessBar + updatePigmentBar); merging them
+  // halves the bar-update cost and keeps wet[i] / g[k][i] / d[k][i]
+  // each touched once per frame instead of twice.
+  const g0 = g[0], g1 = g[1], g2 = g[2];
+  const d0 = d[0], d1 = d[1], d2 = d[2];
+  let tWet = 0, tSusp = 0, tPig = 0;
+  for (let i = 0; i < N; i++) {
+    tWet += wet[i];
+    const s = g0[i] + g1[i] + g2[i];
+    tSusp += s;
+    tPig += s + d0[i] + d1[i] + d2[i];
+  }
+  lastTotalWet = tWet;
+  lastTotalSuspended = tSusp;
+
+  // --- Dryness ---
+  const avgWet = tWet / N;
+  let dry = 1 - avgWet / DRYNESS_REFERENCE;
+  if (dry < 0) dry = 0; else if (dry > 1) dry = 1;
+  drynessFill.style.width = (dry * 100).toFixed(1) + '%';
+
+  // --- Pigment ---
+  const avgPig = tPig / N;
+  // Expose to the AI planner so it can switch behavior on saturation
+  currentAvgPigment = avgPig;
+  let frac = avgPig / PIGMENT_REFERENCE;
+  if (frac < 0) frac = 0; else if (frac > 1) frac = 1;
+  pigmentFill.style.width = (frac * 100).toFixed(1) + '%';
+  // Readout shows raw average pigment per cell. Theoretical max is 3.0
+  // (all three pigments saturated everywhere); in practice values
+  // above ~1.0 indicate very heavy coverage.
+  pigmentReadout.textContent = avgPig.toFixed(3);
+}
+
+// ============================================================
+// IDLE SKIP — sim/render skipping when canvas is settled
+// ============================================================
+// Most of a typical session, nothing is happening: the canvas is dry,
+// no pigment is moving, no input is arriving. Running simStep + render
+// every frame in that state burns CPU for no visible change. This
+// state machine detects when the sim has truly settled and skips the
+// hot path until something changes.
+//
+// Wake conditions (anything that mutates state must call markCanvasActive):
+//   • paintAt   — user or AI applies paint
+//   • rewet     — global re-wet button
+//   • resetSim  — Reset button
+//
+// Sleep conditions (all checked together once framesSincePaint > grace):
+//   • Average wet per cell below a small threshold
+//   • Average suspended pigment per cell below a small threshold
+// Deposited pigment (d[]) is dry and won't change without water input,
+// so we don't need it in the idle check.
+//
+// The totals lastTotalWet / lastTotalSuspended are maintained by
+// updateBars (which runs every frame), so the idle check itself is O(1).
+// State (framesSincePaint, simIsIdle, totals) is declared up near the
+// state arrays so paintAt / resetSim / rewet can call markCanvasActive
+// during init without TDZ errors.
+
+const PAINT_GRACE_FRAMES = 60;        // 1 sec of forced sim after every paint
+const IDLE_CHECK_INTERVAL = 30;
+const IDLE_WET_PER_CELL = 0.025;      // matches evaporate's dry-out threshold
+const IDLE_SUSPENDED_PER_CELL = 0.0005;
+// v0.10 — bars run at ~10 Hz instead of 60 Hz. The O(N) fused sum was a
+// noticeable chunk of per-frame cost at SCALE 1.75 (1.5 M cells), and
+// human perception of bar fill changes saturates well below 60 Hz; the
+// CSS transition on .dryness-fill / .pigment-indicator-fill smooths the
+// gaps. The idle check (shouldRunSim) reads lastTotalWet/Suspended which
+// are still refreshed every tick — 10 Hz is more than fast enough for
+// idle detection (the check itself only runs every 30 frames anyway).
+const BARS_TICK_INTERVAL = 6;
+
+function shouldRunSim() {
+  // Always run during the grace period after any paint event — gives
+  // the simulation time to bleed, dry, edge-darken before we consider
+  // shutting it off.
+  if (framesSincePaint < PAINT_GRACE_FRAMES) return true;
+  if (simIsIdle) return false;
+  // Past the grace period and not currently idle: check periodically
+  // whether the canvas has settled.
+  if (framesSinceIdleCheck < IDLE_CHECK_INTERVAL) return true;
+  framesSinceIdleCheck = 0;
+  const avgWet = lastTotalWet / N;
+  const avgSusp = lastTotalSuspended / N;
+  if (avgWet < IDLE_WET_PER_CELL && avgSusp < IDLE_SUSPENDED_PER_CELL) {
+    simIsIdle = true;
+    return false;
+  }
+  return true;
+}
+
+// ============================================================
+// PIGMENT FADE — gradual lifting of deposited pigment over time
+// ============================================================
+// Multiplicative decay applied to d[k][i] across all cells at a fixed
+// tick rate when enabled via the Fade painting toggle. Suspended
+// pigment (g[]) is intentionally NOT faded — wet strokes stay vibrant
+// until they settle into d[], then begin contributing to the fade.
+//
+// The half-life is mutable so the front-end slider can adjust it at
+// runtime. fadeFactor is derived from it and recomputed on every
+// change via setFadeHalfLifeMs.
+const FADE_TICK_INTERVAL = 6;        // 10 Hz at 60 fps; trade CPU for smoothness
+const FADE_DEFAULT_MS = 4000;        // 4 s default half-life
+const FADE_MIN_MS = 500;             // slider min
+const FADE_MAX_MS = 30000;           // slider max
+// Don't run fade when there's essentially nothing left to fade —
+// avoids waking render() forever to multiply already-zero values.
+const FADE_SKIP_BELOW = 0.001;       // avg pigment per cell
+
+let fadeEnabled = false;             // toggled by "Fade painting" button
+let fadeHalfLifeMs = FADE_DEFAULT_MS;
+let fadeFactor = Math.pow(0.5, FADE_TICK_INTERVAL / 60 / (fadeHalfLifeMs / 1000));
+let framesSinceFade = 0;
+
+function setFadeHalfLifeMs(ms) {
+  // Clamp defensively in case the slider sends something out of range
+  if (ms < FADE_MIN_MS) ms = FADE_MIN_MS;
+  else if (ms > FADE_MAX_MS) ms = FADE_MAX_MS;
+  fadeHalfLifeMs = ms;
+  fadeFactor = Math.pow(0.5, FADE_TICK_INTERVAL / 60 / (ms / 1000));
+}
+
+function fadeStep() {
+  const f = fadeFactor;
+  const d0 = d[0], d1 = d[1], d2 = d[2];
+  // Masked cells freeze pigment in place — fade can't reach them.
+  // Branch on maskActive to keep the hot loop tight when no mask exists.
+  if (maskActive) {
+    for (let i = 0; i < N; i++) {
+      if (mask[i] > MASK_THRESHOLD) continue;
+      d0[i] *= f;
+      d1[i] *= f;
+      d2[i] *= f;
+    }
+  } else {
+    for (let i = 0; i < N; i++) {
+      d0[i] *= f;
+      d1[i] *= f;
+      d2[i] *= f;
+    }
+  }
+}
+
+function loop() {
+  applyPendingPaint();
+  animationStep();
+  framesSincePaint++;
+  framesSinceIdleCheck++;
+  framesSinceFade++;
+
+  // Keep the rainbow cursor color in sync with the cycle. Runs every
+  // frame independently of sim activity — the cursor should animate
+  // even when the canvas is idle and simStep is being skipped.
+  if (currentPigment === RAINBOW_INDEX) updateRainbowCursor();
+
+  const runSim = shouldRunSim();
+  if (runSim) {
+    simStep();
+    simStep();
+    // Periodic active-rect shrink. Runs only when the sim is live (no
+    // point scanning a frozen state) and only past the paint grace
+    // period (mid-stroke expansions would be undone, then re-expanded
+    // by the next paintAt, wasting work). The scan is O(rect_area)
+    // and runs every ACTIVE_SHRINK_INTERVAL frames, so its amortized
+    // cost is small even at full-canvas rect.
+    framesSinceShrink++;
+    if (framesSinceShrink >= ACTIVE_SHRINK_INTERVAL && framesSincePaint >= PAINT_GRACE_FRAMES) {
+      framesSinceShrink = 0;
+      shrinkActiveRect();
+    }
+  }
+
+  // Fade tick: 10 Hz when enabled, skipped entirely when the toggle is
+  // off OR the canvas has effectively faded to blank — no point spending
+  // cycles multiplying near-zeroes.
+  let didFade = false;
+  if (fadeEnabled && framesSinceFade >= FADE_TICK_INTERVAL) {
+    framesSinceFade = 0;
+    if (currentAvgPigment > FADE_SKIP_BELOW) {
+      fadeStep();
+      didFade = true;
+    }
+  }
+
+  // Time-of-day wash (v0.12.1): paints pigment dabs across the canvas
+  // when a preset is selected. The dabs go through paintAt which marks
+  // the canvas active and grows the rect, so the normal sim + render
+  // path picks up the wash automatically — no need for a forceFull.
+  timeWashStep();
+
+  // Render if EITHER the sim ran (state changed via simStep) OR the
+  // fade tick changed d[] while sim was idle. When both are false the
+  // canvas is unchanged frame-to-frame; the existing rendered pixels
+  // stay correct.
+  if (runSim || didFade) render();
+
+  // v0.10 — bars throttled to ~10 Hz. updateBars is an O(N) fused sum;
+  // running it every frame at SCALE 1.75 (1.5M cells) is wasted work
+  // since the bars' CSS transitions (.25s ease-out on width) smooth
+  // between sparser updates. The 6-frame interval also paces the
+  // refresh of lastTotalWet / lastTotalSuspended, but shouldRunSim
+  // only consults those every IDLE_CHECK_INTERVAL=30 frames anyway,
+  // so they're always fresh when the idle check fires.
+  framesSinceBars++;
+  if (framesSinceBars >= BARS_TICK_INTERVAL) {
+    framesSinceBars = 0;
+    updateBars();
+  }
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>
