@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kubelka-Munk glazing playground — Washes reference gallery</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Crimson+Pro:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f5efe2;
+    --canvas-bg: #fbf7ed;
+    --ink: #2a2620;
+    --ink-soft: #6a6356;
+    --ink-faded: #a39885;
+    --panel-bg: rgba(245, 239, 226, 0.78);
+    --panel-border: rgba(42, 38, 32, 0.10);
+    --panel-shadow: 0 6px 28px rgba(60, 40, 20, 0.10), 0 2px 4px rgba(60, 40, 20, 0.05);
+    --btn-border: rgba(42, 38, 32, 0.2);
+    --btn-border-hover: rgba(42, 38, 32, 0.4);
+    --slider-track: rgba(42, 38, 32, 0.18);
+    --ultramarine: #233e8d;
+    --chart-grid: rgba(42, 38, 32, 0.10);
+    --chart-text: #6a6356;
+    --ch-r: #c0392b;
+    --ch-g: #5d8a1e;
+    --ch-b: #2e64b5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --canvas-bg: #1a1816;
+      --ink: #e8e2d4;
+      --ink-soft: #b3a999;
+      --ink-faded: #6a6356;
+      --panel-bg: rgba(38, 34, 28, 0.80);
+      --panel-border: rgba(245, 239, 226, 0.08);
+      --panel-shadow: 0 6px 28px rgba(0, 0, 0, 0.45), 0 2px 4px rgba(0, 0, 0, 0.25);
+      --btn-border: rgba(245, 239, 226, 0.2);
+      --btn-border-hover: rgba(245, 239, 226, 0.4);
+      --slider-track: rgba(245, 239, 226, 0.18);
+      --ultramarine: #8aa3e8;
+      --chart-grid: rgba(245, 239, 226, 0.12);
+      --chart-text: #b3a999;
+      --ch-r: #e07a6d;
+      --ch-g: #9ec46a;
+      --ch-b: #7da7e0;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    min-height: 100vh;
+    background: var(--canvas-bg);
+    color: var(--ink);
+    font-family: 'Crimson Pro', Georgia, serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 880px; margin: 0 auto; padding: 56px 24px 72px; }
+  .eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; letter-spacing: 0.14em;
+    color: var(--ink-faded); margin-bottom: 18px;
+  }
+  h1 {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-weight: 400; font-size: clamp(34px, 6vw, 52px);
+    line-height: 1.05; margin-bottom: 10px;
+  }
+  .citation {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-style: italic; font-size: 19px;
+    color: var(--ink-soft); margin-bottom: 22px;
+  }
+  .lede { font-size: 18px; line-height: 1.65; max-width: 64ch; }
+  .lede + .lede { margin-top: 0.8em; }
+  .panel {
+    margin: 36px 0 28px;
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 14px;
+    box-shadow: var(--panel-shadow);
+    padding: 22px 24px 24px;
+  }
+  .layer-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 22px; }
+  .layer-grid label { font-size: 15px; color: var(--ink-soft); display: block; margin-bottom: 7px; }
+  select {
+    font-family: 'Crimson Pro', Georgia, serif; font-size: 16px;
+    color: var(--ink); width: 100%;
+    background: transparent; border: 1px solid var(--btn-border);
+    border-radius: 8px; padding: 7px 10px; cursor: pointer;
+  }
+  select option { color: #2a2620; background: #f5efe2; }
+  .th-row { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none;
+    flex: 1; height: 22px; background: transparent; cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-runnable-track { height: 3px; background: var(--slider-track); border-radius: 2px; }
+  input[type="range"]::-moz-range-track { height: 3px; background: var(--slider-track); border-radius: 2px; }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--ink); margin-top: -6.5px; border: none;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--ink); border: none;
+  }
+  .num { font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 500; min-width: 7ch; }
+  .controls-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 20px; }
+  .controls-row label { font-size: 15px; color: var(--ink-soft); }
+  .controls-row select { width: auto; }
+  button {
+    font-family: 'Crimson Pro', Georgia, serif; font-size: 15px;
+    color: var(--ink); background: transparent;
+    border: 1px solid var(--btn-border); border-radius: 8px;
+    padding: 7px 16px; cursor: pointer;
+    transition: border-color 0.15s ease;
+  }
+  button:hover { border-color: var(--btn-border-hover); }
+  button:active { transform: scale(0.98); }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--ultramarine); outline-offset: 2px; }
+  .results { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 20px; align-items: end; margin-top: 24px; }
+  .swatch {
+    height: 120px; border-radius: 10px;
+    border: 1px solid var(--panel-border);
+  }
+  .results p { font-size: 15px; margin-top: 9px; }
+  .results .hex { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--ink-soft); }
+  .stack { border: 1px solid var(--panel-border); border-radius: 10px; overflow: hidden; }
+  .stack div { transition: height 0.12s ease, background-color 0.12s ease; }
+  .chart-wrap { margin-top: 28px; }
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 18px;
+    font-size: 13px; color: var(--ink-soft);
+    font-family: 'JetBrains Mono', monospace; margin-bottom: 8px;
+  }
+  .legend span { display: flex; align-items: center; gap: 6px; }
+  .key { display: inline-block; width: 16px; border-top-width: 2.5px; }
+  canvas#chart { width: 100%; display: block; }
+  h2 {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-weight: 500; font-size: 27px; margin: 40px 0 12px;
+  }
+  .experiments { max-width: 66ch; }
+  .experiments p { font-size: 17px; line-height: 1.65; margin-bottom: 0.85em; }
+  .experiments .marker { font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 500; color: var(--ultramarine); }
+  .note { font-size: 15px; color: var(--ink-soft); max-width: 66ch; line-height: 1.6; margin-top: 20px; }
+  footer {
+    margin-top: 56px; padding-top: 18px;
+    border-top: 1px solid var(--panel-border);
+    font-size: 14px; color: var(--ink-faded);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  @media (prefers-reduced-motion: reduce) { button, .stack div { transition: none; } }
+</style>
+</head>
+<body>
+<main>
+  <p class="eyebrow">WASHES · REFERENCE GALLERY · OPTICS</p>
+  <h1>Kubelka&ndash;Munk glazing playground</h1>
+  <p class="citation">Kubelka &amp; Munk, 1931. "Ein Beitrag zur Optik der Farbanstriche," Zeitschrift f&uuml;r Technische Physik 12, 593&ndash;601. The two-flux model behind the Washes renderer.</p>
+  <p class="lede">Each pigment is characterized by an absorption coefficient K and a scattering coefficient S per channel. A layer of thickness x has a closed-form reflectance R and transmittance T; stacking a layer over a background of reflectance R<sub>b</sub> composites optically as R&nbsp;+&nbsp;T&sup2;R<sub>b</sub>&nbsp;/&nbsp;(1&nbsp;&minus;&nbsp;RR<sub>b</sub>) &mdash; light passes down through the glaze, bounces, and passes back up, attenuated twice.</p>
+  <p class="lede">The two large swatches render the same two layers both ways: physically, via Kubelka&ndash;Munk, and naively, via sRGB alpha compositing. The chart plots the top pigment's reflectance per channel as its thickness grows, flattening toward the asymptote R<sub>&infin;</sub>.</p>
+
+  <div class="panel">
+    <div class="layer-grid">
+      <div>
+        <label for="pigTop">Top layer (glaze)</label>
+        <select id="pigTop"></select>
+        <div class="th-row">
+          <input type="range" id="thTop" min="0" max="3" step="0.05" value="0.6" aria-label="Top layer thickness">
+          <span class="num" id="thTopOut">x = 0.60</span>
+        </div>
+      </div>
+      <div>
+        <label for="pigBot">Bottom layer (wash)</label>
+        <select id="pigBot"></select>
+        <div class="th-row">
+          <input type="range" id="thBot" min="0" max="3" step="0.05" value="1" aria-label="Bottom layer thickness">
+          <span class="num" id="thBotOut">x = 1.00</span>
+        </div>
+      </div>
+    </div>
+    <div class="controls-row">
+      <label for="bg">Paper</label>
+      <select id="bg">
+        <option value="white" selected>White paper (R = 0.95)</option>
+        <option value="black">Black paper (R = 0.04)</option>
+      </select>
+      <button id="swap">Swap layers</button>
+    </div>
+    <div class="results">
+      <div>
+        <div class="swatch" id="swKM" role="img" aria-label="Kubelka-Munk composited color"></div>
+        <p>Kubelka&ndash;Munk &nbsp;<span class="hex" id="hexKM"></span></p>
+      </div>
+      <div>
+        <div class="swatch" id="swAB" role="img" aria-label="Naive alpha blend color"></div>
+        <p>Naive alpha blend &nbsp;<span class="hex" id="hexAB"></span></p>
+      </div>
+      <div>
+        <div class="stack" role="img" aria-label="Cross-section of the layer stack from glaze to paper">
+          <div id="stTop"></div>
+          <div id="stBot"></div>
+          <div id="stBg"></div>
+        </div>
+        <p style="color:var(--ink-soft);">Cross-section, glaze &rarr; paper</p>
+      </div>
+    </div>
+    <div class="chart-wrap">
+      <div class="legend" aria-hidden="true">
+        <span><span class="key" style="border-top-style:solid;border-top-color:var(--ch-r);"></span>red channel</span>
+        <span><span class="key" style="border-top-style:dashed;border-top-color:var(--ch-g);"></span>green channel</span>
+        <span><span class="key" style="border-top-style:dotted;border-top-color:var(--ch-b);"></span>blue channel</span>
+        <span style="color:var(--ink-faded);">vertical line = current thickness</span>
+      </div>
+      <canvas id="chart" height="260" role="img"
+              aria-label="Reflectance of the top pigment per RGB channel versus layer thickness from 0 to 3, approaching an asymptote"></canvas>
+    </div>
+  </div>
+
+  <h2>Try this</h2>
+  <div class="experiments">
+    <p><span class="marker">1.</span>&ensp;Asymmetry. Titanium white over ivory black, then swap. White over black scatters light back before it reaches the black and reads pale gray; black over white goes nearly black. Order matters in K&ndash;M because R and T are not symmetric roles &mdash; alpha blending has no equivalent.</p>
+    <p><span class="marker">2.</span>&ensp;Glazing luminosity. A thin ultramarine glaze (x &asymp; 0.4) over a hansa yellow wash on white paper yields a green the alpha-blend swatch renders duller and grayer. This is "blue + yellow = green" &mdash; the effect Sochorov&aacute; &amp; Jamri&scaron;ka built Mixbox to recover &mdash; falling straight out of the 1931 math.</p>
+    <p><span class="marker">3.</span>&ensp;Black paper. Any transparent pigment (rose, ultramarine) over black paper nearly vanishes at any thickness &mdash; nothing scatters light back. Titanium white still reads. Watch the chart: for transparent pigments over black, the curves barely lift off zero. That is the K-versus-S distinction made visible.</p>
+  </div>
+  <p class="note">Coefficient caveat: the K and S values here are representative numbers chosen to behave like their namesakes, not the measured coefficients from Figure 5 of Curtis et&nbsp;al. 1997. Swap in the paper's values for the published gallery.</p>
+
+  <footer>Built for Washes — an in-browser watercolor library after Curtis et&nbsp;al. 1997 · self-contained demo, no dependencies</footer>
+</main>
+<script>
+(function () {
+  "use strict";
+
+  var pigments = [
+    { name: "French ultramarine", K: [0.86, 0.72, 0.06], S: [0.005, 0.005, 0.09] },
+    { name: "Hansa yellow",       K: [0.06, 0.21, 1.78], S: [0.50, 0.88, 0.009] },
+    { name: "Quinacridone rose",  K: [0.12, 1.18, 0.49], S: [0.05, 0.006, 0.02] },
+    { name: "Phthalo green",      K: [1.62, 0.06, 0.46], S: [0.01, 0.05, 0.02] },
+    { name: "Burnt sienna",       K: [0.30, 0.85, 1.10], S: [0.31, 0.12, 0.05] },
+    { name: "Titanium white",     K: [0.05, 0.05, 0.06], S: [1.20, 1.20, 1.10] },
+    { name: "Ivory black",        K: [0.95, 0.95, 0.95], S: [0.02, 0.02, 0.02] }
+  ];
+
+  // Kubelka-Munk layer reflectance and transmittance for one channel.
+  // a = 1 + K/S, b = sqrt(a^2 - 1), arg = b*S*x
+  // R = sinh(arg)/c, T = b/c with c = a*sinh(arg) + b*cosh(arg)
+  function layerRT(K, S, x) {
+    if (x <= 0) return [0, 1];
+    var a = 1 + K / S;
+    var b = Math.sqrt(Math.max(a * a - 1, 1e-12));
+    var arg = Math.min(b * S * x, 40);
+    var sh = Math.sinh(arg), ch = Math.cosh(arg);
+    var cc = a * sh + b * ch;
+    return [sh / cc, b / cc];
+  }
+
+  // Composite layer (R, T) over background reflectance Rb.
+  function over(R, T, Rb) {
+    return R + T * T * Rb / (1 - R * Rb);
+  }
+
+  function gam(v) {
+    return Math.round(Math.pow(Math.min(Math.max(v, 0), 1), 1 / 2.2) * 255);
+  }
+  function rgbStr(lin) { return "rgb(" + gam(lin[0]) + "," + gam(lin[1]) + "," + gam(lin[2]) + ")"; }
+  function hexByte(n) { return ("0" + n.toString(16)).slice(-2); }
+  function hexStr(lin) { return "#" + hexByte(gam(lin[0])) + hexByte(gam(lin[1])) + hexByte(gam(lin[2])); }
+
+  function pigOverBg(p, x, Rb) {
+    var out = [0, 0, 0];
+    for (var ch = 0; ch < 3; ch++) {
+      var rt = layerRT(p.K[ch], p.S[ch], x);
+      out[ch] = over(rt[0], rt[1], Rb);
+    }
+    return out;
+  }
+
+  var selT = document.getElementById("pigTop");
+  var selB = document.getElementById("pigBot");
+  pigments.forEach(function (p, i) {
+    selT.add(new Option(p.name, i));
+    selB.add(new Option(p.name, i));
+  });
+  selT.value = 0;
+  selB.value = 1;
+
+  var thT = document.getElementById("thTop"), thB = document.getElementById("thBot");
+  var thTOut = document.getElementById("thTopOut"), thBOut = document.getElementById("thBotOut");
+  var bgSel = document.getElementById("bg");
+
+  var chartCv = document.getElementById("chart");
+  var chartCtx = chartCv.getContext("2d");
+
+  function cssVar(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+
+  function drawChart(pT, xT, Rb) {
+    var dpr = window.devicePixelRatio || 1;
+    var w = chartCv.clientWidth, h = 260;
+    chartCv.width = w * dpr;
+    chartCv.height = h * dpr;
+    chartCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    chartCtx.clearRect(0, 0, w, h);
+
+    var padL = 44, padR = 12, padT = 10, padB = 32;
+    var pw = w - padL - padR, ph = h - padT - padB;
+    function px(x) { return padL + (x / 3) * pw; }
+    function py(r) { return padT + (1 - r) * ph; }
+
+    var grid = cssVar("--chart-grid"), text = cssVar("--chart-text");
+    chartCtx.font = "11px 'JetBrains Mono', monospace";
+    chartCtx.fillStyle = text;
+    chartCtx.strokeStyle = grid;
+    chartCtx.lineWidth = 1;
+
+    var r, x;
+    for (r = 0; r <= 1.001; r += 0.25) {
+      chartCtx.beginPath();
+      chartCtx.moveTo(padL, py(r));
+      chartCtx.lineTo(w - padR, py(r));
+      chartCtx.stroke();
+      chartCtx.textAlign = "right";
+      chartCtx.fillText(r.toFixed(2), padL - 7, py(r) + 4);
+    }
+    chartCtx.textAlign = "center";
+    for (x = 0; x <= 3.001; x += 0.5) {
+      chartCtx.fillText(x.toFixed(1), px(x), h - padB + 18);
+    }
+    chartCtx.fillText("top pigment thickness x", padL + pw / 2, h - 4);
+    chartCtx.save();
+    chartCtx.translate(11, padT + ph / 2);
+    chartCtx.rotate(-Math.PI / 2);
+    chartCtx.fillText("reflectance", 0, 0);
+    chartCtx.restore();
+
+    // current-thickness marker
+    chartCtx.strokeStyle = text;
+    chartCtx.globalAlpha = 0.45;
+    chartCtx.setLineDash([3, 3]);
+    chartCtx.beginPath();
+    chartCtx.moveTo(px(xT), padT);
+    chartCtx.lineTo(px(xT), padT + ph);
+    chartCtx.stroke();
+    chartCtx.setLineDash([]);
+    chartCtx.globalAlpha = 1;
+
+    var chans = [
+      { ch: 0, color: cssVar("--ch-r"), dash: [] },
+      { ch: 1, color: cssVar("--ch-g"), dash: [7, 4] },
+      { ch: 2, color: cssVar("--ch-b"), dash: [2, 4] }
+    ];
+    chans.forEach(function (cfg) {
+      chartCtx.strokeStyle = cfg.color;
+      chartCtx.lineWidth = 2.5;
+      chartCtx.setLineDash(cfg.dash);
+      chartCtx.beginPath();
+      for (var i = 0; i <= 90; i++) {
+        var xx = (i / 90) * 3;
+        var rt = layerRT(pT.K[cfg.ch], pT.S[cfg.ch], xx);
+        var rr = over(rt[0], rt[1], Rb);
+        var X = px(xx), Y = py(Math.min(rr, 1));
+        if (i === 0) chartCtx.moveTo(X, Y); else chartCtx.lineTo(X, Y);
+      }
+      chartCtx.stroke();
+    });
+    chartCtx.setLineDash([]);
+  }
+
+  function update() {
+    var pT = pigments[+selT.value], pB = pigments[+selB.value];
+    var xT = parseFloat(thT.value), xB = parseFloat(thB.value);
+    thTOut.textContent = "x = " + xT.toFixed(2);
+    thBOut.textContent = "x = " + xB.toFixed(2);
+    var Rb = bgSel.value === "white" ? 0.95 : 0.04;
+
+    // Kubelka-Munk: bottom over paper, then top over that.
+    var km = [0, 0, 0], i;
+    for (i = 0; i < 3; i++) {
+      var rtB = layerRT(pB.K[i], pB.S[i], xB);
+      var r1 = over(rtB[0], rtB[1], Rb);
+      var rtT = layerRT(pT.K[i], pT.S[i], xT);
+      km[i] = over(rtT[0], rtT[1], r1);
+    }
+    document.getElementById("swKM").style.background = rgbStr(km);
+    document.getElementById("hexKM").textContent = hexStr(km);
+
+    // Naive alpha blend: each layer's masstone over white, opacity = 1 - mean(T),
+    // composited with the standard over operator in sRGB space.
+    var mT = pigOverBg(pT, Math.max(xT, 0.001), 1.0);
+    var mB = pigOverBg(pB, Math.max(xB, 0.001), 1.0);
+    var aT = 0, aB = 0;
+    for (i = 0; i < 3; i++) {
+      aT += 1 - layerRT(pT.K[i], pT.S[i], xT)[1];
+      aB += 1 - layerRT(pB.K[i], pB.S[i], xB)[1];
+    }
+    aT = Math.min(Math.max(aT / 3, 0), 1);
+    aB = Math.min(Math.max(aB / 3, 0), 1);
+    var ab = [0, 0, 0];
+    for (i = 0; i < 3; i++) {
+      var bg = gam(Rb), ct = gam(mT[i]), cb = gam(mB[i]);
+      var c1 = aB * cb + (1 - aB) * bg;
+      ab[i] = Math.round(aT * ct + (1 - aT) * c1);
+    }
+    document.getElementById("swAB").style.background = "rgb(" + ab[0] + "," + ab[1] + "," + ab[2] + ")";
+    document.getElementById("hexAB").textContent = "#" + hexByte(ab[0]) + hexByte(ab[1]) + hexByte(ab[2]);
+
+    // Cross-section stack.
+    var stTop = document.getElementById("stTop");
+    var stBot = document.getElementById("stBot");
+    stTop.style.background = rgbStr(mT);
+    stTop.style.height = Math.round(14 + xT * 15) + "px";
+    stBot.style.background = rgbStr(mB);
+    stBot.style.height = Math.round(14 + xB * 15) + "px";
+    document.getElementById("stBg").style.cssText = "height:22px;background:" + (Rb > 0.5 ? "#f8f5ee" : "#16140f");
+
+    drawChart(pT, xT, Rb);
+  }
+
+  [selT, selB, thT, thB, bgSel].forEach(function (el) {
+    el.addEventListener("input", update);
+  });
+  document.getElementById("swap").addEventListener("click", function () {
+    var p = selT.value; selT.value = selB.value; selB.value = p;
+    var t = thT.value; thT.value = thB.value; thB.value = t;
+    update();
+  });
+  window.addEventListener("resize", update);
+  if (window.matchMedia) {
+    window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", update);
+  }
+
+  update();
+})();
+</script>
+</body>
+</html>

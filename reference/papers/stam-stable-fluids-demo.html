@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stable Fluids — Washes reference gallery</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Crimson+Pro:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f5efe2;
+    --canvas-bg: #fbf7ed;
+    --ink: #2a2620;
+    --ink-soft: #6a6356;
+    --ink-faded: #a39885;
+    --panel-bg: rgba(245, 239, 226, 0.78);
+    --panel-border: rgba(42, 38, 32, 0.10);
+    --panel-shadow: 0 6px 28px rgba(60, 40, 20, 0.10), 0 2px 4px rgba(60, 40, 20, 0.05);
+    --btn-border: rgba(42, 38, 32, 0.2);
+    --btn-border-hover: rgba(42, 38, 32, 0.4);
+    --slider-track: rgba(42, 38, 32, 0.18);
+    --stable: #3b6d11;
+    --unstable: #a02060;
+    --ultramarine: #233e8d;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --canvas-bg: #1a1816;
+      --ink: #e8e2d4;
+      --ink-soft: #b3a999;
+      --ink-faded: #6a6356;
+      --panel-bg: rgba(38, 34, 28, 0.80);
+      --panel-border: rgba(245, 239, 226, 0.08);
+      --panel-shadow: 0 6px 28px rgba(0, 0, 0, 0.45), 0 2px 4px rgba(0, 0, 0, 0.25);
+      --btn-border: rgba(245, 239, 226, 0.2);
+      --btn-border-hover: rgba(245, 239, 226, 0.4);
+      --slider-track: rgba(245, 239, 226, 0.18);
+      --stable: #97c459;
+      --unstable: #ed93b1;
+      --ultramarine: #8aa3e8;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    min-height: 100vh;
+    background: var(--canvas-bg);
+    color: var(--ink);
+    font-family: 'Crimson Pro', Georgia, serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 880px; margin: 0 auto; padding: 56px 24px 72px; }
+  .eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    color: var(--ink-faded);
+    margin-bottom: 18px;
+  }
+  h1 {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-weight: 400;
+    font-size: clamp(34px, 6vw, 52px);
+    line-height: 1.05;
+    margin-bottom: 10px;
+  }
+  .citation {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-style: italic;
+    font-size: 19px;
+    color: var(--ink-soft);
+    margin-bottom: 22px;
+  }
+  .lede { font-size: 18px; line-height: 1.65; max-width: 64ch; color: var(--ink); }
+  .lede + .lede { margin-top: 0.8em; }
+  .panel {
+    margin: 36px 0 28px;
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 14px;
+    box-shadow: var(--panel-shadow);
+    padding: 22px 24px 24px;
+  }
+  .controls-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .controls-row + .controls-row { margin-top: 14px; }
+  label.ctl { font-size: 15px; color: var(--ink-soft); white-space: nowrap; }
+  .slider-wrap { flex: 1; min-width: 200px; position: relative; padding-top: 16px; }
+  .cfl-tick {
+    position: absolute; top: 0; transform: translateX(-50%);
+    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    color: var(--ink-faded); white-space: nowrap;
+  }
+  .cfl-tick::after {
+    content: ""; display: block; width: 1px; height: 6px;
+    background: var(--ink-faded); margin: 2px auto 0;
+  }
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 22px; background: transparent; cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-runnable-track { height: 3px; background: var(--slider-track); border-radius: 2px; }
+  input[type="range"]::-moz-range-track { height: 3px; background: var(--slider-track); border-radius: 2px; }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--ink); margin-top: -6.5px; border: none;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--ink); border: none;
+  }
+  .num { font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 500; }
+  .cfl-readout { font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 500; min-width: 7.2ch; text-align: right; }
+  .cfl-label { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: var(--ink-faded); }
+  button {
+    font-family: 'Crimson Pro', Georgia, serif; font-size: 15px;
+    color: var(--ink); background: transparent;
+    border: 1px solid var(--btn-border); border-radius: 8px;
+    padding: 7px 16px; cursor: pointer;
+    transition: border-color 0.15s ease;
+  }
+  button:hover { border-color: var(--btn-border-hover); }
+  button:active { transform: scale(0.98); }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--ultramarine); outline-offset: 2px; }
+  .readout { font-size: 14px; color: var(--ink-soft); font-family: 'JetBrains Mono', monospace; }
+  .sims { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; margin-top: 20px; }
+  .sim canvas {
+    width: 100%; display: block; border-radius: 10px;
+    border: 1px solid var(--panel-border); background: #f8f5ee;
+  }
+  .sim figcaption { font-size: 15px; color: var(--ink-soft); margin-top: 9px; line-height: 1.5; }
+  .sim figcaption strong { font-weight: 500; color: var(--ink); }
+  h2 {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-weight: 500; font-size: 27px; margin: 40px 0 12px;
+  }
+  .experiments { max-width: 66ch; }
+  .experiments p { font-size: 17px; line-height: 1.65; margin-bottom: 0.85em; }
+  .experiments .num { color: var(--ultramarine); }
+  footer {
+    margin-top: 56px; padding-top: 18px;
+    border-top: 1px solid var(--panel-border);
+    font-size: 14px; color: var(--ink-faded);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  @media (prefers-reduced-motion: reduce) { button, input { transition: none; } }
+</style>
+</head>
+<body>
+<main>
+  <p class="eyebrow">WASHES · REFERENCE GALLERY · ADVECTION</p>
+  <h1>Stable Fluids</h1>
+  <p class="citation">Jos Stam. SIGGRAPH '99, pp. 121&ndash;128. The scheme that fixed the cross artifact in Washes v0.67&ndash;v0.69.</p>
+  <p class="lede">The same cross of pigment is carried by the same velocity field on both canvases below &mdash; a constant diagonal drift on a wrapping domain, scaled so the maximum CFL number equals &Delta;t exactly. The only difference is the advection scheme. The left canvas uses donor-cell explicit upwind, which is stable only while CFL &le; 1. The right uses Stam's semi-Lagrangian backtracing, which traces each cell backward along the flow and interpolates &mdash; unconditionally stable at any timestep.</p>
+  <p class="lede">Push &Delta;t past the tick at 1.00 and watch the left side: oscillations appear, pigment concentration goes negative (rendered magenta, the "negative pigment" streaks from the original bug), and the field disintegrates. The right side never breaks. It only blurs &mdash; semi-Lagrangian's known cost.</p>
+
+  <div class="panel">
+    <div class="controls-row">
+      <label class="ctl" for="dt">Timestep &Delta;t</label>
+      <div class="slider-wrap">
+        <span class="cfl-tick" id="tick">CFL = 1</span>
+        <input type="range" id="dt" min="0.2" max="2" step="0.05" value="0.6"
+               aria-describedby="cflOut" aria-label="Timestep delta t, equal to the maximum CFL number">
+      </div>
+      <span class="num" id="dtOut">0.60</span>
+      <span style="display:flex;flex-direction:column;align-items:flex-end;">
+        <span class="cfl-label">MAX CFL</span>
+        <span class="cfl-readout" id="cflOut" style="color:var(--stable);">0.60</span>
+      </span>
+    </div>
+    <div class="controls-row">
+      <button id="play" aria-pressed="true">Pause</button>
+      <button id="step" disabled>Step once</button>
+      <button id="reset">Reset cross</button>
+      <span class="readout" id="stats">step 0 &middot; min pigment 0.00</span>
+    </div>
+    <div class="sims">
+      <figure class="sim">
+        <canvas id="cvA" width="96" height="96" role="img"
+                aria-label="Donor-cell advection of a pigment cross; develops magenta negative-pigment oscillations when CFL exceeds one"></canvas>
+        <figcaption><strong>Donor-cell explicit upwind</strong> &mdash; conditionally stable, CFL &le; 1 (Courant, Friedrichs &amp; Lewy 1928)</figcaption>
+      </figure>
+      <figure class="sim">
+        <canvas id="cvB" width="96" height="96" role="img"
+                aria-label="Semi-Lagrangian advection of the same pigment cross; remains smooth at any timestep"></canvas>
+        <figcaption><strong>Semi-Lagrangian</strong> (Stam 1999) &mdash; unconditionally stable, increasingly diffusive</figcaption>
+      </figure>
+    </div>
+  </div>
+
+  <h2>Try this</h2>
+  <div class="experiments">
+    <p><span class="num">1.</span>&ensp;Run at &Delta;t = 0.95 for a while. Stable &mdash; just diffusive. Then nudge to 1.10. The growth rate near the threshold is gentle, which is exactly why the original artifact survived eleven versions of root-causing.</p>
+    <p><span class="num">2.</span>&ensp;Pause and use single steps right at &Delta;t = 1.05 to watch the first oscillations form on the cross's trailing edges, where the upwind difference looks furthest backward.</p>
+    <p><span class="num">3.</span>&ensp;Set &Delta;t = 2.00. The left field is noise within seconds; the right is a soft, blurred cross forever. Stability is not accuracy &mdash; semi-Lagrangian buys robustness with smearing, which Bridson's MacCormack chapter addresses.</p>
+  </div>
+
+  <footer>Built for Washes — an in-browser watercolor library after Curtis et&nbsp;al. 1997 · self-contained demo, no dependencies</footer>
+</main>
+<script>
+(function () {
+  "use strict";
+  var N = 96;
+  var c = (N - 1) / 2;
+  var U = 0.6, V = 0.4;
+  var SUM = Math.abs(U) + Math.abs(V); // max |u|dt + |v|dt per unit dt = 1.0
+
+  var qA, qB, stepCount;
+  function seed() {
+    qA = new Float32Array(N * N);
+    qB = new Float32Array(N * N);
+    stepCount = 0;
+    var thick = 6, arm = 32;
+    for (var j = 0; j < N; j++) {
+      for (var i = 0; i < N; i++) {
+        var dx = Math.abs(i - c), dy = Math.abs(j - c);
+        if ((dx < thick && dy < arm) || (dy < thick && dx < arm)) {
+          qA[j * N + i] = 1;
+          qB[j * N + i] = 1;
+        }
+      }
+    }
+  }
+
+  function stepDonor(q, dt) {
+    var out = new Float32Array(N * N);
+    for (var j = 0; j < N; j++) {
+      var jd = (j - 1 + N) % N, ju = (j + 1) % N;
+      for (var i = 0; i < N; i++) {
+        var k = j * N + i;
+        var il = (i - 1 + N) % N, ir = (i + 1) % N;
+        var dqx = U > 0 ? q[k] - q[j * N + il] : q[j * N + ir] - q[k];
+        var dqy = V > 0 ? q[k] - q[jd * N + i] : q[ju * N + i] - q[k];
+        var val = q[k] - dt * (U * dqx + V * dqy);
+        if (val > 6) val = 6;
+        if (val < -6) val = -6;
+        out[k] = val;
+      }
+    }
+    return out;
+  }
+
+  function samp(q, x, y) {
+    x = ((x % N) + N) % N;
+    y = ((y % N) + N) % N;
+    var i0 = Math.floor(x), j0 = Math.floor(y);
+    var i1 = (i0 + 1) % N, j1 = (j0 + 1) % N;
+    var fx = x - i0, fy = y - j0;
+    return q[j0 * N + i0] * (1 - fx) * (1 - fy)
+         + q[j0 * N + i1] * fx * (1 - fy)
+         + q[j1 * N + i0] * (1 - fx) * fy
+         + q[j1 * N + i1] * fx * fy;
+  }
+
+  function stepSemiL(q, dt) {
+    var out = new Float32Array(N * N);
+    for (var j = 0; j < N; j++) {
+      for (var i = 0; i < N; i++) {
+        out[j * N + i] = samp(q, i - dt * U, j - dt * V);
+      }
+    }
+    return out;
+  }
+
+  var ctxA = document.getElementById("cvA").getContext("2d");
+  var ctxB = document.getElementById("cvB").getContext("2d");
+  var imgA = ctxA.createImageData(N, N);
+  var imgB = ctxB.createImageData(N, N);
+  var PAPER = [248, 245, 238], BLUE = [35, 62, 141], MAG = [208, 40, 122];
+
+  function draw(ctx, img, q) {
+    var d = img.data;
+    for (var k = 0; k < N * N; k++) {
+      var v = q[k], t, src;
+      if (v >= 0) { t = Math.min(v, 1.1) / 1.1; src = BLUE; }
+      else { t = Math.min(-v, 1.1) / 1.1; src = MAG; }
+      d[k * 4]     = PAPER[0] + (src[0] - PAPER[0]) * t;
+      d[k * 4 + 1] = PAPER[1] + (src[1] - PAPER[1]) * t;
+      d[k * 4 + 2] = PAPER[2] + (src[2] - PAPER[2]) * t;
+      d[k * 4 + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+  }
+
+  var dt = 0.6;
+  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var playing = !reduced;
+
+  var slider = document.getElementById("dt");
+  var dtOut = document.getElementById("dtOut");
+  var cflOut = document.getElementById("cflOut");
+  var statsEl = document.getElementById("stats");
+  var playBtn = document.getElementById("play");
+  var stepBtn = document.getElementById("step");
+  var resetBtn = document.getElementById("reset");
+  var tick = document.getElementById("tick");
+
+  // place the CFL=1 tick: slider range 0.2..2.0, threshold where dt*SUM = 1
+  var thresholdDt = 1 / SUM;
+  tick.style.left = (100 * (thresholdDt - 0.2) / (2.0 - 0.2)) + "%";
+
+  function updateReadouts() {
+    var cfl = dt * SUM;
+    dtOut.textContent = dt.toFixed(2);
+    cflOut.textContent = cfl.toFixed(2);
+    cflOut.style.color = cfl <= 1.0001 ? "var(--stable)" : "var(--unstable)";
+  }
+
+  function updateStats() {
+    var mn = 0;
+    for (var k = 0; k < N * N; k++) if (qA[k] < mn) mn = qA[k];
+    statsEl.innerHTML = "step " + stepCount + " &middot; min pigment " + mn.toFixed(2);
+  }
+
+  function advance() {
+    qA = stepDonor(qA, dt);
+    qB = stepSemiL(qB, dt);
+    stepCount++;
+    draw(ctxA, imgA, qA);
+    draw(ctxB, imgB, qB);
+    updateStats();
+  }
+
+  function setPlaying(p) {
+    playing = p;
+    playBtn.textContent = playing ? "Pause" : "Play";
+    playBtn.setAttribute("aria-pressed", String(playing));
+    stepBtn.disabled = playing;
+  }
+
+  slider.addEventListener("input", function () {
+    dt = parseFloat(slider.value);
+    updateReadouts();
+  });
+  playBtn.addEventListener("click", function () { setPlaying(!playing); });
+  stepBtn.addEventListener("click", advance);
+  resetBtn.addEventListener("click", function () {
+    seed();
+    draw(ctxA, imgA, qA);
+    draw(ctxB, imgB, qB);
+    updateStats();
+  });
+
+  seed();
+  updateReadouts();
+  setPlaying(playing);
+  draw(ctxA, imgA, qA);
+  draw(ctxB, imgB, qB);
+  updateStats();
+
+  (function loop() {
+    if (playing) advance();
+    requestAnimationFrame(loop);
+  })();
+})();
+</script>
+</body>
+</html>

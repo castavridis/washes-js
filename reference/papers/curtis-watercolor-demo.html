@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Computer-Generated Watercolor — Washes reference gallery</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Crimson+Pro:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f5efe2;
+    --canvas-bg: #fbf7ed;
+    --ink: #2a2620;
+    --ink-soft: #6a6356;
+    --ink-faded: #a39885;
+    --panel-bg: rgba(245, 239, 226, 0.78);
+    --panel-border: rgba(42, 38, 32, 0.10);
+    --panel-shadow: 0 6px 28px rgba(60, 40, 20, 0.10), 0 2px 4px rgba(60, 40, 20, 0.05);
+    --btn-border: rgba(42, 38, 32, 0.2);
+    --btn-border-hover: rgba(42, 38, 32, 0.4);
+    --slider-track: rgba(42, 38, 32, 0.18);
+    --ultramarine: #233e8d;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --canvas-bg: #1a1816;
+      --ink: #e8e2d4;
+      --ink-soft: #b3a999;
+      --ink-faded: #6a6356;
+      --panel-bg: rgba(38, 34, 28, 0.80);
+      --panel-border: rgba(245, 239, 226, 0.08);
+      --panel-shadow: 0 6px 28px rgba(0, 0, 0, 0.45), 0 2px 4px rgba(0, 0, 0, 0.25);
+      --btn-border: rgba(245, 239, 226, 0.2);
+      --btn-border-hover: rgba(245, 239, 226, 0.4);
+      --slider-track: rgba(245, 239, 226, 0.18);
+      --ultramarine: #8aa3e8;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    min-height: 100vh;
+    background: var(--canvas-bg);
+    color: var(--ink);
+    font-family: 'Crimson Pro', Georgia, serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 880px; margin: 0 auto; padding: 56px 24px 72px; }
+  .eyebrow {
+    font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    letter-spacing: 0.14em; color: var(--ink-faded); margin-bottom: 18px;
+  }
+  h1 {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-weight: 400; font-size: clamp(34px, 6vw, 52px);
+    line-height: 1.05; margin-bottom: 10px;
+  }
+  .citation {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-style: italic; font-size: 19px; color: var(--ink-soft); margin-bottom: 22px;
+  }
+  .lede { font-size: 18px; line-height: 1.65; max-width: 64ch; }
+  .lede + .lede { margin-top: 0.8em; }
+  .panel {
+    margin: 36px 0 28px;
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 14px;
+    box-shadow: var(--panel-shadow);
+    padding: 22px 24px 24px;
+  }
+  .controls-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .controls-row + .controls-row { margin-top: 12px; }
+  label.ctl { font-size: 15px; color: var(--ink-soft); white-space: nowrap; }
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none;
+    flex: 1; min-width: 140px; height: 22px; background: transparent; cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-runnable-track { height: 3px; background: var(--slider-track); border-radius: 2px; }
+  input[type="range"]::-moz-range-track { height: 3px; background: var(--slider-track); border-radius: 2px; }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--ink); margin-top: -6.5px; border: none;
+  }
+  input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: var(--ink); border: none; }
+  button {
+    font-family: 'Crimson Pro', Georgia, serif; font-size: 15px;
+    color: var(--ink); background: transparent;
+    border: 1px solid var(--btn-border); border-radius: 8px;
+    padding: 7px 14px; cursor: pointer; transition: border-color 0.15s ease;
+  }
+  button:hover { border-color: var(--btn-border-hover); }
+  button:active { transform: scale(0.98); }
+  button[aria-pressed="true"] { border-color: var(--ultramarine); color: var(--ultramarine); }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--ultramarine); outline-offset: 2px; }
+  .check { display: flex; align-items: center; gap: 7px; font-size: 15px; color: var(--ink-soft); cursor: pointer; }
+  .check input { width: 15px; height: 15px; accent-color: var(--ultramarine); cursor: pointer; flex: none; min-width: 0; }
+  .stage { margin-top: 18px; }
+  #wash {
+    width: 100%; max-width: 560px; display: block; margin: 0 auto;
+    border-radius: 10px; border: 1px solid var(--panel-border);
+    cursor: crosshair; touch-action: none; background: #f6f1e4;
+  }
+  .hint { text-align: center; font-size: 15px; color: var(--ink-faded); margin-top: 10px; font-style: italic; }
+  .views { justify-content: center; margin-top: 16px; }
+  h2 { font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 500; font-size: 27px; margin: 40px 0 12px; }
+  .experiments { max-width: 66ch; }
+  .experiments p { font-size: 17px; line-height: 1.65; margin-bottom: 0.85em; }
+  .experiments .marker { font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 500; color: var(--ultramarine); }
+  footer {
+    margin-top: 56px; padding-top: 18px;
+    border-top: 1px solid var(--panel-border);
+    font-size: 14px; color: var(--ink-faded);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  @media (prefers-reduced-motion: reduce) { button { transition: none; } }
+</style>
+</head>
+<body>
+<main>
+  <p class="eyebrow">WASHES · REFERENCE GALLERY · THE FOUNDATION</p>
+  <h1>Computer-Generated Watercolor</h1>
+  <p class="citation">Curtis, Anderson, Seims, Fleischer &amp; Salesin. SIGGRAPH '97, pp. 421&ndash;430. The three-layer water / pigment / paper model Washes is built on.</p>
+  <p class="lede">Paint on the canvas below. Each stroke deposits water and suspended pigment; the wash then dries from the rim inward. As water evaporates at the boundary, interior water flows outward to replace it, carrying suspended pigment with it &mdash; pigment accumulates and deposits at the receding edge. That migration is the source of watercolor's signature dark rim, and it is the paper's contribution to the image, not the painter's.</p>
+  <p class="lede">This is a deliberately simplified version of the Curtis pipeline (no full shallow-water solve), but it keeps the three layers &mdash; water, suspended pigment, deposited pigment on textured paper &mdash; and the two effects that define the look: edge darkening and granulation. Both have kill switches so you can see exactly what each one contributes.</p>
+
+  <div class="panel">
+    <div class="controls-row">
+      <label class="check"><input type="checkbox" id="edgeChk" checked> Edge darkening (pigment migrates to the drying rim)</label>
+      <label class="check"><input type="checkbox" id="granChk" checked> Granulation (pigment settles into paper valleys)</label>
+    </div>
+    <div class="controls-row">
+      <label class="ctl" for="dry">Drying speed</label>
+      <input type="range" id="dry" min="0.2" max="3" step="0.1" value="1" aria-label="Drying speed">
+      <button id="play" aria-pressed="true">Pause</button>
+      <button id="reset">Clear paper</button>
+    </div>
+    <div class="stage">
+      <canvas id="wash" width="128" height="128" role="img"
+              aria-label="Simulated watercolor wash drying on textured paper; painting with the pointer adds wet pigment"></canvas>
+      <p class="hint">Click or drag to lay down a wet wash, then let it dry.</p>
+    </div>
+    <div class="controls-row views" role="group" aria-label="Layer view">
+      <button class="view" data-v="composite" aria-pressed="true">Composite</button>
+      <button class="view" data-v="water" aria-pressed="false">Water layer</button>
+      <button class="view" data-v="pigment" aria-pressed="false">Suspended pigment</button>
+      <button class="view" data-v="paper" aria-pressed="false">Paper height</button>
+    </div>
+  </div>
+
+  <h2>Try this</h2>
+  <div class="experiments">
+    <p><span class="marker">1.</span>&ensp;Paint one blob and let it dry untouched. Switch to the suspended-pigment view mid-dry to watch the pigment crowd toward the shrinking boundary before it deposits.</p>
+    <p><span class="marker">2.</span>&ensp;Clear, turn off edge darkening, and paint the same blob. It dries to a flat, even stain &mdash; gouache, not watercolor. The rim was doing all the work.</p>
+    <p><span class="marker">3.</span>&ensp;Toggle granulation with the paper-height view open. The pigment's grain pattern is the paper's noise field made visible &mdash; deposition is biased into the valleys, exactly the coupling Curtis et&nbsp;al. use to get pigment texture for free from the paper model.</p>
+    <p><span class="marker">4.</span>&ensp;Drop a fresh wet blob overlapping a half-dried one. The new water re-wets the boundary and pushes the old rim outward &mdash; a primitive backrun.</p>
+  </div>
+
+  <footer>Built for Washes — an in-browser watercolor library after Curtis et&nbsp;al. 1997 · self-contained demo, no dependencies</footer>
+</main>
+<script>
+(function () {
+  "use strict";
+  var N = 128;
+  var w, p, D, h;
+
+  function ihash(i, j) {
+    var n = (i * 374761393 + j * 668265263) | 0;
+    n = ((n ^ (n >>> 13)) * 1274126177) | 0;
+    return ((n ^ (n >>> 16)) >>> 0) / 4294967295;
+  }
+  function smooth(t) { return t * t * (3 - 2 * t); }
+  function vnoise(x, y) {
+    var i0 = Math.floor(x), j0 = Math.floor(y);
+    var fx = smooth(x - i0), fy = smooth(y - j0);
+    var a = ihash(i0, j0), b = ihash(i0 + 1, j0);
+    var c = ihash(i0, j0 + 1), d = ihash(i0 + 1, j0 + 1);
+    return (a * (1 - fx) + b * fx) * (1 - fy) + (c * (1 - fx) + d * fx) * fy;
+  }
+
+  function makePaper() {
+    h = new Float32Array(N * N);
+    for (var j = 0; j < N; j++) {
+      for (var i = 0; i < N; i++) {
+        var v = 0.5 * vnoise(i * 0.09, j * 0.09)
+              + 0.3 * vnoise(i * 0.21 + 31, j * 0.21 + 17)
+              + 0.2 * vnoise(i * 0.47 + 71, j * 0.47 + 53);
+        h[j * N + i] = v;
+      }
+    }
+  }
+
+  function clearAll() {
+    w = new Float32Array(N * N);
+    p = new Float32Array(N * N);
+    D = new Float32Array(N * N);
+  }
+
+  function blob(cx, cy, rad, wAmt, pAmt) {
+    var r2 = rad * rad;
+    var x0 = Math.max(0, Math.floor(cx - rad)), x1 = Math.min(N - 1, Math.ceil(cx + rad));
+    var y0 = Math.max(0, Math.floor(cy - rad)), y1 = Math.min(N - 1, Math.ceil(cy + rad));
+    for (var j = y0; j <= y1; j++) {
+      for (var i = x0; i <= x1; i++) {
+        var dx = i - cx, dy = j - cy, d2 = dx * dx + dy * dy;
+        if (d2 < r2) {
+          var g = Math.exp(-d2 / (r2 * 0.42));
+          var k = j * N + i;
+          w[k] = Math.min(1, w[k] + wAmt * g);
+          p[k] = Math.min(2, p[k] + pAmt * g);
+        }
+      }
+    }
+  }
+
+  function clampi(v) { return v < 0 ? 0 : (v > N - 1 ? N - 1 : v); }
+
+  function sampleClamped(q, x, y) {
+    x = Math.min(Math.max(x, 0), N - 1.001);
+    y = Math.min(Math.max(y, 0), N - 1.001);
+    var i0 = Math.floor(x), j0 = Math.floor(y);
+    var i1 = Math.min(i0 + 1, N - 1), j1 = Math.min(j0 + 1, N - 1);
+    var fx = x - i0, fy = y - j0;
+    return q[j0 * N + i0] * (1 - fx) * (1 - fy)
+         + q[j0 * N + i1] * fx * (1 - fy)
+         + q[j1 * N + i0] * (1 - fx) * fy
+         + q[j1 * N + i1] * fx * fy;
+  }
+
+  var edgeOn = true, granOn = true, drySpeed = 1;
+  var WET = 0.002;
+
+  function step() {
+    var i, j, k;
+
+    // 1. Capillary spread of water (gentle bleed, slight absorption).
+    var w2 = new Float32Array(N * N);
+    for (j = 0; j < N; j++) {
+      for (i = 0; i < N; i++) {
+        k = j * N + i;
+        var l = j * N + clampi(i - 1), r = j * N + clampi(i + 1);
+        var u = clampi(j - 1) * N + i, d = clampi(j + 1) * N + i;
+        var lap = w[l] + w[r] + w[u] + w[d] - 4 * w[k];
+        var nv = w[k] + 0.09 * lap - 0.0006 * drySpeed;
+        w2[k] = nv < 0 ? 0 : nv;
+      }
+    }
+    w = w2;
+
+    // 2. Evaporation, fastest at the wet boundary.
+    var w3 = new Float32Array(N * N);
+    for (j = 0; j < N; j++) {
+      for (i = 0; i < N; i++) {
+        k = j * N + i;
+        if (w[k] <= 0) { w3[k] = 0; continue; }
+        var wet = 0;
+        if (w[j * N + clampi(i - 1)] > WET) wet++;
+        if (w[j * N + clampi(i + 1)] > WET) wet++;
+        if (w[clampi(j - 1) * N + i] > WET) wet++;
+        if (w[clampi(j + 1) * N + i] > WET) wet++;
+        var edge = 1 - wet / 4;
+        var nv = w[k] - 0.0024 * drySpeed * (0.3 + 2.2 * edge);
+        w3[k] = nv < 0 ? 0 : nv;
+      }
+    }
+    w = w3;
+
+    // 3. Edge darkening: suspended pigment rides the outward replacement
+    //    flow toward the drying rim (advect along -grad w).
+    if (edgeOn) {
+      var p2 = new Float32Array(N * N);
+      for (j = 0; j < N; j++) {
+        for (i = 0; i < N; i++) {
+          k = j * N + i;
+          if (w[k] <= WET) { p2[k] = p[k]; continue; }
+          var gx = (w[j * N + clampi(i + 1)] - w[j * N + clampi(i - 1)]) * 0.5;
+          var gy = (w[clampi(j + 1) * N + i] - w[clampi(j - 1) * N + i]) * 0.5;
+          var m = Math.sqrt(gx * gx + gy * gy);
+          if (m > 1e-5) {
+            var s = Math.min(0.85, m * 14) / m;
+            // velocity is -grad(w); backtrace goes +grad(w), toward the interior
+            p2[k] = sampleClamped(p, i + gx * s, j + gy * s);
+          } else {
+            p2[k] = p[k];
+          }
+        }
+      }
+      p = p2;
+    }
+
+    // 4. Diffusion of suspended pigment within the wet region.
+    var p3 = new Float32Array(N * N);
+    for (j = 0; j < N; j++) {
+      for (i = 0; i < N; i++) {
+        k = j * N + i;
+        if (w[k] <= WET) { p3[k] = p[k]; continue; }
+        var lp = p[j * N + clampi(i - 1)] + p[j * N + clampi(i + 1)]
+               + p[clampi(j - 1) * N + i] + p[clampi(j + 1) * N + i] - 4 * p[k];
+        p3[k] = p[k] + 0.045 * lp;
+      }
+    }
+    p = p3;
+
+    // 5. Deposition: slow while wet, fast as the cell dries; biased into
+    //    paper valleys when granulation is on.
+    for (k = 0; k < N * N; k++) {
+      if (p[k] <= 0) continue;
+      var rate;
+      if (w[k] <= WET) {
+        rate = 1;
+      } else {
+        rate = 0.004 * drySpeed;
+        if (w[k] < 0.12) rate += (0.12 - w[k]) / 0.12 * 0.09 * drySpeed;
+        if (granOn) rate *= 1 + 1.35 * (0.5 - h[k]);
+        if (rate < 0) rate = 0;
+        if (rate > 0.6) rate = 0.6;
+      }
+      var dep = p[k] * rate;
+      p[k] -= dep;
+      D[k] += dep;
+    }
+  }
+
+  var cv = document.getElementById("wash");
+  var ctx = cv.getContext("2d");
+  var img = ctx.createImageData(N, N);
+  var A = [3.0, 2.2, 0.45]; // ultramarine-ish absorption per channel
+  var view = "composite";
+
+  function render() {
+    var d = img.data, k, r, g, b;
+    for (k = 0; k < N * N; k++) {
+      if (view === "composite") {
+        var base = 0.93 + 0.07 * h[k];
+        var dens = D[k] + 0.55 * p[k];
+        r = 245 * base * Math.exp(-A[0] * dens);
+        g = 239 * base * Math.exp(-A[1] * dens);
+        b = 226 * base * Math.exp(-A[2] * dens);
+        if (w[k] > WET) { r *= 0.965; g *= 0.97; b *= 0.995; }
+      } else if (view === "water") {
+        var t = Math.min(w[k], 1);
+        r = 246 - 190 * t; g = 241 - 150 * t; b = 228 - 60 * t;
+      } else if (view === "pigment") {
+        var tp = Math.min(p[k] / 1.2, 1);
+        r = 246 - 60 * tp; g = 241 - 195 * tp; b = 228 - 115 * tp;
+      } else {
+        var th = h[k];
+        r = 70 + 176 * th; g = 66 + 175 * th; b = 56 + 172 * th;
+      }
+      d[k * 4] = r; d[k * 4 + 1] = g; d[k * 4 + 2] = b; d[k * 4 + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+  }
+
+  // controls
+  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var playing = !reduced;
+  var playBtn = document.getElementById("play");
+  function setPlaying(v) {
+    playing = v;
+    playBtn.textContent = playing ? "Pause" : "Play";
+    playBtn.setAttribute("aria-pressed", String(playing));
+  }
+  playBtn.addEventListener("click", function () { setPlaying(!playing); });
+  document.getElementById("reset").addEventListener("click", function () {
+    clearAll(); seedBlob(); render();
+  });
+  document.getElementById("edgeChk").addEventListener("change", function (e) { edgeOn = e.target.checked; });
+  document.getElementById("granChk").addEventListener("change", function (e) { granOn = e.target.checked; });
+  document.getElementById("dry").addEventListener("input", function (e) { drySpeed = parseFloat(e.target.value); });
+
+  var viewBtns = Array.prototype.slice.call(document.querySelectorAll("button.view"));
+  viewBtns.forEach(function (b) {
+    b.addEventListener("click", function () {
+      view = b.getAttribute("data-v");
+      viewBtns.forEach(function (o) { o.setAttribute("aria-pressed", String(o === b)); });
+      render();
+    });
+  });
+
+  // painting
+  var painting = false;
+  function paintAt(ev) {
+    var rect = cv.getBoundingClientRect();
+    var x = (ev.clientX - rect.left) / rect.width * N;
+    var y = (ev.clientY - rect.top) / rect.height * N;
+    blob(x, y, 11, 0.9, 0.55);
+    if (!playing) render();
+  }
+  cv.addEventListener("pointerdown", function (ev) {
+    painting = true; cv.setPointerCapture(ev.pointerId); paintAt(ev); ev.preventDefault();
+  });
+  cv.addEventListener("pointermove", function (ev) { if (painting) paintAt(ev); });
+  cv.addEventListener("pointerup", function () { painting = false; });
+  cv.addEventListener("pointercancel", function () { painting = false; });
+
+  function seedBlob() { blob(N * 0.5, N * 0.46, 24, 1.0, 0.6); }
+
+  makePaper();
+  clearAll();
+  seedBlob();
+  setPlaying(playing);
+  render();
+
+  (function loop() {
+    if (playing) { step(); render(); }
+    requestAnimationFrame(loop);
+  })();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The CFL Condition — Washes reference gallery</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Crimson+Pro:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f5efe2;
+    --canvas-bg: #fbf7ed;
+    --ink: #2a2620;
+    --ink-soft: #6a6356;
+    --ink-faded: #a39885;
+    --panel-bg: rgba(245, 239, 226, 0.78);
+    --panel-border: rgba(42, 38, 32, 0.10);
+    --panel-shadow: 0 6px 28px rgba(60, 40, 20, 0.10), 0 2px 4px rgba(60, 40, 20, 0.05);
+    --btn-border: rgba(42, 38, 32, 0.2);
+    --btn-border-hover: rgba(42, 38, 32, 0.4);
+    --slider-track: rgba(42, 38, 32, 0.18);
+    --ultramarine: #233e8d;
+    --diagram-bg: #f6f1e4;
+    --diagram-ink: #2a2620;
+    --stable: #3b6d11;
+    --unstable: #a02060;
+    --cone: rgba(35, 62, 141, 0.13);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --canvas-bg: #1a1816;
+      --ink: #e8e2d4;
+      --ink-soft: #b3a999;
+      --ink-faded: #6a6356;
+      --panel-bg: rgba(38, 34, 28, 0.80);
+      --panel-border: rgba(245, 239, 226, 0.08);
+      --panel-shadow: 0 6px 28px rgba(0, 0, 0, 0.45), 0 2px 4px rgba(0, 0, 0, 0.25);
+      --btn-border: rgba(245, 239, 226, 0.2);
+      --btn-border-hover: rgba(245, 239, 226, 0.4);
+      --slider-track: rgba(245, 239, 226, 0.18);
+      --ultramarine: #8aa3e8;
+      --diagram-bg: #211e1a;
+      --diagram-ink: #e8e2d4;
+      --stable: #97c459;
+      --unstable: #ed93b1;
+      --cone: rgba(138, 163, 232, 0.16);
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    min-height: 100vh;
+    background: var(--canvas-bg);
+    color: var(--ink);
+    font-family: 'Crimson Pro', Georgia, serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 880px; margin: 0 auto; padding: 56px 24px 72px; }
+  .eyebrow { font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.14em; color: var(--ink-faded); margin-bottom: 18px; }
+  h1 { font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 400; font-size: clamp(34px, 6vw, 52px); line-height: 1.05; margin-bottom: 10px; }
+  .citation { font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; font-size: 19px; color: var(--ink-soft); margin-bottom: 22px; }
+  .lede { font-size: 18px; line-height: 1.65; max-width: 64ch; }
+  .lede + .lede { margin-top: 0.8em; }
+  .panel {
+    margin: 36px 0 28px;
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 14px;
+    box-shadow: var(--panel-shadow);
+    padding: 22px 24px 24px;
+  }
+  .controls-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  label.ctl { font-size: 15px; color: var(--ink-soft); white-space: nowrap; }
+  .slider-wrap { flex: 1; min-width: 200px; position: relative; padding-top: 16px; }
+  .cfl-tick {
+    position: absolute; top: 0; transform: translateX(-50%);
+    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    color: var(--ink-faded); white-space: nowrap;
+  }
+  .cfl-tick::after { content: ""; display: block; width: 1px; height: 6px; background: var(--ink-faded); margin: 2px auto 0; }
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 22px; background: transparent; cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-runnable-track { height: 3px; background: var(--slider-track); border-radius: 2px; }
+  input[type="range"]::-moz-range-track { height: 3px; background: var(--slider-track); border-radius: 2px; }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--ink); margin-top: -6.5px; border: none;
+  }
+  input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: var(--ink); border: none; }
+  .cfl-readout { font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 500; min-width: 6.5ch; text-align: right; }
+  .cfl-label { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: var(--ink-faded); }
+  button {
+    font-family: 'Crimson Pro', Georgia, serif; font-size: 15px;
+    color: var(--ink); background: transparent;
+    border: 1px solid var(--btn-border); border-radius: 8px;
+    padding: 7px 16px; cursor: pointer; transition: border-color 0.15s ease;
+  }
+  button:hover { border-color: var(--btn-border-hover); }
+  button:active { transform: scale(0.98); }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--ultramarine); outline-offset: 2px; }
+  canvas.diagram {
+    width: 100%; display: block;
+    border-radius: 10px; border: 1px solid var(--panel-border);
+    background: var(--diagram-bg);
+  }
+  .sub {
+    font-size: 15px; color: var(--ink-soft); margin: 8px 0 18px; line-height: 1.5;
+  }
+  .readout { font-size: 14px; color: var(--ink-soft); font-family: 'JetBrains Mono', monospace; }
+  h2 { font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 500; font-size: 27px; margin: 40px 0 12px; }
+  .experiments { max-width: 66ch; }
+  .experiments p { font-size: 17px; line-height: 1.65; margin-bottom: 0.85em; }
+  .experiments .marker { font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 500; color: var(--ultramarine); }
+  footer { margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--panel-border); font-size: 14px; color: var(--ink-faded); font-family: 'JetBrains Mono', monospace; }
+</style>
+</head>
+<body>
+<main>
+  <p class="eyebrow">WASHES · REFERENCE GALLERY · THE STABILITY BOUND</p>
+  <h1>The CFL condition</h1>
+  <p class="citation">Courant, Friedrichs &amp; Lewy, 1928. Mathematische Annalen 100, 32&ndash;74. The 1928 theorem behind the negative-pigment streaks in Washes pre-v0.69.</p>
+  <p class="lede">An explicit scheme computes each new value from a fixed stencil of old values &mdash; its numerical domain of dependence grows by one cell per step. But the true solution at that point depends on data along the physical characteristic, which travels u&middot;&Delta;t per step. The CFL theorem: if the characteristic outruns the stencil, the scheme is computing the answer from data that cannot contain it, and no choice of weights can save it. For donor-cell advection that means |u|&middot;&Delta;t&nbsp;&le;&nbsp;&Delta;x.</p>
+  <p class="lede">The diagram below shows the space-time cone of grid points an upwind scheme consults (shaded) and the physical characteristic (the bold line) for the chosen Courant number c&nbsp;=&nbsp;u&middot;&Delta;t/&Delta;x. The strip underneath runs live 1-D upwind advection at that same c. The moment the characteristic's foot leaves the cone, the strip grows oscillations and negative pigment.</p>
+
+  <div class="panel">
+    <div class="controls-row" style="margin-bottom:16px;">
+      <label class="ctl" for="c">Courant number c = u&middot;&Delta;t/&Delta;x</label>
+      <div class="slider-wrap">
+        <span class="cfl-tick" id="tick">c = 1</span>
+        <input type="range" id="c" min="0.2" max="2" step="0.05" value="0.7" aria-label="Courant number">
+      </div>
+      <span style="display:flex;flex-direction:column;align-items:flex-end;">
+        <span class="cfl-label">COURANT NUMBER</span>
+        <span class="cfl-readout" id="cOut" style="color:var(--stable);">0.70</span>
+      </span>
+    </div>
+    <canvas id="cone" class="diagram" height="300" role="img"
+            aria-label="Space-time diagram showing the numerical domain of dependence cone of an upwind scheme and the physical characteristic line; the characteristic exits the cone when the Courant number exceeds one"></canvas>
+    <p class="sub">Space runs horizontally, time upward. The shaded cone is every grid value the scheme can possibly consult when computing the top node. The bold line is where the answer actually comes from.</p>
+    <canvas id="wave" class="diagram" height="190" role="img"
+            aria-label="Live one-dimensional upwind advection of a pigment bump at the chosen Courant number, with a rendered pigment strip below the curve"></canvas>
+    <div class="controls-row" style="margin-top:14px;">
+      <button id="play" aria-pressed="true">Pause</button>
+      <button id="reset">Reset bump</button>
+      <span class="readout" id="minOut">min pigment 0.00</span>
+    </div>
+  </div>
+
+  <h2>Try this</h2>
+  <div class="experiments">
+    <p><span class="marker">1.</span>&ensp;Sit at c = 1.00 exactly. Upwind becomes the exact shift operator &mdash; the bump translates without any smearing at all. The scheme is perfect precisely at the edge of legality, and only there.</p>
+    <p><span class="marker">2.</span>&ensp;Back off to c = 0.70. Stable, but the bump erodes: that's numerical diffusion, the price of the safety margin. Stability and accuracy pull in opposite directions for explicit schemes.</p>
+    <p><span class="marker">3.</span>&ensp;Step to c = 1.10 and watch the trailing edge. The first thing to appear is a small undershoot below zero &mdash; negative pigment &mdash; which then feeds back and grows exponentially. This is the cross artifact's signature in one dimension, and the diagram above shows why: the characteristic's foot now lies one node outside everything the scheme can see.</p>
+  </div>
+
+  <footer>Built for Washes — an in-browser watercolor library after Curtis et&nbsp;al. 1997 · self-contained demo, no dependencies</footer>
+</main>
+<script>
+(function () {
+  "use strict";
+
+  var c = 0.7;
+  var STEPS = 6;      // time levels in the diagram
+  var NODES = 17;     // space nodes in the diagram
+  var TJ = 13;        // target node index (characteristic runs left for u > 0)
+
+  var coneCv = document.getElementById("cone");
+  var coneCtx = coneCv.getContext("2d");
+
+  function cssVar(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+
+  function drawCone() {
+    var dpr = window.devicePixelRatio || 1;
+    var w = coneCv.clientWidth, h = 300;
+    coneCv.width = w * dpr;
+    coneCv.height = h * dpr;
+    coneCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    coneCtx.clearRect(0, 0, w, h);
+
+    var padL = 36, padR = 20, padT = 34, padB = 40;
+    var pw = w - padL - padR, ph = h - padT - padB;
+    function X(j) { return padL + (j / (NODES - 1)) * pw; }
+    function Y(n) { return padT + (1 - n / STEPS) * ph; } // n = time level
+
+    var ink = cssVar("--diagram-ink");
+    var faded = cssVar("--ink-faded");
+    var cone = cssVar("--cone");
+    var stable = cssVar("--stable");
+    var unstable = cssVar("--unstable");
+    var ok = c <= 1.0001;
+
+    // numerical domain of dependence (upwind, u > 0): triangle widening left
+    coneCtx.fillStyle = cone;
+    coneCtx.beginPath();
+    coneCtx.moveTo(X(TJ), Y(STEPS));
+    coneCtx.lineTo(X(TJ - STEPS), Y(0));
+    coneCtx.lineTo(X(TJ), Y(0));
+    coneCtx.closePath();
+    coneCtx.fill();
+
+    // grid nodes
+    var n, j;
+    for (n = 0; n <= STEPS; n++) {
+      for (j = 0; j < NODES; j++) {
+        var inside = (n < STEPS) && (j <= TJ) && (j >= TJ - (STEPS - n));
+        coneCtx.fillStyle = inside ? ink : faded;
+        coneCtx.globalAlpha = inside ? 0.95 : 0.5;
+        coneCtx.beginPath();
+        coneCtx.arc(X(j), Y(n), inside ? 3 : 2.2, 0, Math.PI * 2);
+        coneCtx.fill();
+      }
+    }
+    coneCtx.globalAlpha = 1;
+
+    // target node
+    coneCtx.fillStyle = ink;
+    coneCtx.beginPath();
+    coneCtx.arc(X(TJ), Y(STEPS), 5, 0, Math.PI * 2);
+    coneCtx.fill();
+    coneCtx.font = "12px 'JetBrains Mono', monospace";
+    coneCtx.textAlign = "center";
+    coneCtx.fillText("value being computed", X(TJ), Y(STEPS) - 12);
+
+    // physical characteristic: from target back to t = 0, foot at TJ - c*STEPS
+    var foot = TJ - c * STEPS;
+    coneCtx.strokeStyle = ok ? stable : unstable;
+    coneCtx.lineWidth = 3;
+    coneCtx.beginPath();
+    coneCtx.moveTo(X(TJ), Y(STEPS));
+    coneCtx.lineTo(X(foot), Y(0));
+    coneCtx.stroke();
+
+    // foot marker
+    coneCtx.fillStyle = ok ? stable : unstable;
+    coneCtx.beginPath();
+    coneCtx.moveTo(X(foot), Y(0) + 4);
+    coneCtx.lineTo(X(foot) - 6, Y(0) + 14);
+    coneCtx.lineTo(X(foot) + 6, Y(0) + 14);
+    coneCtx.closePath();
+    coneCtx.fill();
+    coneCtx.textAlign = "center";
+    coneCtx.fillStyle = ok ? stable : unstable;
+    coneCtx.fillText(ok ? "data is inside the cone" : "data is outside the cone",
+                     Math.max(X(foot), padL + 78), Y(0) + 30);
+
+    // axis labels
+    coneCtx.fillStyle = faded;
+    coneCtx.textAlign = "left";
+    coneCtx.fillText("x →", w - padR - 30, h - 8);
+    coneCtx.save();
+    coneCtx.translate(12, padT + 30);
+    coneCtx.rotate(-Math.PI / 2);
+    coneCtx.fillText("← t", 0, 0);
+    coneCtx.restore();
+  }
+
+  // 1-D upwind advection (periodic)
+  var M = 240;
+  var q;
+  function seed() {
+    q = new Float32Array(M);
+    for (var i = 0; i < M; i++) {
+      var d = (i - M * 0.3) / 14;
+      q[i] = Math.exp(-d * d);
+    }
+  }
+  function stepWave() {
+    var out = new Float32Array(M);
+    for (var i = 0; i < M; i++) {
+      var im = (i - 1 + M) % M;
+      var v = q[i] - c * (q[i] - q[im]);
+      if (v > 3) v = 3;
+      if (v < -3) v = -3;
+      out[i] = v;
+    }
+    q = out;
+  }
+
+  var waveCv = document.getElementById("wave");
+  var waveCtx = waveCv.getContext("2d");
+  var PAPER = [246, 241, 228], BLUE = [35, 62, 141], MAG = [208, 40, 122];
+
+  function drawWave() {
+    var dpr = window.devicePixelRatio || 1;
+    var w = waveCv.clientWidth, h = 190;
+    waveCv.width = w * dpr;
+    waveCv.height = h * dpr;
+    waveCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    waveCtx.clearRect(0, 0, w, h);
+
+    var plotH = 130, stripY = 148, stripH = 30;
+    var faded = cssVar("--ink-faded");
+    var ink = cssVar("--diagram-ink");
+
+    // baseline q = 0 and q = 1 guides
+    function Yv(v) { return 14 + (1.35 - v) / (1.35 - (-0.75)) * plotH; }
+    waveCtx.strokeStyle = faded;
+    waveCtx.globalAlpha = 0.5;
+    waveCtx.lineWidth = 1;
+    [0, 1].forEach(function (lvl) {
+      waveCtx.beginPath();
+      waveCtx.moveTo(0, Yv(lvl));
+      waveCtx.lineTo(w, Yv(lvl));
+      waveCtx.stroke();
+    });
+    waveCtx.globalAlpha = 0.9;
+    waveCtx.font = "10px 'JetBrains Mono', monospace";
+    waveCtx.fillStyle = faded;
+    waveCtx.fillText("1", 4, Yv(1) - 3);
+    waveCtx.fillText("0", 4, Yv(0) - 3);
+    waveCtx.globalAlpha = 1;
+
+    // curve, colored by sign
+    var i, x, v;
+    waveCtx.lineWidth = 2;
+    waveCtx.beginPath();
+    waveCtx.strokeStyle = ink;
+    for (i = 0; i < M; i++) {
+      x = i / (M - 1) * w;
+      v = Math.max(-0.75, Math.min(1.35, q[i]));
+      if (i === 0) waveCtx.moveTo(x, Yv(v)); else waveCtx.lineTo(x, Yv(v));
+    }
+    waveCtx.stroke();
+
+    // pigment strip
+    var cw = w / M;
+    for (i = 0; i < M; i++) {
+      v = q[i];
+      var t, src;
+      if (v >= 0) { t = Math.min(v, 1.1) / 1.1; src = BLUE; }
+      else { t = Math.min(-v, 1.1) / 1.1; src = MAG; }
+      var r = PAPER[0] + (src[0] - PAPER[0]) * t;
+      var g = PAPER[1] + (src[1] - PAPER[1]) * t;
+      var b = PAPER[2] + (src[2] - PAPER[2]) * t;
+      waveCtx.fillStyle = "rgb(" + Math.round(r) + "," + Math.round(g) + "," + Math.round(b) + ")";
+      waveCtx.fillRect(i * cw, stripY, cw + 1, stripH);
+    }
+    waveCtx.strokeStyle = faded;
+    waveCtx.globalAlpha = 0.6;
+    waveCtx.strokeRect(0.5, stripY + 0.5, w - 1, stripH - 1);
+    waveCtx.globalAlpha = 1;
+  }
+
+  // controls
+  var slider = document.getElementById("c");
+  var cOut = document.getElementById("cOut");
+  var minOut = document.getElementById("minOut");
+  var playBtn = document.getElementById("play");
+  var tick = document.getElementById("tick");
+  tick.style.left = (100 * (1.0 - 0.2) / (2.0 - 0.2)) + "%";
+
+  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var playing = !reduced;
+
+  function setPlaying(v) {
+    playing = v;
+    playBtn.textContent = playing ? "Pause" : "Play";
+    playBtn.setAttribute("aria-pressed", String(playing));
+  }
+
+  function updateC() {
+    c = parseFloat(slider.value);
+    cOut.textContent = c.toFixed(2);
+    cOut.style.color = c <= 1.0001 ? "var(--stable)" : "var(--unstable)";
+    drawCone();
+  }
+
+  slider.addEventListener("input", updateC);
+  playBtn.addEventListener("click", function () { setPlaying(!playing); });
+  document.getElementById("reset").addEventListener("click", function () { seed(); drawWave(); });
+  window.addEventListener("resize", function () { drawCone(); drawWave(); });
+  if (window.matchMedia) {
+    window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", function () { drawCone(); drawWave(); });
+  }
+
+  seed();
+  updateC();
+  setPlaying(playing);
+  drawWave();
+
+  var frameCount = 0;
+  (function loop() {
+    if (playing) {
+      // run at a readable pace: one step every other frame
+      if (frameCount % 2 === 0) {
+        stepWave();
+        var mn = 0;
+        for (var i = 0; i < M; i++) if (q[i] < mn) mn = q[i];
+        minOut.textContent = "min pigment " + mn.toFixed(2);
+        drawWave();
+      }
+      frameCount++;
+    }
+    requestAnimationFrame(loop);
+  })();
+})();
+</script>
+</body>
+</html>

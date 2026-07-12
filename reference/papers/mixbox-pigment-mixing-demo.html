@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Practical Pigment Mixing — Washes reference gallery</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Crimson+Pro:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f5efe2;
+    --canvas-bg: #fbf7ed;
+    --ink: #2a2620;
+    --ink-soft: #6a6356;
+    --ink-faded: #a39885;
+    --panel-bg: rgba(245, 239, 226, 0.78);
+    --panel-border: rgba(42, 38, 32, 0.10);
+    --panel-shadow: 0 6px 28px rgba(60, 40, 20, 0.10), 0 2px 4px rgba(60, 40, 20, 0.05);
+    --btn-border: rgba(42, 38, 32, 0.2);
+    --btn-border-hover: rgba(42, 38, 32, 0.4);
+    --slider-track: rgba(42, 38, 32, 0.18);
+    --ultramarine: #233e8d;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --canvas-bg: #1a1816;
+      --ink: #e8e2d4;
+      --ink-soft: #b3a999;
+      --ink-faded: #6a6356;
+      --panel-bg: rgba(38, 34, 28, 0.80);
+      --panel-border: rgba(245, 239, 226, 0.08);
+      --panel-shadow: 0 6px 28px rgba(0, 0, 0, 0.45), 0 2px 4px rgba(0, 0, 0, 0.25);
+      --btn-border: rgba(245, 239, 226, 0.2);
+      --btn-border-hover: rgba(245, 239, 226, 0.4);
+      --slider-track: rgba(245, 239, 226, 0.18);
+      --ultramarine: #8aa3e8;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    min-height: 100vh;
+    background: var(--canvas-bg);
+    color: var(--ink);
+    font-family: 'Crimson Pro', Georgia, serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 880px; margin: 0 auto; padding: 56px 24px 72px; }
+  .eyebrow { font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.14em; color: var(--ink-faded); margin-bottom: 18px; }
+  h1 { font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 400; font-size: clamp(34px, 6vw, 52px); line-height: 1.05; margin-bottom: 10px; }
+  .citation { font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; font-size: 19px; color: var(--ink-soft); margin-bottom: 22px; }
+  .lede { font-size: 18px; line-height: 1.65; max-width: 64ch; }
+  .lede + .lede { margin-top: 0.8em; }
+  .panel {
+    margin: 36px 0 28px;
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 14px;
+    box-shadow: var(--panel-shadow);
+    padding: 22px 24px 24px;
+  }
+  .pickers { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 22px; margin-bottom: 22px; }
+  .pickers label { font-size: 15px; color: var(--ink-soft); display: block; margin-bottom: 7px; }
+  select {
+    font-family: 'Crimson Pro', Georgia, serif; font-size: 16px;
+    color: var(--ink); width: 100%;
+    background: transparent; border: 1px solid var(--btn-border);
+    border-radius: 8px; padding: 7px 10px; cursor: pointer;
+  }
+  select option { color: #2a2620; background: #f5efe2; }
+  select:focus-visible, input:focus-visible { outline: 2px solid var(--ultramarine); outline-offset: 2px; }
+  .striplabel { font-size: 15px; color: var(--ink-soft); margin: 14px 0 6px; display: flex; justify-content: space-between; align-items: baseline; }
+  .striplabel .mode { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: var(--ink-faded); }
+  canvas.strip {
+    width: 100%; height: 56px; display: block;
+    border-radius: 8px; border: 1px solid var(--panel-border);
+  }
+  .mix-row { display: flex; align-items: center; gap: 14px; margin: 22px 0 6px; flex-wrap: wrap; }
+  .mix-row label { font-size: 15px; color: var(--ink-soft); white-space: nowrap; }
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none;
+    flex: 1; min-width: 180px; height: 22px; background: transparent; cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-runnable-track { height: 3px; background: var(--slider-track); border-radius: 2px; }
+  input[type="range"]::-moz-range-track { height: 3px; background: var(--slider-track); border-radius: 2px; }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--ink); margin-top: -6.5px; border: none;
+  }
+  input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: var(--ink); border: none; }
+  .num { font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 500; min-width: 7.5ch; }
+  .pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 20px; margin-top: 12px; }
+  .pair .swatch { height: 96px; border-radius: 10px; border: 1px solid var(--panel-border); }
+  .pair p { font-size: 15px; margin-top: 8px; }
+  .pair .hex { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--ink-soft); }
+  h2 { font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 500; font-size: 27px; margin: 40px 0 12px; }
+  .experiments { max-width: 66ch; }
+  .experiments p { font-size: 17px; line-height: 1.65; margin-bottom: 0.85em; }
+  .experiments .marker { font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 500; color: var(--ultramarine); }
+  .note { font-size: 15px; color: var(--ink-soft); max-width: 66ch; line-height: 1.6; margin-top: 20px; }
+  footer { margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--panel-border); font-size: 14px; color: var(--ink-faded); font-family: 'JetBrains Mono', monospace; }
+</style>
+</head>
+<body>
+<main>
+  <p class="eyebrow">WASHES · REFERENCE GALLERY · THE CATALYST</p>
+  <h1>Practical Pigment Mixing</h1>
+  <p class="citation">Sochorov&aacute; &amp; Jamri&scaron;ka. ACM TOG 40(6), SIGGRAPH Asia 2021. The Mixbox paper &mdash; the fast-forward video that started the Washes project.</p>
+  <p class="lede">Mix blue and yellow paint and you get green. Lerp blue and yellow in RGB and you get gray. The difference is that paint mixes subtractively, through absorption and scattering, while RGB interpolation averages light. Mixbox's insight: map RGB into a latent pigment-concentration space, interpolate there, and map back &mdash; RGB in, RGB out, physically plausible in between, droppable into any painting app without changing its color representation.</p>
+  <p class="lede">The strips below show both paths between the same two endpoint colors. The top strip interpolates in sRGB. The bottom strip interpolates pigment concentrations &mdash; the Kubelka&ndash;Munk coefficients K and S are mixed linearly, then the reflectance of the mixture is computed. That coefficient-space mixing is the physical ground truth Mixbox is engineered to approximate cheaply.</p>
+
+  <div class="panel">
+    <div class="pickers">
+      <div>
+        <label for="pigA">Pigment A</label>
+        <select id="pigA"></select>
+      </div>
+      <div>
+        <label for="pigB">Pigment B</label>
+        <select id="pigB"></select>
+      </div>
+    </div>
+    <p class="striplabel"><span>Naive sRGB interpolation</span><span class="mode">LERP IN DISPLAY SPACE</span></p>
+    <canvas class="strip" id="stripRGB" height="56" role="img" aria-label="Gradient strip interpolating the two pigment colors in sRGB; passes through desaturated gray midtones"></canvas>
+    <p class="striplabel"><span>Pigment-space interpolation</span><span class="mode">LERP K AND S, THEN RENDER</span></p>
+    <canvas class="strip" id="stripKM" height="56" role="img" aria-label="Gradient strip interpolating the two pigments in Kubelka-Munk coefficient space; passes through saturated paint-like midtones"></canvas>
+    <div class="mix-row">
+      <label for="mix">Mix ratio</label>
+      <input type="range" id="mix" min="0" max="1" step="0.01" value="0.5" aria-label="Mix ratio between pigment A and pigment B">
+      <span class="num" id="mixOut">t = 0.50</span>
+    </div>
+    <div class="pair">
+      <div>
+        <div class="swatch" id="swRGB" role="img" aria-label="sRGB interpolated color at the current mix ratio"></div>
+        <p>sRGB lerp &nbsp;<span class="hex" id="hexRGB"></span></p>
+      </div>
+      <div>
+        <div class="swatch" id="swKM" role="img" aria-label="Pigment-space mixed color at the current mix ratio"></div>
+        <p>Pigment mix &nbsp;<span class="hex" id="hexKM"></span></p>
+      </div>
+    </div>
+  </div>
+
+  <h2>Try this</h2>
+  <div class="experiments">
+    <p><span class="marker">1.</span>&ensp;French ultramarine + hansa yellow, t &asymp; 0.5. The classic. The sRGB midpoint is a lifeless gray-mauve; the pigment midpoint is a believable sap green. This single comparison is the entire pitch of the paper.</p>
+    <p><span class="marker">2.</span>&ensp;Quinacridone rose + phthalo green &mdash; near-complementary pigments. Both paths darken in the middle, but the pigment path stays chromatic far longer before collapsing toward black, the way real complements mud out on a palette.</p>
+    <p><span class="marker">3.</span>&ensp;Titanium white + any dark pigment. Watch the pigment-space tints: a little pigment in white shifts hue as well as lightness (compare against the straight-line sRGB tint). Scattering, not just absorption, shapes the mixture &mdash; the reason K&ndash;M needs two coefficients.</p>
+  </div>
+  <p class="note">What's shown here is full Kubelka&ndash;Munk coefficient mixing, the slow exact computation. Mixbox itself is a fitted RGB&rarr;latent&rarr;RGB approximation of this behavior (its coefficients are the authors' own and aren't reproduced here). Washes took the other fork in the road: keep the full K&ndash;M representation and simulate the fluid too.</p>
+
+  <footer>Built for Washes — an in-browser watercolor library after Curtis et&nbsp;al. 1997 · self-contained demo, no dependencies</footer>
+</main>
+<script>
+(function () {
+  "use strict";
+
+  var pigments = [
+    { name: "French ultramarine", K: [0.86, 0.72, 0.06], S: [0.005, 0.005, 0.09] },
+    { name: "Hansa yellow",       K: [0.06, 0.21, 1.78], S: [0.50, 0.88, 0.009] },
+    { name: "Quinacridone rose",  K: [0.12, 1.18, 0.49], S: [0.05, 0.006, 0.02] },
+    { name: "Phthalo green",      K: [1.62, 0.06, 0.46], S: [0.01, 0.05, 0.02] },
+    { name: "Burnt sienna",       K: [0.30, 0.85, 1.10], S: [0.31, 0.12, 0.05] },
+    { name: "Titanium white",     K: [0.05, 0.05, 0.06], S: [1.20, 1.20, 1.10] },
+    { name: "Ivory black",        K: [0.95, 0.95, 0.95], S: [0.02, 0.02, 0.02] }
+  ];
+
+  var THICK = 1.4, RB = 0.95;
+
+  function layerRT(K, S, x) {
+    if (x <= 0) return [0, 1];
+    var a = 1 + K / S;
+    var b = Math.sqrt(Math.max(a * a - 1, 1e-12));
+    var arg = Math.min(b * S * x, 40);
+    var sh = Math.sinh(arg), ch = Math.cosh(arg);
+    var cc = a * sh + b * ch;
+    return [sh / cc, b / cc];
+  }
+  function over(R, T, Rb) { return R + T * T * Rb / (1 - R * Rb); }
+  function gam(v) { return Math.round(Math.pow(Math.min(Math.max(v, 0), 1), 1 / 2.2) * 255); }
+  function hexByte(n) { return ("0" + n.toString(16)).slice(-2); }
+
+  // sRGB color (0-255 array) of a K/S pigment definition at standard thickness
+  function colorOf(K, S) {
+    var out = [0, 0, 0];
+    for (var ch = 0; ch < 3; ch++) {
+      var rt = layerRT(K[ch], S[ch], THICK);
+      out[ch] = gam(over(rt[0], rt[1], RB));
+    }
+    return out;
+  }
+
+  function mixKM(pA, pB, t) {
+    var K = [0, 0, 0], S = [0, 0, 0];
+    for (var ch = 0; ch < 3; ch++) {
+      K[ch] = pA.K[ch] * (1 - t) + pB.K[ch] * t;
+      S[ch] = pA.S[ch] * (1 - t) + pB.S[ch] * t;
+    }
+    return colorOf(K, S);
+  }
+
+  function mixRGB(cA, cB, t) {
+    return [
+      Math.round(cA[0] * (1 - t) + cB[0] * t),
+      Math.round(cA[1] * (1 - t) + cB[1] * t),
+      Math.round(cA[2] * (1 - t) + cB[2] * t)
+    ];
+  }
+
+  var selA = document.getElementById("pigA");
+  var selB = document.getElementById("pigB");
+  pigments.forEach(function (p, i) {
+    selA.add(new Option(p.name, i));
+    selB.add(new Option(p.name, i));
+  });
+  selA.value = 0;
+  selB.value = 1;
+
+  var stripRGB = document.getElementById("stripRGB");
+  var stripKM = document.getElementById("stripKM");
+  var mixSlider = document.getElementById("mix");
+  var mixOut = document.getElementById("mixOut");
+
+  function drawStrip(cv, fn, t) {
+    var dpr = window.devicePixelRatio || 1;
+    var w = cv.clientWidth, h = 56;
+    cv.width = w * dpr;
+    cv.height = h * dpr;
+    var ctx = cv.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    var steps = Math.max(120, Math.min(320, Math.floor(w / 2)));
+    var sw = w / steps;
+    for (var s = 0; s < steps; s++) {
+      var tt = steps === 1 ? 0 : s / (steps - 1);
+      var c = fn(tt);
+      ctx.fillStyle = "rgb(" + c[0] + "," + c[1] + "," + c[2] + ")";
+      ctx.fillRect(s * sw, 0, sw + 1, h);
+    }
+    // current-ratio marker
+    var mx = t * w;
+    ctx.strokeStyle = "rgba(255,255,255,0.9)";
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(mx, 0); ctx.lineTo(mx, h); ctx.stroke();
+    ctx.strokeStyle = "rgba(0,0,0,0.55)";
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(mx, 0); ctx.lineTo(mx, h); ctx.stroke();
+  }
+
+  function update() {
+    var pA = pigments[+selA.value], pB = pigments[+selB.value];
+    var t = parseFloat(mixSlider.value);
+    mixOut.textContent = "t = " + t.toFixed(2);
+
+    var cA = colorOf(pA.K, pA.S), cB = colorOf(pB.K, pB.S);
+    drawStrip(stripRGB, function (tt) { return mixRGB(cA, cB, tt); }, t);
+    drawStrip(stripKM, function (tt) { return mixKM(pA, pB, tt); }, t);
+
+    var cR = mixRGB(cA, cB, t);
+    var cK = mixKM(pA, pB, t);
+    document.getElementById("swRGB").style.background = "rgb(" + cR.join(",") + ")";
+    document.getElementById("swKM").style.background = "rgb(" + cK.join(",") + ")";
+    document.getElementById("hexRGB").textContent = "#" + hexByte(cR[0]) + hexByte(cR[1]) + hexByte(cR[2]);
+    document.getElementById("hexKM").textContent = "#" + hexByte(cK[0]) + hexByte(cK[1]) + hexByte(cK[2]);
+  }
+
+  [selA, selB, mixSlider].forEach(function (el) { el.addEventListener("input", update); });
+  window.addEventListener("resize", update);
+  update();
+})();
+</script>
+</body>
+</html>

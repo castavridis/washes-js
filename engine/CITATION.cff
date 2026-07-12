@@ -1,0 +1,82 @@
+cff-version: 1.2.0
+title: "Washes: a JavaScript watercolor simulation"
+version: 1.12.1
+date-released: 2026-06-10
+message: "If you use this software, please cite it using these metadata."
+type: software
+authors:
+  - given-names: "Stephanie"
+abstract: >-
+  An interactive watercolor simulation for the browser, implementing the
+  three-layer water/pigment/paper model from Curtis, Anderson, Seims,
+  Fleischer, and Salesin's 1997 SIGGRAPH paper "Computer-Generated
+  Watercolor," with Kubelka-Munk optical compositing, semi-Lagrangian
+  advection (Stam 1999), and several extensions for interactive use.
+keywords:
+  - watercolor
+  - fluid simulation
+  - computer graphics
+  - kubelka-munk
+  - generative art
+license: MIT
+repository-code: "https://github.com/castavridis/washes-js"
+references:
+  - type: article
+    authors:
+      - family-names: Curtis
+        given-names: Cassidy J.
+      - family-names: Anderson
+        given-names: Sean E.
+      - family-names: Seims
+        given-names: Joshua E.
+      - family-names: Fleischer
+        given-names: Kurt W.
+      - family-names: Salesin
+        given-names: David H.
+    title: "Computer-Generated Watercolor"
+    year: 1997
+    conference:
+      name: "SIGGRAPH '97: Proceedings of the 24th annual conference on Computer graphics and interactive techniques"
+    doi: "10.1145/258734.258896"
+  - type: article
+    authors:
+      - family-names: Kubelka
+        given-names: P.
+      - family-names: Munk
+        given-names: F.
+    title: "Ein Beitrag zur Optik der Farbanstriche"
+    year: 1931
+    journal: "Zeitschrift für Technische Physik"
+    volume: 12
+    start: 593
+    end: 601
+  - type: article
+    authors:
+      - family-names: Stam
+        given-names: Jos
+    title: "Stable Fluids"
+    year: 1999
+    conference:
+      name: "SIGGRAPH '99: Proceedings of the 26th annual conference on Computer graphics and interactive techniques"
+  - type: book
+    authors:
+      - family-names: Bridson
+        given-names: Robert
+    title: "Fluid Simulation for Computer Graphics"
+    edition: 2
+    year: 2015
+    publisher:
+      name: "AK Peters/CRC Press"
+    isbn: "978-1482232837"
+  - type: article
+    authors:
+      - family-names: Sochorová
+        given-names: Šárka
+      - family-names: Jamriška
+        given-names: Ondřej
+    title: "Practical Pigment Mixing for Digital Painting"
+    year: 2021
+    journal: "ACM Transactions on Graphics (Proceedings of SIGGRAPH Asia 2021)"
+    volume: 40
+    issue: 6
+    start: 234

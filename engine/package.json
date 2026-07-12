@@ -1,0 +1,53 @@
+{
+  "name": "washes",
+  "version": "1.12.1",
+  "description": "An interactive watercolor simulation for the browser, built on Curtis et al.'s 1997 SIGGRAPH paper. Three-layer fluid + pigment + paper model with Kubelka-Munk compositing, with an optional WebGL2 GPU backend.",
+  "type": "module",
+  "main": "./src/index.js",
+  "module": "./src/index.js",
+  "types": "./src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "import": "./src/index.js",
+      "default": "./src/index.js"
+    },
+    "./gpu-sim": {
+      "types": "./src/washes-gpu-sim.d.ts",
+      "import": "./src/washes-gpu-sim.js",
+      "default": "./src/washes-gpu-sim.js"
+    },
+    "./timeline": {
+      "types": "./src/washes-timeline.d.ts",
+      "import": "./src/washes-timeline.js",
+      "default": "./src/washes-timeline.js"
+    }
+  },
+  "files": [
+    "src/index.js",
+    "src/index.d.ts",
+    "src/washes.js",
+    "src/washes.d.ts",
+    "src/washes-gpu-sim.js",
+    "src/washes-gpu-sim.d.ts",
+    "src/washes-timeline.js",
+    "src/washes-timeline.d.ts",
+    "src/shaders/brush_stamp.frag",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "CITATION.cff"
+  ],
+  "keywords": ["watercolor","simulation","fluid","canvas","webgl","gpu","kubelka-munk","generative","creative-coding","visualization","svg","animation"],
+  "author": "Stephanie",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/castavridis/washes-js" },
+  "homepage": "https://github.com/castavridis/washes-js#readme",
+  "bugs": { "url": "https://github.com/castavridis/washes-js/issues" },
+  "scripts": {
+    "test": "node tests/washes-test-harness.cjs src/washes.js all",
+    "test:texture-parity": "node tests/texture-parity.test.mjs"
+  },
+  "sideEffects": ["./src/washes.js","./src/washes-gpu-sim.js","./src/index.js"],
+  "engines": { "node": ">=18" }
+}

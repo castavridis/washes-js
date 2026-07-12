@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fluid Simulation for Computer Graphics — Washes reference gallery</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Crimson+Pro:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f5efe2;
+    --canvas-bg: #fbf7ed;
+    --ink: #2a2620;
+    --ink-soft: #6a6356;
+    --ink-faded: #a39885;
+    --panel-bg: rgba(245, 239, 226, 0.78);
+    --panel-border: rgba(42, 38, 32, 0.10);
+    --panel-shadow: 0 6px 28px rgba(60, 40, 20, 0.10), 0 2px 4px rgba(60, 40, 20, 0.05);
+    --btn-border: rgba(42, 38, 32, 0.2);
+    --btn-border-hover: rgba(42, 38, 32, 0.4);
+    --slider-track: rgba(42, 38, 32, 0.18);
+    --ultramarine: #233e8d;
+    --stable: #3b6d11;
+    --unstable: #a02060;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --canvas-bg: #1a1816;
+      --ink: #e8e2d4;
+      --ink-soft: #b3a999;
+      --ink-faded: #6a6356;
+      --panel-bg: rgba(38, 34, 28, 0.80);
+      --panel-border: rgba(245, 239, 226, 0.08);
+      --panel-shadow: 0 6px 28px rgba(0, 0, 0, 0.45), 0 2px 4px rgba(0, 0, 0, 0.25);
+      --btn-border: rgba(245, 239, 226, 0.2);
+      --btn-border-hover: rgba(245, 239, 226, 0.4);
+      --slider-track: rgba(245, 239, 226, 0.18);
+      --ultramarine: #8aa3e8;
+      --stable: #97c459;
+      --unstable: #ed93b1;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    min-height: 100vh;
+    background: var(--canvas-bg);
+    color: var(--ink);
+    font-family: 'Crimson Pro', Georgia, serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 880px; margin: 0 auto; padding: 56px 24px 72px; }
+  .eyebrow { font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.14em; color: var(--ink-faded); margin-bottom: 18px; }
+  h1 { font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 400; font-size: clamp(32px, 5.5vw, 48px); line-height: 1.08; margin-bottom: 10px; }
+  .citation { font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; font-size: 19px; color: var(--ink-soft); margin-bottom: 22px; }
+  .lede { font-size: 18px; line-height: 1.65; max-width: 64ch; }
+  .lede + .lede { margin-top: 0.8em; }
+  .panel {
+    margin: 36px 0 28px;
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 14px;
+    box-shadow: var(--panel-shadow);
+    padding: 22px 24px 24px;
+  }
+  .controls-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .controls-row + .controls-row { margin-top: 12px; }
+  label.ctl { font-size: 15px; color: var(--ink-soft); white-space: nowrap; }
+  .slider-wrap { flex: 1; min-width: 180px; position: relative; padding-top: 16px; }
+  .cfl-tick {
+    position: absolute; top: 0; transform: translateX(-50%);
+    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    color: var(--ink-faded); white-space: nowrap;
+  }
+  .cfl-tick::after { content: ""; display: block; width: 1px; height: 6px; background: var(--ink-faded); margin: 2px auto 0; }
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 22px; background: transparent; cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-runnable-track { height: 3px; background: var(--slider-track); border-radius: 2px; }
+  input[type="range"]::-moz-range-track { height: 3px; background: var(--slider-track); border-radius: 2px; }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--ink); margin-top: -6.5px; border: none;
+  }
+  input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: var(--ink); border: none; }
+  .num { font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 500; }
+  button {
+    font-family: 'Crimson Pro', Georgia, serif; font-size: 15px;
+    color: var(--ink); background: transparent;
+    border: 1px solid var(--btn-border); border-radius: 8px;
+    padding: 7px 16px; cursor: pointer; transition: border-color 0.15s ease;
+  }
+  button:hover { border-color: var(--btn-border-hover); }
+  button:active { transform: scale(0.98); }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--ultramarine); outline-offset: 2px; }
+  .bench { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 18px; margin-top: 20px; }
+  .bench canvas {
+    width: 100%; display: block; border-radius: 10px;
+    border: 1px solid var(--panel-border); background: #f8f5ee;
+  }
+  .bench figcaption { font-size: 15px; margin-top: 9px; line-height: 1.5; color: var(--ink-soft); }
+  .bench figcaption strong { font-weight: 500; color: var(--ink); }
+  .bench .stat { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--ink-soft); display: block; margin-top: 5px; }
+  h2 { font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 500; font-size: 27px; margin: 40px 0 12px; }
+  .experiments { max-width: 66ch; }
+  .experiments p { font-size: 17px; line-height: 1.65; margin-bottom: 0.85em; }
+  .experiments .marker { font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 500; color: var(--ultramarine); }
+  .note { font-size: 15px; color: var(--ink-soft); max-width: 66ch; line-height: 1.6; margin-top: 20px; }
+  footer { margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--panel-border); font-size: 14px; color: var(--ink-faded); font-family: 'JetBrains Mono', monospace; }
+</style>
+</head>
+<body>
+<main>
+  <p class="eyebrow">WASHES · REFERENCE GALLERY · THE TEXTBOOK</p>
+  <h1>Fluid Simulation for Computer Graphics</h1>
+  <p class="citation">Robert Bridson, 2nd ed., 2015, AK Peters/CRC Press. The reference for everything in the Washes fluid pipeline, especially the advection chapters behind the v0.67&ndash;v0.72 work.</p>
+  <p class="lede">Bridson's advection chapter is a catalog of tradeoffs, and this bench runs three of its entries head to head: the same sharp-edged block of pigment, the same diagonal drift on a wrapping domain, the same &Delta;t. Donor-cell upwind is first-order, conditionally stable, and diffusive. Semi-Lagrangian is unconditionally stable but smears just as much. MacCormack (the unconditionally stable variant: advect forward, advect back, correct by half the round-trip error, then clamp to the local interpolation bounds) recovers second-order accuracy and keeps edges crisp.</p>
+  <p class="lede">The sharpness number under each panel is the field's steepest edge gradient as a fraction of its initial value &mdash; a direct measure of how much edge contrast each scheme has destroyed.</p>
+
+  <div class="panel">
+    <div class="controls-row">
+      <label class="ctl" for="dt">Timestep &Delta;t (= max CFL)</label>
+      <div class="slider-wrap">
+        <span class="cfl-tick" id="tick">CFL = 1</span>
+        <input type="range" id="dt" min="0.2" max="2" step="0.05" value="0.9" aria-label="Timestep, equal to the maximum CFL number">
+      </div>
+      <span class="num" id="dtOut">0.90</span>
+      <button id="play" aria-pressed="true">Pause</button>
+      <button id="reset">Reset block</button>
+    </div>
+    <div class="bench">
+      <figure>
+        <canvas id="cvA" width="84" height="84" role="img" aria-label="Donor-cell advection of a sharp pigment block"></canvas>
+        <figcaption><strong>Donor-cell</strong> &mdash; 1st order, CFL-bound
+          <span class="stat" id="stA">sharpness 100% · min 0.00</span></figcaption>
+      </figure>
+      <figure>
+        <canvas id="cvB" width="84" height="84" role="img" aria-label="Semi-Lagrangian advection of the same block"></canvas>
+        <figcaption><strong>Semi-Lagrangian</strong> &mdash; stable, diffusive
+          <span class="stat" id="stB">sharpness 100% · min 0.00</span></figcaption>
+      </figure>
+      <figure>
+        <canvas id="cvC" width="84" height="84" role="img" aria-label="Clamped MacCormack advection of the same block"></canvas>
+        <figcaption><strong>MacCormack</strong> &mdash; stable, 2nd order, clamped
+          <span class="stat" id="stC">sharpness 100% · min 0.00</span></figcaption>
+      </figure>
+    </div>
+  </div>
+
+  <h2>Try this</h2>
+  <div class="experiments">
+    <p><span class="marker">1.</span>&ensp;Run at &Delta;t = 0.90 for thirty seconds and compare sharpness numbers. Donor-cell and semi-Lagrangian decay together toward mush; MacCormack diffuses too, but holds roughly three times their edge contrast indefinitely. Same stencil cost class, visibly different result &mdash; the error-compensation trick is nearly free.</p>
+    <p><span class="marker">2.</span>&ensp;Push past CFL = 1. Donor-cell disintegrates into negative-pigment noise; both backtracing schemes sail on. The two failure axes &mdash; stability and diffusion &mdash; are independent, and MacCormack is the corner of the chart that wins both.</p>
+    <p><span class="marker">3.</span>&ensp;Watch MacCormack's block corners closely at large &Delta;t. The clamp is what keeps them from ringing with over- and undershoot; the unclamped corrector would oscillate at sharp edges. Bridson covers exactly this failure mode &mdash; it's why Washes v0.72 shipped the clamped variant.</p>
+  </div>
+  <p class="note">This page benches the advection chapter only. The book's other half of the Washes pipeline &mdash; the pressure projection that keeps the velocity field divergence-free &mdash; is demonstrated on the Foster &amp; Metaxas page via the staggered-grid null-mode experiment.</p>
+
+  <footer>Built for Washes — an in-browser watercolor library after Curtis et&nbsp;al. 1997 · self-contained demo, no dependencies</footer>
+</main>
+<script>
+(function () {
+  "use strict";
+  var N = 84, c = (N - 1) / 2;
+  var U = 0.6, V = 0.4;
+  var SUM = Math.abs(U) + Math.abs(V); // = 1.0, so max CFL = dt
+
+  var qA, qB, qC, g0;
+
+  function seed() {
+    qA = new Float32Array(N * N);
+    var half = 16;
+    for (var j = 0; j < N; j++) {
+      for (var i = 0; i < N; i++) {
+        if (Math.abs(i - c) < half && Math.abs(j - c) < half) qA[j * N + i] = 1;
+      }
+    }
+    qB = qA.slice();
+    qC = qA.slice();
+    g0 = maxGrad(qA);
+  }
+
+  function maxGrad(q) {
+    var m = 0;
+    for (var j = 0; j < N; j++) {
+      for (var i = 0; i < N; i++) {
+        var k = j * N + i;
+        var gx = Math.abs(q[j * N + ((i + 1) % N)] - q[k]);
+        var gy = Math.abs(q[((j + 1) % N) * N + i] - q[k]);
+        if (gx > m) m = gx;
+        if (gy > m) m = gy;
+      }
+    }
+    return m;
+  }
+
+  function minOf(q) {
+    var mn = 0;
+    for (var k = 0; k < N * N; k++) if (q[k] < mn) mn = q[k];
+    return mn;
+  }
+
+  function stepDonor(q, dt) {
+    var out = new Float32Array(N * N);
+    for (var j = 0; j < N; j++) {
+      var jd = (j - 1 + N) % N, ju = (j + 1) % N;
+      for (var i = 0; i < N; i++) {
+        var k = j * N + i;
+        var il = (i - 1 + N) % N, ir = (i + 1) % N;
+        var dqx = U > 0 ? q[k] - q[j * N + il] : q[j * N + ir] - q[k];
+        var dqy = V > 0 ? q[k] - q[jd * N + i] : q[ju * N + i] - q[k];
+        var val = q[k] - dt * (U * dqx + V * dqy);
+        if (val > 6) val = 6;
+        if (val < -6) val = -6;
+        out[k] = val;
+      }
+    }
+    return out;
+  }
+
+  function samp(q, x, y) {
+    x = ((x % N) + N) % N;
+    y = ((y % N) + N) % N;
+    var i0 = Math.floor(x), j0 = Math.floor(y);
+    var i1 = (i0 + 1) % N, j1 = (j0 + 1) % N;
+    var fx = x - i0, fy = y - j0;
+    return q[j0 * N + i0] * (1 - fx) * (1 - fy)
+         + q[j0 * N + i1] * fx * (1 - fy)
+         + q[j1 * N + i0] * (1 - fx) * fy
+         + q[j1 * N + i1] * fx * fy;
+  }
+
+  function stepSL(q, dt) {
+    var out = new Float32Array(N * N);
+    for (var j = 0; j < N; j++) {
+      for (var i = 0; i < N; i++) {
+        out[j * N + i] = samp(q, i - dt * U, j - dt * V);
+      }
+    }
+    return out;
+  }
+
+  // Unconditionally stable MacCormack with min/max clamping:
+  //   q1 = SL(q, +dt); q2 = SL(q1, -dt); qM = q1 + (q - q2)/2,
+  //   clamped to the bilinear corner values at the backtraced point.
+  function stepMacCormack(q, dt) {
+    var q1 = stepSL(q, dt);
+    var q2 = stepSL(q1, -dt);
+    var out = new Float32Array(N * N);
+    for (var j = 0; j < N; j++) {
+      for (var i = 0; i < N; i++) {
+        var k = j * N + i;
+        var v = q1[k] + 0.5 * (q[k] - q2[k]);
+        var x = ((i - dt * U) % N + N) % N;
+        var y = ((j - dt * V) % N + N) % N;
+        var i0 = Math.floor(x), j0 = Math.floor(y);
+        var i1 = (i0 + 1) % N, j1 = (j0 + 1) % N;
+        var a = q[j0 * N + i0], b = q[j0 * N + i1];
+        var cc = q[j1 * N + i0], d = q[j1 * N + i1];
+        var lo = Math.min(a, b, cc, d), hi = Math.max(a, b, cc, d);
+        out[k] = v < lo ? lo : (v > hi ? hi : v);
+      }
+    }
+    return out;
+  }
+
+  var ctxA = document.getElementById("cvA").getContext("2d");
+  var ctxB = document.getElementById("cvB").getContext("2d");
+  var ctxC = document.getElementById("cvC").getContext("2d");
+  var imgA = ctxA.createImageData(N, N);
+  var imgB = ctxB.createImageData(N, N);
+  var imgC = ctxC.createImageData(N, N);
+  var PAPER = [248, 245, 238], BLUE = [35, 62, 141], MAG = [208, 40, 122];
+
+  function draw(ctx, img, q) {
+    var d = img.data;
+    for (var k = 0; k < N * N; k++) {
+      var v = q[k], t, src;
+      if (v >= 0) { t = Math.min(v, 1.1) / 1.1; src = BLUE; }
+      else { t = Math.min(-v, 1.1) / 1.1; src = MAG; }
+      d[k * 4]     = PAPER[0] + (src[0] - PAPER[0]) * t;
+      d[k * 4 + 1] = PAPER[1] + (src[1] - PAPER[1]) * t;
+      d[k * 4 + 2] = PAPER[2] + (src[2] - PAPER[2]) * t;
+      d[k * 4 + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+  }
+
+  function stat(el, q) {
+    var sh = g0 > 0 ? Math.min(maxGrad(q) / g0 * 100, 999) : 0;
+    el.textContent = "sharpness " + Math.round(sh) + "% · min " + minOf(q).toFixed(2);
+  }
+
+  var dt = 0.9;
+  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var playing = !reduced;
+
+  var slider = document.getElementById("dt");
+  var dtOut = document.getElementById("dtOut");
+  var playBtn = document.getElementById("play");
+  var stA = document.getElementById("stA");
+  var stB = document.getElementById("stB");
+  var stC = document.getElementById("stC");
+  document.getElementById("tick").style.left = (100 * (1 / SUM - 0.2) / (2.0 - 0.2)) + "%";
+
+  function setPlaying(v) {
+    playing = v;
+    playBtn.textContent = playing ? "Pause" : "Play";
+    playBtn.setAttribute("aria-pressed", String(playing));
+  }
+
+  slider.addEventListener("input", function () {
+    dt = parseFloat(slider.value);
+    dtOut.textContent = dt.toFixed(2);
+    dtOut.style.color = dt * SUM <= 1.0001 ? "var(--stable)" : "var(--unstable)";
+  });
+  playBtn.addEventListener("click", function () { setPlaying(!playing); });
+  document.getElementById("reset").addEventListener("click", function () {
+    seed(); redraw(); restat();
+  });
+
+  function redraw() {
+    draw(ctxA, imgA, qA);
+    draw(ctxB, imgB, qB);
+    draw(ctxC, imgC, qC);
+  }
+  function restat() {
+    stat(stA, qA);
+    stat(stB, qB);
+    stat(stC, qC);
+  }
+
+  seed();
+  setPlaying(playing);
+  redraw();
+  restat();
+  dtOut.style.color = "var(--stable)";
+
+  var frameCount = 0;
+  (function loop() {
+    if (playing) {
+      qA = stepDonor(qA, dt);
+      qB = stepSL(qB, dt);
+      qC = stepMacCormack(qC, dt);
+      redraw();
+      if (frameCount % 10 === 0) restat(); // maxGrad is O(N^2); throttle it
+      frameCount++;
+    }
+    requestAnimationFrame(loop);
+  })();
+})();
+</script>
+</body>
+</html>

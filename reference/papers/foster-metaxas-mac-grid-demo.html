@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Realistic Animation of Liquids — Washes reference gallery</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Crimson+Pro:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f5efe2;
+    --canvas-bg: #fbf7ed;
+    --ink: #2a2620;
+    --ink-soft: #6a6356;
+    --ink-faded: #a39885;
+    --panel-bg: rgba(245, 239, 226, 0.78);
+    --panel-border: rgba(42, 38, 32, 0.10);
+    --panel-shadow: 0 6px 28px rgba(60, 40, 20, 0.10), 0 2px 4px rgba(60, 40, 20, 0.05);
+    --btn-border: rgba(42, 38, 32, 0.2);
+    --btn-border-hover: rgba(42, 38, 32, 0.4);
+    --ultramarine: #233e8d;
+    --diagram-bg: #f6f1e4;
+    --diagram-ink: #2a2620;
+    --diagram-soft: #6a6356;
+    --pos: #d85a30;
+    --neg: #233e8d;
+    --force: #1d6e56;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --canvas-bg: #1a1816;
+      --ink: #e8e2d4;
+      --ink-soft: #b3a999;
+      --ink-faded: #6a6356;
+      --panel-bg: rgba(38, 34, 28, 0.80);
+      --panel-border: rgba(245, 239, 226, 0.08);
+      --panel-shadow: 0 6px 28px rgba(0, 0, 0, 0.45), 0 2px 4px rgba(0, 0, 0, 0.25);
+      --btn-border: rgba(245, 239, 226, 0.2);
+      --btn-border-hover: rgba(245, 239, 226, 0.4);
+      --ultramarine: #8aa3e8;
+      --diagram-bg: #211e1a;
+      --diagram-ink: #e8e2d4;
+      --diagram-soft: #b3a999;
+      --pos: #f0997b;
+      --neg: #8aa3e8;
+      --force: #5dcaa5;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    min-height: 100vh;
+    background: var(--canvas-bg);
+    color: var(--ink);
+    font-family: 'Crimson Pro', Georgia, serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 880px; margin: 0 auto; padding: 56px 24px 72px; }
+  .eyebrow { font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.14em; color: var(--ink-faded); margin-bottom: 18px; }
+  h1 { font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 400; font-size: clamp(34px, 6vw, 52px); line-height: 1.05; margin-bottom: 10px; }
+  .citation { font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; font-size: 19px; color: var(--ink-soft); margin-bottom: 22px; }
+  .lede { font-size: 18px; line-height: 1.65; max-width: 64ch; }
+  .lede + .lede { margin-top: 0.8em; }
+  .panel {
+    margin: 36px 0 28px;
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 14px;
+    box-shadow: var(--panel-shadow);
+    padding: 22px 24px 24px;
+  }
+  .controls-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .group { display: flex; align-items: center; gap: 8px; }
+  .group > span { font-size: 15px; color: var(--ink-soft); white-space: nowrap; }
+  button {
+    font-family: 'Crimson Pro', Georgia, serif; font-size: 15px;
+    color: var(--ink); background: transparent;
+    border: 1px solid var(--btn-border); border-radius: 8px;
+    padding: 7px 14px; cursor: pointer; transition: border-color 0.15s ease;
+  }
+  button:hover { border-color: var(--btn-border-hover); }
+  button:active { transform: scale(0.98); }
+  button[aria-pressed="true"] { border-color: var(--ultramarine); color: var(--ultramarine); }
+  button:focus-visible { outline: 2px solid var(--ultramarine); outline-offset: 2px; }
+  canvas#grid {
+    width: 100%; display: block; margin-top: 18px;
+    border-radius: 10px; border: 1px solid var(--panel-border);
+    background: var(--diagram-bg);
+  }
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 18px; margin-top: 12px;
+    font-size: 14px; color: var(--ink-soft);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .legend span { display: flex; align-items: center; gap: 6px; }
+  .verdict {
+    margin-top: 16px; font-size: 17px; line-height: 1.55;
+    border-left: 3px solid var(--ultramarine); padding-left: 14px;
+  }
+  .verdict .num { font-family: 'JetBrains Mono', monospace; font-weight: 500; }
+  h2 { font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 500; font-size: 27px; margin: 40px 0 12px; }
+  .experiments { max-width: 66ch; }
+  .experiments p { font-size: 17px; line-height: 1.65; margin-bottom: 0.85em; }
+  .experiments .marker { font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 500; color: var(--ultramarine); }
+  footer { margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--panel-border); font-size: 14px; color: var(--ink-faded); font-family: 'JetBrains Mono', monospace; }
+</style>
+</head>
+<body>
+<main>
+  <p class="eyebrow">WASHES · REFERENCE GALLERY · THE GRID</p>
+  <h1>Realistic Animation of Liquids</h1>
+  <p class="citation">Foster &amp; Metaxas, 1996. Graphical Models and Image Processing 58(5), 471&ndash;483. The first Navier&ndash;Stokes solver in graphics &mdash; and the staggered MAC grid Washes inherits through Curtis et&nbsp;al.</p>
+  <p class="lede">On a MAC (marker-and-cell) grid, the unknowns don't live in the same place: pressure sits at cell centers, the horizontal velocity u on vertical faces, the vertical velocity v on horizontal faces. The payoff for that bookkeeping is shown below. The cells are shaded by a pressure field; the green arrows are the pressure-gradient forces the solver actually computes from it.</p>
+  <p class="lede">Set the pressure to a checkerboard and switch between discretizations. The staggered grid differences adjacent cells across each face and sees the checkerboard at full strength. A collocated grid, differencing across two cells with a central difference, returns exactly zero everywhere &mdash; the mode is invisible to the solver, so nothing ever removes it, and it contaminates the pressure solve as decoupled checkerboard noise. Staggering eliminates the null mode by construction.</p>
+
+  <div class="panel">
+    <div class="controls-row">
+      <div class="group" role="group" aria-label="Pressure field">
+        <span>Pressure field</span>
+        <button id="fCheck" aria-pressed="true">Checkerboard</button>
+        <button id="fBump" aria-pressed="false">Smooth bump</button>
+      </div>
+      <div class="group" role="group" aria-label="Discretization">
+        <span>Discretization</span>
+        <button id="dMac" aria-pressed="true">Staggered MAC</button>
+        <button id="dColl" aria-pressed="false">Collocated</button>
+      </div>
+    </div>
+    <canvas id="grid" height="480" role="img"
+            aria-label="A grid of cells shaded by pressure, with arrows showing the pressure-gradient force computed by the chosen discretization"></canvas>
+    <div class="legend" aria-hidden="true">
+      <span><span style="width:10px;height:10px;border-radius:50%;background:var(--diagram-ink);display:inline-block;"></span>p at cell center</span>
+      <span><span style="width:14px;height:0;border-top:2px solid var(--ink-faded);display:inline-block;"></span>u, v sample sites on faces</span>
+      <span><span style="width:14px;height:0;border-top:2.5px solid var(--force);display:inline-block;"></span>computed force &minus;&nabla;p</span>
+      <span><span style="width:10px;height:10px;background:var(--pos);opacity:0.5;display:inline-block;border-radius:2px;"></span>p &gt; 0</span>
+      <span><span style="width:10px;height:10px;background:var(--neg);opacity:0.5;display:inline-block;border-radius:2px;"></span>p &lt; 0</span>
+    </div>
+    <p class="verdict" id="verdict"></p>
+  </div>
+
+  <h2>Try this</h2>
+  <div class="experiments">
+    <p><span class="marker">1.</span>&ensp;Checkerboard + collocated. Every sampled gradient is exactly zero: p[i+1] and p[i&minus;1] are always equal on a checkerboard, so the central difference cancels perfectly. The most violently oscillating field possible produces no restoring force at all.</p>
+    <p><span class="marker">2.</span>&ensp;Checkerboard + staggered MAC. Now each face differences immediate neighbors, and the forces are the largest the grid can represent. The mode the collocated grid couldn't see is the one the MAC grid sees best.</p>
+    <p><span class="marker">3.</span>&ensp;Smooth bump under both discretizations. For well-resolved fields they broadly agree &mdash; the arrows point away from the high-pressure center either way. The grids differ only on the highest-frequency mode, which is exactly where it matters: that's the mode round-off and source terms continually inject.</p>
+  </div>
+
+  <footer>Built for Washes — an in-browser watercolor library after Curtis et&nbsp;al. 1997 · self-contained demo, no dependencies</footer>
+</main>
+<script>
+(function () {
+  "use strict";
+  var n = 7; // cells per side
+  var fieldMode = "check";
+  var gridMode = "mac";
+
+  function pressure(i, j) {
+    // periodic indices
+    i = ((i % n) + n) % n;
+    j = ((j % n) + n) % n;
+    if (fieldMode === "check") {
+      return ((i + j) % 2) * 2 - 1;
+    }
+    var c = (n - 1) / 2;
+    var dx = i - c, dy = j - c;
+    return 2 * Math.exp(-(dx * dx + dy * dy) / (2 * 1.8 * 1.8)) - 0.55;
+  }
+
+  var cv = document.getElementById("grid");
+  var ctx = cv.getContext("2d");
+
+  function cssVar(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+
+  function arrow(x, y, dx, dy, color) {
+    var len = Math.sqrt(dx * dx + dy * dy);
+    if (len < 1.5) return;
+    var ux = dx / len, uy = dy / len;
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    ctx.moveTo(x - dx / 2, y - dy / 2);
+    ctx.lineTo(x + dx / 2, y + dy / 2);
+    ctx.stroke();
+    var hx = x + dx / 2, hy = y + dy / 2, ah = 6.5;
+    ctx.beginPath();
+    ctx.moveTo(hx, hy);
+    ctx.lineTo(hx - ah * ux - ah * 0.55 * uy, hy - ah * uy + ah * 0.55 * ux);
+    ctx.lineTo(hx - ah * ux + ah * 0.55 * uy, hy - ah * uy - ah * 0.55 * ux);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  var maxForce = 0;
+
+  function draw() {
+    var dpr = window.devicePixelRatio || 1;
+    var w = cv.clientWidth;
+    var hpx = Math.max(380, Math.min(520, w * 0.72));
+    cv.style.height = hpx + "px";
+    cv.width = w * dpr;
+    cv.height = hpx * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, hpx);
+
+    var cell = Math.min((w - 60) / n, (hpx - 50) / n);
+    var ox = (w - cell * n) / 2, oy = (hpx - cell * n) / 2;
+    var inkCol = cssVar("--diagram-ink");
+    var softCol = cssVar("--ink-faded");
+    var posCol = cssVar("--pos");
+    var negCol = cssVar("--neg");
+    var forceCol = cssVar("--force");
+
+    var i, j, x, y, pv;
+
+    // cell shading
+    for (j = 0; j < n; j++) {
+      for (i = 0; i < n; i++) {
+        pv = pressure(i, j);
+        var a = Math.min(Math.abs(pv), 1.45) * 0.30;
+        ctx.fillStyle = pv >= 0 ? posCol : negCol;
+        ctx.globalAlpha = a;
+        ctx.fillRect(ox + i * cell, oy + j * cell, cell, cell);
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    // grid lines
+    ctx.strokeStyle = softCol;
+    ctx.globalAlpha = 0.55;
+    ctx.lineWidth = 1;
+    for (i = 0; i <= n; i++) {
+      ctx.beginPath();
+      ctx.moveTo(ox + i * cell, oy);
+      ctx.lineTo(ox + i * cell, oy + n * cell);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(ox, oy + i * cell);
+      ctx.lineTo(ox + n * cell, oy + i * cell);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    // pressure dots + values
+    ctx.font = "11px 'JetBrains Mono', monospace";
+    ctx.textAlign = "center";
+    for (j = 0; j < n; j++) {
+      for (i = 0; i < n; i++) {
+        x = ox + (i + 0.5) * cell;
+        y = oy + (j + 0.5) * cell;
+        pv = pressure(i, j);
+        ctx.fillStyle = inkCol;
+        ctx.beginPath();
+        ctx.arc(x, y, 2.6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 0.75;
+        ctx.fillText(pv.toFixed(1), x, y + 16);
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    var scale = cell * 0.42;
+    maxForce = 0;
+
+    if (gridMode === "mac") {
+      // face sample-site ticks
+      ctx.strokeStyle = softCol;
+      ctx.globalAlpha = 0.8;
+      ctx.lineWidth = 2;
+      for (j = 0; j < n; j++) {
+        for (i = 0; i < n; i++) {
+          // vertical face (right of cell i): u site
+          x = ox + (i + 1) * cell; y = oy + (j + 0.5) * cell;
+          ctx.beginPath(); ctx.moveTo(x - 4, y); ctx.lineTo(x + 4, y); ctx.stroke();
+          // horizontal face (below cell j): v site
+          x = ox + (i + 0.5) * cell; y = oy + (j + 1) * cell;
+          ctx.beginPath(); ctx.moveTo(x, y - 4); ctx.lineTo(x, y + 4); ctx.stroke();
+        }
+      }
+      ctx.globalAlpha = 1;
+
+      // forces on faces: fx = -(p[i+1]-p[i]) at vertical faces, fy likewise
+      for (j = 0; j < n; j++) {
+        for (i = 0; i < n; i++) {
+          var fx = -(pressure(i + 1, j) - pressure(i, j));
+          if (Math.abs(fx) > maxForce) maxForce = Math.abs(fx);
+          arrow(ox + (i + 1) * cell, oy + (j + 0.5) * cell, fx * scale, 0, forceCol);
+          var fy = -(pressure(i, j + 1) - pressure(i, j));
+          if (Math.abs(fy) > maxForce) maxForce = Math.abs(fy);
+          arrow(ox + (i + 0.5) * cell, oy + (j + 1) * cell, 0, fy * scale, forceCol);
+        }
+      }
+    } else {
+      // collocated: central differences at cell centers
+      for (j = 0; j < n; j++) {
+        for (i = 0; i < n; i++) {
+          var gx = -(pressure(i + 1, j) - pressure(i - 1, j)) / 2;
+          var gy = -(pressure(i, j + 1) - pressure(i, j - 1)) / 2;
+          var m = Math.sqrt(gx * gx + gy * gy);
+          if (m > maxForce) maxForce = m;
+          arrow(ox + (i + 0.5) * cell, oy + (j + 0.5) * cell, gx * scale, gy * scale, forceCol);
+        }
+      }
+    }
+
+    var verdict = document.getElementById("verdict");
+    var modeName = gridMode === "mac" ? "staggered MAC" : "collocated central difference";
+    if (maxForce < 1e-9) {
+      verdict.innerHTML = "Largest force the " + modeName + " scheme computes from this field: <span class=\"num\">0.00</span>. The checkerboard is a null mode &mdash; the solver cannot see it, so it can never remove it.";
+    } else {
+      verdict.innerHTML = "Largest force the " + modeName + " scheme computes from this field: <span class=\"num\">" + maxForce.toFixed(2) + "</span>.";
+    }
+  }
+
+  function bindToggle(idA, idB, set) {
+    var a = document.getElementById(idA), b = document.getElementById(idB);
+    a.addEventListener("click", function () {
+      set(true);
+      a.setAttribute("aria-pressed", "true");
+      b.setAttribute("aria-pressed", "false");
+      draw();
+    });
+    b.addEventListener("click", function () {
+      set(false);
+      a.setAttribute("aria-pressed", "false");
+      b.setAttribute("aria-pressed", "true");
+      draw();
+    });
+  }
+  bindToggle("fCheck", "fBump", function (first) { fieldMode = first ? "check" : "bump"; });
+  bindToggle("dMac", "dColl", function (first) { gridMode = first ? "mac" : "coll"; });
+
+  window.addEventListener("resize", draw);
+  if (window.matchMedia) {
+    window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
+  }
+  draw();
+})();
+</script>
+</body>
+</html>
