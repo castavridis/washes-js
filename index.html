@@ -87,10 +87,30 @@
   .btn.primary { background: var(--ink); color: var(--paper); }
   .btn.primary:hover { background: #453c31; }
   .hero-hint {
-    position: absolute; bottom: 0.8rem; left: 0; right: 0; z-index: 2;
-    text-align: center; font-size: 0.9rem; font-style: italic;
+    position: absolute; bottom: 0.95rem; left: 1.1rem; z-index: 2;
+    font-size: 0.9rem; font-style: italic;
     color: var(--ink-soft); pointer-events: none;
   }
+  .hero-controls {
+    position: absolute; right: 0.9rem; bottom: 0.8rem; z-index: 3;
+    display: flex; align-items: center; gap: 0.45rem;
+    padding: 0.35rem 0.6rem;
+    border: 1px solid var(--hairline); border-radius: 999px;
+    background: rgba(250, 245, 236, 0.82);
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  }
+  .hc-dot {
+    width: 20px; height: 20px; border-radius: 50%;
+    border: 1px solid var(--hairline); padding: 0; cursor: pointer;
+  }
+  .hc-dot[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--paper), 0 0 0 3.5px var(--ink); }
+  .hc-sep { width: 1px; height: 18px; background: var(--hairline); }
+  .hc-btn {
+    display: grid; place-items: center; width: 26px; height: 26px;
+    border: none; background: none; color: var(--ink);
+    border-radius: 50%; cursor: pointer; padding: 0;
+  }
+  .hc-btn:hover { background: var(--paper-deep); }
   .hero-badge {
     position: absolute; top: 0.9rem; right: 1.1rem; z-index: 2;
     font-size: 0.85rem; color: var(--ink-soft); pointer-events: none;
@@ -172,6 +192,23 @@
     </div>
   </div>
   <div class="hero-hint" id="hero-hint" hidden>it's wet — draw on it, or tap to splash</div>
+  <div class="hero-controls" id="hero-controls" hidden>
+    <button class="hc-dot" type="button" data-pal="dawn"  aria-pressed="false" aria-label="Dawn inks"  title="dawn"></button>
+    <button class="hc-dot" type="button" data-pal="day"   aria-pressed="false" aria-label="Day inks"   title="day"></button>
+    <button class="hc-dot" type="button" data-pal="dusk"  aria-pressed="false" aria-label="Dusk inks"  title="dusk"></button>
+    <button class="hc-dot" type="button" data-pal="night" aria-pressed="false" aria-label="Night inks" title="night"></button>
+    <span class="hc-sep" aria-hidden="true"></span>
+    <button class="hc-btn" type="button" id="hc-pause" aria-pressed="false" aria-label="Pause the painting" title="pause">
+      <svg class="i-pause" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4h3.5v16H7zM13.5 4H17v16h-3.5z"/></svg>
+      <svg class="i-play" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="display:none"><path d="M7 4l13 8-13 8z"/></svg>
+    </button>
+    <button class="hc-btn" type="button" id="hc-reset" aria-label="Reset the canvas" title="reset">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 4v6h6"/><path d="M3.5 15a9 9 0 1 0 2.1-9.4L1 10"/></svg>
+    </button>
+    <button class="hc-btn" type="button" id="hc-save" aria-label="Download as PNG" title="download">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+    </button>
+  </div>
 </header>
 
 <main>
@@ -248,7 +285,9 @@
     itself — inks mixed for the local hour, strokes choreographed by the
     timeline sidecar, resolution governed by <code>quality('auto')</code>, and it
     reads its own <code>coverage()</code> before deciding what to paint next.
-    View source; the whole painter is ~130 lines.</p>
+    The corner controls re-ink, pause (it still accepts pigment while frozen —
+    deposits bloom on resume), reset, or save the sheet as a PNG.
+    View source; the whole painter is ~180 lines.</p>
 <pre><code><span class="c">// ESM / bundlers</span>
 import { Washes } from './engine/src/index.js';
 const wc = Washes.create(host, { pigments: [{ color: '#2f6fb0' }] });
@@ -328,9 +367,16 @@ wc.paintNorm(0.5, 0.5, 0.06, 'blue', 0.8);
       wc.quality('auto');                            // resolution belongs to the governor
       wc.fadePainting(45000);                        // 45s half-life: old gestures ghost away
       wc.runUntilDry(true);
+      wc.paintLoad(0.25).waterLoad(0.2);
+      wc.edgeMode('closed-gravity');                 // sheet keeps its mass, but feels the tilt
+      wc.gravityDirection('down');
+      wc.gravityStrength(1);                         // full pull — washes run down the page
+      const fitBrush = () => wc.brushSize(host.clientHeight / 5);  // brush ⌀ = hero height / 5
+      fitBrush();
 
       const hint = document.getElementById('hero-hint');
-      hint.textContent = `inks mixed for ${hour} — draw on it, or tap to splash`;
+      const hintFor = (name) => { hint.textContent = `inks mixed for ${name} — draw on it, or tap to splash`; };
+      hintFor(hour);
       hint.hidden = false;
 
       const rand = (a, b) => a + Math.random() * (b - a);
@@ -409,7 +455,7 @@ wc.paintNorm(0.5, 0.5, 0.06, 'blue', 0.8);
 
       // ---- the loop: look at the canvas, then paint with intent ----
       const step = () => {
-        if (!document.hidden && inView && !humanActive()) {
+        if (!document.hidden && inView && !humanActive() && !paused) {
           if (wc.coverage(0.12) > 0.45) tide();      // crowded — move paint, let the fade thin it
           else {
             const r = Math.random();
@@ -437,6 +483,50 @@ wc.paintNorm(0.5, 0.5, 0.06, 'blue', 0.8);
         }
       }, { passive: true });
 
+      // ---- viewer controls: inks · pause · reset · save ----
+      const controls = document.getElementById('hero-controls');
+      let palName = hour, paused = false;
+      const dots = controls.querySelectorAll('.hc-dot');
+      dots.forEach((dot) => {
+        const name = dot.dataset.pal;
+        const [a, b, c] = PALETTES[name].map((p) => p.color);
+        dot.style.background = `conic-gradient(${a} 0 33.4%, ${b} 0 66.7%, ${c} 0)`;
+        dot.setAttribute('aria-pressed', String(name === palName));
+        dot.addEventListener('click', () => {
+          wc.palette(PALETTES[palName = name]);      // live re-ink: the painting recomposites
+          hintFor(name);
+          dots.forEach((d) => d.setAttribute('aria-pressed', String(d === dot)));
+        });
+      });
+      const pauseBtn = document.getElementById('hc-pause');
+      const setPauseUI = () => {
+        pauseBtn.setAttribute('aria-pressed', String(paused));
+        pauseBtn.setAttribute('aria-label', paused ? 'Resume the painting' : 'Pause the painting');
+        pauseBtn.title = paused ? 'resume' : 'pause';
+        pauseBtn.querySelector('.i-pause').style.display = paused ? 'none' : '';
+        pauseBtn.querySelector('.i-play').style.display  = paused ? '' : 'none';
+      };
+      pauseBtn.addEventListener('click', () => {
+        paused = !paused;
+        // frozen but still accepting pigment — deposits sit inert and bloom on resume
+        if (paused) wc.pause({ acceptInput: true }); else wc.resume();
+        setPauseUI();
+      });
+      document.getElementById('hc-reset').addEventListener('click', () => {
+        if (paused) { paused = false; wc.resume(); setPauseUI(); }
+        wc.clearPaint();                             // keeps every setting; wipes the sheet
+        quietUntil = performance.now() + 9000;       // the fresh sheet is the human's first
+      });
+      document.getElementById('hc-save').addEventListener('click', async () => {
+        const blob = await wc.exportPNG({ asBlob: true });
+        const url = URL.createObjectURL(blob);
+        const a = Object.assign(document.createElement('a'),
+          { href: url, download: `washes-${palName}-${Date.now()}.png` });
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 4000);
+      });
+      controls.hidden = false;
+
       // ---- resize: rebuild the grid, then repaint the opening in place ----
       let lastW = host.clientWidth, lastH = host.clientHeight, rzTimer = 0;
       new ResizeObserver(() => {
@@ -445,6 +535,7 @@ wc.paintNorm(0.5, 0.5, 0.06, 'blue', 0.8);
         rzTimer = setTimeout(() => {
           lastW = host.clientWidth; lastH = host.clientHeight;
           wc.remeasure();
+          fitBrush();
           opening();
         }, 350);
       }).observe(host);
