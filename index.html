@@ -46,6 +46,10 @@
     filter: blur(6px);
   }
   #wash-hero { position: absolute; inset: 0; }
+  /* The engine sets inline touch-action:none, which would trap page scrolling
+     under a 64vh hero on touch devices. pan-y keeps vertical swipes scrolling;
+     horizontal strokes still paint, taps still splash. */
+  #wash-hero canvas { touch-action: pan-y !important; }
   .hero-overlay {
     position: absolute; inset: 0; z-index: 2;
     display: flex; flex-direction: column;
@@ -155,8 +159,8 @@
 
 <header class="hero" id="hero">
   <div class="hero-fallback" aria-hidden="true"></div>
-  <div id="wash-hero" aria-label="Live watercolor canvas — press and drag to paint"></div>
-  <div class="hero-badge">demo v1.0.16 · engine 1.12.1</div>
+  <div id="wash-hero" aria-label="Live watercolor canvas — draw on it, or tap to splash"></div>
+  <div class="hero-badge">demo v1.0.17 · engine 1.12.1</div>
   <div class="hero-overlay">
     <h1>Washes</h1>
     <p class="tag">An interactive watercolor simulation for the browser — a three-layer
@@ -167,7 +171,7 @@
       <a class="btn" href="https://github.com/castavridis/washes-js">GitHub</a>
     </div>
   </div>
-  <div class="hero-hint" id="hero-hint" hidden>this header is wet — press and drag to paint</div>
+  <div class="hero-hint" id="hero-hint" hidden>it's wet — draw on it, or tap to splash</div>
 </header>
 
 <main>
@@ -178,7 +182,7 @@
         <h3><span class="swatch b"></span>Playground</h3>
         <p>The full instrument: every brush, pigment palettes, masks, transparency,
         the timeline flourish — with built-in docs and the complete changelog
-        (v0.1&nbsp;→&nbsp;v1.0.16).</p>
+        (v0.1&nbsp;→&nbsp;v1.0.17).</p>
       </a>
       <a class="card" href="demos/snake.html">
         <h3><span class="swatch r"></span>Serpentine</h3>
@@ -240,8 +244,11 @@
     <p><code>washes</code> is a dependency-free npm-shaped package
     (<a href="https://github.com/castavridis/washes-js/blob/main/engine/README.md">README</a> ·
     <a href="https://github.com/castavridis/washes-js/blob/main/engine/CHANGELOG.md">changelog 0.98&nbsp;→&nbsp;1.12.1</a>)
-    living in <code>engine/</code>. This page's header is the engine itself,
-    running the <code>reveal-blue</code> preset.</p>
+    living in <code>engine/</code>. The header above is the engine painting for
+    itself — inks mixed for the local hour, strokes choreographed by the
+    timeline sidecar, resolution governed by <code>quality('auto')</code>, and it
+    reads its own <code>coverage()</code> before deciding what to paint next.
+    View source; the whole painter is ~130 lines.</p>
 <pre><code><span class="c">// ESM / bundlers</span>
 import { Washes } from './engine/src/index.js';
 const wc = Washes.create(host, { pigments: [{ color: '#2f6fb0' }] });
@@ -280,40 +287,172 @@ wc.paintNorm(0.5, 0.5, 0.06, 'blue', 0.8);
 </main>
 
 <footer>
-  Washes · MIT · Stephanie · demo v1.0.16 · engine 1.12.1 ·
+  Washes · MIT · Stephanie · demo v1.0.17 · engine 1.12.1 ·
   after <a href="https://doi.org/10.1145/258734.258896">Curtis et al., SIGGRAPH 1997</a>
 </footer>
 
 <script type="module">
-  // Live hero: the real engine painting the header, reveal-blue preset.
-  // Falls back to the static CSS wash (behind the canvas) if the engine
-  // can't load (e.g. opened via file:// where module imports are blocked).
+  // The header is a painter.
+  //
+  // A small autonomous system running the real engine: a gesture vocabulary
+  // (blooms, arc drifts, sprays, basin-tips), composition anchors on a loose
+  // golden-section grid, and inks mixed for the local hour. It reads its own
+  // canvas (coverage) before deciding what to paint, yields while a human is
+  // painting, sleeps when offscreen, and under prefers-reduced-motion stamps
+  // one still composition instead of animating — same choreography code, the
+  // timeline sidecar collapses it. Falls back to the static CSS wash behind
+  // the canvas if module loading fails (e.g. file://).
   (async () => {
     try {
-      const [{ Washes }, { REVEAL_BLUE }] = await Promise.all([
+      const [{ Washes }, { WashesTimeline }, { REVEAL_BLUE }] = await Promise.all([
         import('./engine/src/index.js'),
+        import('./engine/src/washes-timeline.js'),
         import('./presets/reveal-blue.preset.js'),
       ]);
+
+      // ---- inks mixed for the hour ----
+      const PALETTES = {
+        dawn:  [{ color: '#b95d73' }, { color: '#d9a441' }, { color: '#6e87a8', granulation: 0.35 }],
+        day:   REVEAL_BLUE.palette,   // the saved preset, verbatim
+        dusk:  [{ color: '#c0492f' }, { color: '#6b5b9e', granulation: 0.30 }, { color: '#d9a441' }],
+        night: [{ color: '#34457e', granulation: 0.40 }, { color: '#2e6f6a' }, { color: '#8a8075' }],
+      };
+      const h = new Date().getHours();
+      const hour = h < 5 ? 'night' : h < 10 ? 'dawn' : h < 17 ? 'day' : h < 21 ? 'dusk' : 'night';
+
       const host = document.getElementById('wash-hero');
-      const wc = Washes.create(host, { pigments: REVEAL_BLUE.palette });
-      wc.paperColor('#faf5ec');
+      const wc = Washes.create(host, { pigments: PALETTES[hour] });
+      wc.paperColor('#faf5ec');                      // seamless with the page
       wc.evaporation(REVEAL_BLUE.settings.evaporation);
       wc.flow(REVEAL_BLUE.settings.flow);
-      wc.quality('auto');
+      wc.quality('auto');                            // resolution belongs to the governor
+      wc.fadePainting(45000);                        // 45s half-life: old gestures ghost away
       wc.runUntilDry(true);
-      document.getElementById('hero-hint').hidden = false;
 
-      const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
-      if (!calm) {
-        // opening blooms, then an occasional ambient dab
-        [[0.22, 0.42, 0], [0.52, 0.60, 2], [0.78, 0.38, 1]].forEach(([x, y, p], i) =>
-          setTimeout(() => wc.paintNorm(x, y, 0.055, p, 0.55), 500 + i * 900));
-        setInterval(() => {
-          if (document.hidden) return;
-          wc.paintNorm(0.1 + 0.8 * Math.random(), 0.15 + 0.7 * Math.random(),
-                       0.03 + 0.03 * Math.random(), (Math.random() * 3) | 0, 0.35);
-        }, 16000);
-      }
+      const hint = document.getElementById('hero-hint');
+      hint.textContent = `inks mixed for ${hour} — draw on it, or tap to splash`;
+      hint.hidden = false;
+
+      const rand = (a, b) => a + Math.random() * (b - a);
+      const pig  = () => (Math.random() * 3) | 0;
+
+      // ---- awareness: only paint when someone could be watching ----
+      const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      let inView = true;
+      new IntersectionObserver(([e]) => { inView = e.isIntersecting; }, { threshold: 0.15 }).observe(host);
+      let quietUntil = 0;                            // the painter yields to a human
+      const noteHuman = (e) => { if (e.type === 'pointerdown' || e.buttons) quietUntil = performance.now() + 9000; };
+      host.addEventListener('pointerdown', noteHuman, { passive: true });
+      host.addEventListener('pointermove', noteHuman, { passive: true });
+      const humanActive = () => performance.now() < quietUntil;
+
+      // ---- gesture vocabulary ----
+      const ANCHORS = [[0.24, 0.62], [0.38, 0.30], [0.62, 0.68], [0.76, 0.34], [0.50, 0.52]];
+      const anchor = () => {
+        const [x, y] = ANCHORS[(Math.random() * ANCHORS.length) | 0];
+        return [x + rand(-0.06, 0.06), y + rand(-0.06, 0.06)];
+      };
+      const bezier = (a, c, b, n = 24) => {          // start, control, end → sampled points
+        const pts = [];
+        for (let i = 0; i <= n; i++) {
+          const t = i / n, u = 1 - t;
+          pts.push([u * u * a[0] + 2 * u * t * c[0] + t * t * b[0],
+                    u * u * a[1] + 2 * u * t * c[1] + t * t * b[1]]);
+        }
+        return pts;
+      };
+
+      const bloom = ([x, y]) => {                    // wet-on-wet: a body dab + bleeding satellites
+        const p = pig();
+        wc.paintNorm(x, y, rand(0.045, 0.07), p, rand(0.45, 0.6));
+        for (let i = 0, n = 1 + (Math.random() * 2 | 0); i < n; i++)
+          wc.paintNorm(x + rand(-0.05, 0.05), y + rand(-0.04, 0.04),
+                       rand(0.02, 0.035), (p + 1 + (Math.random() * 2 | 0)) % 3, rand(0.3, 0.45));
+      };
+      const spray = ([x, y]) => {                    // rainbow-spray technique: random ink per dab
+        const dx = rand(-0.1, 0.1), dy = rand(-0.05, 0.05);
+        for (let i = 0, n = 6 + (Math.random() * 3 | 0); i < n; i++)
+          wc.paintNorm(x + dx * (i / n) + rand(-0.015, 0.015), y + dy * (i / n) + rand(-0.015, 0.015),
+                       rand(0.007, 0.013), pig(), 0.32);
+      };
+      const drift = () => {                          // an eased arc stroke between two anchors
+        const a = anchor(), b = anchor();
+        const c = [(a[0] + b[0]) / 2 + rand(-0.1, 0.1), (a[1] + b[1]) / 2 + rand(-0.12, 0.12)];
+        new WashesTimeline(wc).once(bezier(a, c, b), {
+          duration: rand(1700, 2400), easing: 'easeInOut',
+          pigment: pig(), nradius: rand(0.009, 0.015), strength: rand(0.35, 0.5),
+        });
+      };
+      const tide = () => {                           // tip the basin; always level it again
+        if (wc.coverage(0.05) < 0.06) return bloom(anchor());
+        wc.pour(rand(-1, 1), rand(0.3, 1), 0.05);
+        setTimeout(() => wc.endPour(), 1600);
+      };
+
+      // ---- opening: sign the page, then two blooms ----
+      const underline = () => {
+        const t = document.querySelector('.hero-overlay h1').getBoundingClientRect();
+        const r = host.getBoundingClientRect();
+        const y  = (t.bottom - r.top) / r.height + 0.02;
+        const x0 = (t.left  - r.left) / r.width  - 0.015;
+        const x1 = (t.right - r.left) / r.width  + 0.015;
+        return bezier([x0, y], [(x0 + x1) / 2, y + 0.03], [x1, y - 0.008]);
+      };
+      const opening = async () => {
+        await new WashesTimeline(wc)
+          .wait(400)
+          .stroke(underline(), { duration: 1400, easing: 'easeOutCubic', pigment: 0, nradius: 0.011, strength: 0.55 })
+          .wait(500).call(() => bloom(anchor()))
+          .wait(650).call(() => bloom(anchor()))
+          .play();
+      };
+
+      // ---- the loop: look at the canvas, then paint with intent ----
+      const step = () => {
+        if (!document.hidden && inView && !humanActive()) {
+          if (wc.coverage(0.12) > 0.45) tide();      // crowded — move paint, let the fade thin it
+          else {
+            const r = Math.random();
+            if (r < 0.38) bloom(anchor());
+            else if (r < 0.72) drift();
+            else if (r < 0.92) spray(anchor());
+            else tide();
+          }
+        }
+        setTimeout(step, rand(8000, 13000));
+      };
+
+      // ---- interaction: drag paints (engine-native); a clean tap splashes ----
+      let downAt = 0, downX = 0, downY = 0;
+      host.addEventListener('pointerdown', (e) => { downAt = performance.now(); downX = e.clientX; downY = e.clientY; }, { passive: true });
+      host.addEventListener('pointerup', (e) => {
+        if (performance.now() - downAt > 260 || Math.hypot(e.clientX - downX, e.clientY - downY) > 9) return;
+        const r = host.getBoundingClientRect();
+        const x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+        wc.paintNorm(x, y, 0.05, pig(), 0.85);
+        for (let i = 0; i < 7; i++) {
+          const a = (i / 7) * Math.PI * 2 + rand(0, 0.6), d = rand(0.03, 0.09);
+          wc.paintNorm(x + Math.cos(a) * d, y + Math.sin(a) * d * 0.8, rand(0.006, 0.014), pig(), 0.5);
+          wc.stirNorm(x, y, Math.cos(a) * 2.5, Math.sin(a) * 2.5, 0.06);
+        }
+      }, { passive: true });
+
+      // ---- resize: rebuild the grid, then repaint the opening in place ----
+      let lastW = host.clientWidth, lastH = host.clientHeight, rzTimer = 0;
+      new ResizeObserver(() => {
+        if (Math.abs(host.clientWidth - lastW) < 90 && Math.abs(host.clientHeight - lastH) < 90) return;
+        clearTimeout(rzTimer);
+        rzTimer = setTimeout(() => {
+          lastW = host.clientWidth; lastH = host.clientHeight;
+          wc.remeasure();
+          opening();
+        }, 350);
+      }).observe(host);
+
+      // wait for the display face so the underline lands under the real glyphs
+      await Promise.race([document.fonts.ready, new Promise((res) => setTimeout(res, 1200))]);
+      await opening();
+      if (!reduced) setTimeout(step, rand(7000, 10000));
     } catch (err) {
       console.warn('Washes hero unavailable, using static fallback:', err);
     }
