@@ -6,7 +6,7 @@ Curtis et al.'s 1997 SIGGRAPH paper *Computer-Generated Watercolor*.
 
 **Live site:** <https://castavridis.github.io/washes-js/> — the landing page
 links to everything below. The flagship demo is the
-[playground](demos/playground.html) (demo v1.0.16, embedding engine 1.12.1).
+[playground](demos/playground.html) (demo v1.0.17, embedding engine 1.12.1).
 
 ## Layout
 
