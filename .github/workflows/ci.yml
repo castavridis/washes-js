@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, engine-review-p0]
+    branches: [main, engine-review-p0, engine-review-p1]
   pull_request:
 
 jobs:
@@ -23,6 +23,8 @@ jobs:
         run: node tests/texture-parity.test.mjs
       - name: API surface (d.ts ↔ runtime reflection)
         run: node tests/api-surface.test.mjs
+      - name: GPU dual-copy drift guard (shader sync)
+        run: node tests/gpu-sync.test.cjs
       - name: standalone build (classic-script parse + global attach)
         run: node scripts/build-standalone.cjs
       - name: types (tsc --strict on declarations + smoke)

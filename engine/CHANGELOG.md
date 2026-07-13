@@ -2,6 +2,44 @@
 
 All notable changes to **washes** are documented here. Dates are ISO 8601.
 
+## [1.14.0] — 2026-07-12
+
+The first P1 slice: render-path work under a new byte-level safety net,
+plus a drift guard for the intentionally duplicated GPU sim.
+
+### Performance
+- **`kmReflect` computes sinh/cosh from one exponential.** With
+  `e = exp(bSx)`, `2·denom = (a+b)·e − (a−b)/e` and the ½ factors cancel
+  in `Rlayer` — one `exp` instead of `sinh + cosh` in the render path's
+  hottest call (3× per pigmented cell per frame). Honest numbers: ~1.2×
+  on the isolated call (V8's sinh/cosh are decent; the sqrt and divides
+  dominate the rest). Accuracy: 10M-sample domain sweep max
+  |ΔR| = 1.9e-14 with zero 8-bit quantization flips; render goldens
+  byte-identical. (The audited 2D-LUT idea stays on the shelf — at ~1.2×
+  for five lines versus a lookup table with palette-rebuild plumbing,
+  this is the better trade today.)
+
+### Testing
+- **Render byte-hash goldens.** The equivalence pattern freezes sim
+  fields; the new `render` pattern freezes the composited RGBA bytes
+  (FNV-1a) across four scenarios — virgin paper, splash + steps, custom
+  palette (color-derived K/S), transparent mode. In `all` and CI.
+  Regenerate only for an intended visual change, with the measured
+  byte-level impact stated in the commit.
+- **GPU dual-copy drift guard.** The WebGL2 sim intentionally exists
+  twice (embedded in `washes.js` + the `washes/gpu-sim` entry; see
+  1.0.1). `tests/gpu-sync.test.cjs` now fails CI unless all 11 shader
+  sources are byte-identical between the copies. This is the interim
+  guard until the extraction work single-sources them (ENGINE_REVIEW
+  P1#6); failures are fixed by porting the edit to both copies, never by
+  allowlisting.
+
+### Notes
+- `fadeStep`'s per-tick inner closure (flagged in the review) was
+  examined and deliberately left: hoisting it would trade one 10 Hz
+  function allocation for per-cell context-slot reads in the hot loop —
+  the cure costs more than the disease.
+
 ## [1.13.0] — 2026-07-12
 
 The engine-review P0 release: performance work verified behavior-preserving

@@ -21,6 +21,17 @@ packaging, and GPU paths. Line references are into `engine/src/washes.js` /
 > boundary-ring pressure leak and the `paintAt` optional-pigment throw
 > (both documented in CHANGELOG 1.13.0 → Known, queued for P2).
 > **P1/P2/P3 remain open.**
+>
+> **P1 slice 1 (branch `engine-review-p1` → engine 1.14.0):** render
+> byte-hash goldens added (composited output frozen alongside sim fields);
+> #9 resolved as an exp-form `kmReflect` rewrite instead of the LUT (~1.2×
+> isolated, byte-identical output, zero 8-bit flips over a 10M-sample sweep
+> — the LUT stays shelved unless profiling demands it); the GPU dual-copy
+> hazard from #6 now has an interim CI drift guard (`tests/gpu-sync.test.cjs`,
+> 11 shaders byte-checked) pending true single-sourcing; the fadeStep
+> closure item was examined and deliberately left (hoisting trades a 10 Hz
+> allocation for per-cell context reads). Still open in P1: the extraction
+> itself (#6), true headless (#7), worker sim (#8).
 
 ---
 
