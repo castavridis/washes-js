@@ -107,8 +107,12 @@ function installMockDOM() {
     value: { maxTouchPoints: 0 },
     configurable: true, writable: true,
   });
+  // Deterministic clock: rainbow-brush weights (and anything else reading
+  // performance.now) must be reproducible for the golden suites. Each call
+  // advances a fake 16 ms frame.
+  let _fakeNow = 0;
   Object.defineProperty(global, 'performance', {
-    value: { now: () => Date.now() },
+    value: { now: () => (_fakeNow += 16) },
     configurable: true, writable: true,
   });
   global.requestAnimationFrame = () => 0;

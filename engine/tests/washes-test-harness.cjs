@@ -496,6 +496,24 @@ function buildEquivalenceScenarios(Washes) {
         wc._debug_simStep(80); cp('after-80', wc);
       },
     },
+    {
+      // Every paintAt tool branch: pigment base, then water (wet+lift),
+      // lift, paper, mask resist, and the rainbow (deterministic under the
+      // shim's fake clock). Coverage for the stamp-extraction work.
+      name: 'tool-brushes',
+      run(cp) {
+        const wc = makeInstance();
+        for (let s = 0; s < 6; s++) wc.paintAt(300 + s * 4, 260, 12, s % 3, 0.8);
+        wc._debug_simStep(20);
+        wc.paintAt(310, 262, 10, 'mask', 0.9);
+        wc.paintAt(292, 258, 9, 'water', 0.7);
+        wc.paintAt(318, 265, 8, 'lift', 0.8);
+        wc.paintAt(300, 250, 8, 'paper', 0.9);
+        wc.paintAt(340, 270, 10, 'rainbow', 0.8);
+        wc.paintAt(348, 274, 10, 'rainbow', 0.8);
+        wc._debug_simStep(40); cp('after-40', wc);
+      },
+    },
   ];
 }
 
