@@ -49,6 +49,8 @@
     "test:texture-parity": "node tests/texture-parity.test.mjs",
     "test:api": "node tests/api-surface.test.mjs",
     "test:gpu-sync": "node tests/gpu-sync.test.cjs",
+    "test:headless": "node tests/headless-bare.test.mjs",
+    "sync:gpu": "node scripts/sync-gpu.cjs",
     "test:browser": "playwright test",
     "build": "node scripts/build-standalone.cjs"
   },

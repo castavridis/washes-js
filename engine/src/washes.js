@@ -35,6 +35,9 @@
   // and can auto-activate the WebGL2 backend. All of gpu-sim's
   // top-level names live inside this IIFE, isolated from the lib.
   // ============================================================
+  // >>> GPU-SIM SYNC BEGIN — this block is generated from washes-gpu-sim.js
+  // by scripts/sync-gpu.cjs. Edit THAT file, then run `npm run sync:gpu`;
+  // CI fails if the copies drift (sync-gpu --check + tests/gpu-sync.test.cjs).
   const __gpuSim = (function () {
   "use strict";
 
@@ -1056,6 +1059,99 @@ function initGpuSim(gl, GW, GH) {
 // ─── Global attachment ──────────────────────────────────────────────────────
   return initGpuSim;
   })();
+  // <<< GPU-SIM SYNC END
+
+  // ============================================================
+  // v1.15 — BARE-NODE HEADLESS SUPPORT (interim; see ENGINE_REVIEW P1#7)
+  // createHeadless() previously dereferenced `document`, so "headless"
+  // only ran under a caller-provided DOM shim (the test harness ships
+  // ~100 lines of mocks). When no DOM exists, it now installs this
+  // minimal surface on globalThis first — the same shape the harness
+  // proved sufficient to run the entire engine. Deliberately scoped:
+  // it only fires when `document` is undefined AND the caller asked for
+  // a headless instance; browsers and jsdom-style embedders never reach
+  // it. A fully environment-free core (no globals at all) arrives with
+  // the module extraction.
+  // ============================================================
+  function _ensureHeadlessEnvironment() {
+    if (typeof document !== "undefined") return;
+    const g = globalThis;
+    function makeEl(tag) {
+      const el = {
+        tagName: (tag || "div").toUpperCase(),
+        nodeName: (tag || "div").toUpperCase(),
+        attributes: {}, children: [], childNodes: [],
+        style: {}, dataset: {},
+        parentNode: null, parentElement: null,
+        width: 1024, height: 768,
+        _listeners: {}, ownerSVGElement: null,
+        classList: { toggle() {}, add() {}, remove() {}, contains() { return false; } },
+        setAttribute(n, v) { this.attributes[n] = String(v); },
+        getAttribute(n) { return Object.prototype.hasOwnProperty.call(this.attributes, n) ? this.attributes[n] : null; },
+        appendChild(c) { this.children.push(c); this.childNodes.push(c); c.parentNode = this; c.parentElement = this; return c; },
+        removeChild(c) { this.children = this.children.filter((x) => x !== c); return c; },
+        replaceChildren() { this.children = []; this.childNodes = []; },
+        addEventListener(t, fn) { (this._listeners[t] = this._listeners[t] || []).push(fn); },
+        removeEventListener() {},
+        dispatchEvent(ev) { (this._listeners[ev.type] || []).forEach((f) => f(ev)); return true; },
+        setPointerCapture() {}, releasePointerCapture() {},
+        getBoundingClientRect() {
+          const w = parseFloat(this.style.width) || 1080;
+          const h = parseFloat(this.style.height) || 900;
+          return { left: 0, top: 0, right: w, bottom: h, width: w, height: h, x: 0, y: 0 };
+        },
+        toDataURL() { return "data:image/png;base64,"; },
+        toBlob(cb) { setTimeout(() => cb({ size: 1, type: "image/png" }), 0); },
+        querySelector() { return null; }, querySelectorAll() { return []; },
+        getContext(t) {
+          if (t !== "2d") return null;
+          return {
+            createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4), width: w, height: h }),
+            getImageData: (x, y, w, h) => ({ data: new Uint8ClampedArray(w * h * 4), width: w, height: h }),
+            putImageData() {}, drawImage() {}, clearRect() {}, fillRect() {}, fillText() {},
+            measureText() { return { width: 50 }; },
+            save() {}, restore() {}, translate() {}, rotate() {}, scale() {},
+            imageSmoothingEnabled: true, imageSmoothingQuality: "high",
+            fillStyle: "", strokeStyle: "", font: "", textBaseline: "", textAlign: "",
+            globalAlpha: 1, globalCompositeOperation: "source-over",
+          };
+        },
+      };
+      return el;
+    }
+    const body = makeEl("body");
+    g.document = {
+      body,
+      createElement: (t) => makeEl(t),
+      createElementNS: (ns, t) => makeEl(t),
+      getElementById: () => null,
+      querySelectorAll: () => [],
+      documentElement: { style: { setProperty() {} }, dataset: {} },
+    };
+    g.window = g.window || {
+      innerWidth: 1080, innerHeight: 900, devicePixelRatio: 1,
+      addEventListener() {},
+      location: { search: "" },
+      requestAnimationFrame: () => 0, cancelAnimationFrame: () => {},
+      matchMedia: () => ({ matches: false }),
+    };
+    if (typeof g.requestAnimationFrame === "undefined") {
+      g.requestAnimationFrame = () => 0;
+      g.cancelAnimationFrame = () => {};
+    }
+    if (typeof g.navigator === "undefined") {
+      try { Object.defineProperty(g, "navigator", { value: { maxTouchPoints: 0 }, configurable: true, writable: true }); } catch (_) { /* older engines */ }
+    }
+    if (typeof g.CustomEvent === "undefined") {
+      g.CustomEvent = function (t, o) { this.type = t; this.detail = o && o.detail; };
+    }
+    if (typeof g.Image === "undefined") g.Image = function () {};
+    if (typeof g.DOMParser === "undefined") {
+      g.DOMParser = function () {
+        return { parseFromString: () => ({ querySelector: () => null, querySelectorAll: () => [] }) };
+      };
+    }
+  }
 
   function createInstance(targetEl, options) {
     options = options || {};
@@ -13468,6 +13564,7 @@ function _ensureTextureNoise(mode) {
     // v1.4 — DOM-light instance for tests/CI: fixed size, CPU renderer,
     // no pointer wiring. Works with a detached host (never appended).
     createHeadless(opts) {
+      _ensureHeadlessEnvironment();
       const o = opts || {};
       const w = +o.width > 0 ? +o.width : 480;
       const h = +o.height > 0 ? +o.height : 360;

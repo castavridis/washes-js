@@ -1321,8 +1321,13 @@ export interface WashesStatic {
   create(target: HTMLElement, options?: CreateOptions): WashesInstance;
 
   /**
-   * v1.4 — DOM-light instance for tests/CI: fixed size, CPU renderer, no
+   * v1.4 — headless instance for tests/CI: fixed size, CPU renderer, no
    * pointer wiring, detached host. Defaults to 480x360.
+   *
+   * v1.15 — runs in BARE Node: when no `document` exists, a minimal
+   * internal environment is installed on globalThis first (only in that
+   * case — browsers and jsdom-style embedders are untouched). No shim
+   * required by the caller anymore.
    */
   createHeadless(options?: CreateOptions & { width?: number; height?: number }): WashesInstance;
 
