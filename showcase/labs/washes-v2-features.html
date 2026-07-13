@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Washes 2.x — one way per concept</title>
+<style>
+  :root{ --bg:#0e1013; --panel:#16191e; --ink:#e7e3da; --dim:#8b8f98; --line:#262b32; --accent:#c98a5e; --chip:#1d2027; }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; background:var(--bg); color:var(--ink); color-scheme:dark;
+    font:14px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial; }
+  #app{ display:flex; gap:18px; padding:18px; align-items:flex-start; max-width:1100px; margin:0 auto; }
+  #side{ width:300px; flex:0 0 300px; background:var(--panel); border:1px solid var(--line);
+    border-radius:14px; padding:16px; }
+  h1{ font-size:15px; margin:0 0 2px; letter-spacing:.2px; }
+  .sub{ color:var(--dim); font-size:12px; margin:0 0 14px; }
+  .grp{ border-top:1px solid var(--line); padding:12px 0 4px; }
+  .grp:first-of-type{ border-top:0; padding-top:0; }
+  .lab{ font-size:11px; text-transform:uppercase; letter-spacing:.6px; color:var(--dim); margin-bottom:7px; }
+  .row{ display:flex; flex-wrap:wrap; gap:6px; }
+  button.pill,.pill{ background:var(--chip); color:var(--ink); border:1px solid var(--line);
+    border-radius:9px; padding:7px 11px; font-size:13px; cursor:pointer; }
+  .pill.on{ border-color:var(--accent); color:#fff; box-shadow:inset 0 0 0 1px var(--accent); }
+  .pill:active{ transform:translateY(1px); }
+  code.api{ color:var(--accent); font:12px/1.4 ui-monospace,Menlo,Consolas,monospace; }
+  input[type=range]{ width:100%; accent-color:var(--accent); }
+  input[type=number]{ width:76px; background:var(--chip); color:var(--ink); border:1px solid var(--line);
+    border-radius:8px; padding:6px 8px; font:13px ui-monospace,Menlo,Consolas,monospace; }
+  .mini{ font-size:11px; color:var(--dim); margin-top:5px; }
+  #main{ flex:1; min-width:0; }
+  #stage{ width:100%; aspect-ratio:1/1; max-width:620px; background:#fdf3ee; border:1px solid var(--line);
+    border-radius:14px; overflow:hidden; touch-action:none; overscroll-behavior:none; }
+  #status{ margin-top:10px; font:12px/1.5 ui-monospace,Menlo,Consolas,monospace; color:var(--dim);
+    min-height:18px; word-break:break-word; }
+  #simstate{ display:inline-block; min-width:8px; height:8px; border-radius:50%; background:var(--dim);
+    margin-right:6px; vertical-align:1px; }
+  #simstate.active{ background:var(--accent); }
+  @media (max-width:760px){ #app{ flex-direction:column; } #side{ width:100%; flex:none; } }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="side">
+    <h1>Washes 2.x</h1>
+    <p class="sub">The API 2.0 surface, live: one way per concept — normalized coordinates, one run policy, chainable everything. Every control is labelled with the call it makes.</p>
+
+    <div class="grp">
+      <div class="lab">Tool — pointer on the canvas</div>
+      <div class="row">
+        <button class="pill" data-tool="paint">Paint</button>
+        <button class="pill" data-tool="stroke">Stroke</button>
+        <button class="pill" data-tool="stir">Stir</button>
+        <button class="pill" data-tool="lift">Lift</button>
+        <button class="pill" data-tool="blot">Blot</button>
+      </div>
+      <div class="mini"><code class="api">paint()</code> dabs; <code class="api">stroke()</code> lays a continuous line (pen lifts on release — <code class="api">penUp()</code>); <code class="api">stir()</code> pushes the fluid; <code class="api">lift()</code> re-suspends dried pigment; <code class="api">blot()</code> dabs it away. All take normalized 0..1 coords, radii as fractions of the smaller side.</div>
+    </div>
+
+    <div class="grp">
+      <div class="lab">Brush — <code class="api">pigment · brushSize(fraction)</code></div>
+      <div class="row">
+        <button class="pill" data-pig="rose">rose</button>
+        <button class="pill" data-pig="yellow">yellow</button>
+        <button class="pill" data-pig="blue">blue</button>
+        <button class="pill" data-pig="rainbow">rainbow</button>
+      </div>
+      <div class="mini" style="margin:8px 0 4px;">Size — a fraction of the smaller side, so it means the same thing at every resolution</div>
+      <input type="range" id="bsize" min="0.01" max="0.12" step="0.005" value="0.04">
+      <div class="mini" id="bsizeReadout">brushSize(0.04)</div>
+    </div>
+
+    <div class="grp">
+      <div class="lab">Run state — <code class="api">run(policy) · drying(v)</code></div>
+      <div class="row">
+        <button class="pill" data-run="auto">auto</button>
+        <button class="pill" data-run="until-dry">until-dry</button>
+        <button class="pill" data-run="always">always</button>
+        <button class="pill" id="dryingToggle">drying: on</button>
+      </div>
+      <div class="mini"><span id="simstate"></span><span id="simReadout">sim idle</span> — live via the typed events <code class="api">on('active'|'idle'|'dry')</code></div>
+    </div>
+
+    <div class="grp">
+      <div class="lab">Determinism — <code class="api">create({ seed })</code></div>
+      <div class="row" style="align-items:center; gap:10px;">
+        <input type="number" id="seed" value="42">
+        <button class="pill" id="replay">Replay</button>
+      </div>
+      <div class="mini">Rebuilds the instance with this seed and replays the opening script — the splashes land in the same seeded-random places every time. Change the seed for a different painting; keep it for the identical one.</div>
+    </div>
+
+    <div class="grp">
+      <div class="lab">Painting as data — <code class="api">saveState · loadState · exportImage</code></div>
+      <div class="row">
+        <button class="pill" id="snap">Snapshot</button>
+        <button class="pill" id="restore">Restore</button>
+        <button class="pill" id="export">Export PNG</button>
+      </div>
+      <div class="mini">Snapshot the painting itself (fluid, pigment, deposit, paper — bit-exact), wreck the canvas, restore.</div>
+    </div>
+
+    <div class="grp">
+      <div class="lab">Cells &amp; water — <code class="api">grid.* · splash · mask/unmask</code></div>
+      <div class="row">
+        <button class="pill" id="mosaic">Grid mosaic</button>
+        <button class="pill" id="splash">Splash</button>
+        <button class="pill" id="window">Mask window</button>
+      </div>
+      <div class="mini">The mosaic thinks in cells (<code class="api">wc.grid.size()</code> + <code class="api">wc.grid.paint()</code> — the explicit cell-space home). Splash takes normalized epicenters now. The window freezes everything except a rounded cut-out, then floods it.</div>
+    </div>
+
+    <div class="grp">
+      <div class="lab">Ambient — <code class="api">backgroundAnimation · animation</code></div>
+      <div class="row">
+        <button class="pill" data-ambient="sunset">sunset</button>
+        <button class="pill" data-ambient="night">night</button>
+        <button class="pill" data-anim="rainy">rain</button>
+        <button class="pill" id="ambientOff">off</button>
+      </div>
+    </div>
+
+    <div class="grp">
+      <div class="row">
+        <button class="pill" id="reset">Reset</button>
+      </div>
+      <div class="mini">Everything above chains — <code class="api">wc.paperColor('#…').paintLoad(x).run('auto')</code> is one expression in v2.</div>
+    </div>
+  </aside>
+
+  <main id="main">
+    <div id="stage"></div>
+    <div id="status">loading engine…</div>
+  </main>
+</div>
+
+<script src="../../engine/dist/washes.standalone.js"></script>
+
+<script type="module">
+const host = document.getElementById('stage');
+const $ = id => document.getElementById(id);
+const statusEl = $('status');
+const status = m => { statusEl.textContent = m; };
+const clamp = (v,a,b)=> v<a?a:v>b?b:v;
+
+let wc = null;                 // rebuilt by Replay — everything reads this
+let snapshot = null;           // saveState() result
+let windowed = false;          // mask-window toggle
+let tool = 'paint', pig = 'blue', drag = false, last = null;
+
+function locate(e){
+  const r = wc.displayRect();
+  return { nx: (e.clientX - r.x) / r.width, ny: (e.clientY - r.y) / r.height };
+}
+
+// The opening script. Deliberately leans on the engine's own randomness
+// (splash picks its epicenters by seeded rejection-sampling) so the seed
+// visibly matters: same seed → the same painting, bit for bit.
+function intro(){
+  wc.paperColor('#fdf3ee').paintLoad(0.4).waterLoad(1.15);   // chaining — every setter returns the instance
+  wc.paint(0.34, 0.40, 0.16, 'blue',   0.7)
+    .paint(0.62, 0.54, 0.17, 'rose',   0.7)
+    .paint(0.48, 0.72, 0.15, 'yellow', 0.7);
+  wc.splash();                    // default preset, seeded-random epicenters
+  wc.splash('fineSpritz');
+}
+
+function wire(){
+  // Typed lifecycle events drive the little run-state readout.
+  const dot = $('simstate'), read = $('simReadout');
+  const show = (label) => { read.textContent = label + " — run('" + wc.run() + "')" + (wc.drying() ? '' : ' · drying off'); };
+  wc.on('active', () => { dot.classList.add('active');    show('sim active'); });
+  wc.on('idle',   (d) => { dot.classList.remove('active'); show('sim idle (wetness ' + d.totalWetness.toFixed(1) + ')'); });
+  wc.on('dry',    () => { dot.classList.remove('active');  show('sim dry'); });
+  wc.brushSize(Number($('bsize').value));
+}
+
+function build(seed){
+  if (wc) { try { wc.destroy(); } catch(_){} }
+  wc = window.Washes.create(host, { gpu:false, pointer:false, seed });
+  wire();
+  intro();
+  windowed = false; // masks don't survive the rebuild
+}
+
+// ---- pointer tools (all normalized; radius = the live brushSize) ----
+host.addEventListener('pointerdown', e => {
+  drag = true; last = locate(e);
+  if (host.setPointerCapture) try{ host.setPointerCapture(e.pointerId); }catch(_){}
+  const p = last, r = wc.brushSize();
+  if (tool === 'paint')      { wc.paint(p.nx, p.ny, r, pig, 0.6); }
+  else if (tool === 'stroke'){ wc.penUp(); wc.stroke(p.nx, p.ny, { pigment: pig, strength: 0.6, nradius: r }); }
+  else if (tool === 'lift')  { wc.lift(p.nx, p.ny, r * 1.6, 0.6);  status('lift(' + p.nx.toFixed(2) + ', ' + p.ny.toFixed(2) + ', ' + (r*1.6).toFixed(3) + ', 0.6)'); }
+  else if (tool === 'blot')  { wc.blot(p.nx, p.ny, r * 1.6, 0.8);  status('blot(' + p.nx.toFixed(2) + ', ' + p.ny.toFixed(2) + ', ' + (r*1.6).toFixed(3) + ', 0.8)'); }
+  else status('stir — drag to push the fluid');
+});
+host.addEventListener('pointermove', e => {
+  if (!drag) return;
+  const p = locate(e), r = wc.brushSize();
+  if (tool === 'stir'){
+    const vx = clamp((p.nx - last.nx) * 40, -0.9, 0.9);
+    const vy = clamp((p.ny - last.ny) * 40, -0.9, 0.9);
+    wc.stir(p.nx, p.ny, vx, vy, r * 1.4);
+    status('stir(' + p.nx.toFixed(2) + ', ' + p.ny.toFixed(2) + ', ' + vx.toFixed(2) + ', ' + vy.toFixed(2) + ')');
+  }
+  else if (tool === 'paint')  { wc.paint(p.nx, p.ny, r, pig, 0.6); }
+  else if (tool === 'stroke') { wc.stroke(p.nx, p.ny, { pigment: pig, strength: 0.6, nradius: r }); status('stroke(' + p.nx.toFixed(2) + ', ' + p.ny.toFixed(2) + ', {nradius: ' + r.toFixed(3) + '})'); }
+  else if (tool === 'lift')   { wc.lift(p.nx, p.ny, r * 1.6, 0.6); }
+  else if (tool === 'blot')   { wc.blot(p.nx, p.ny, r * 1.6, 0.8); }
+  last = p;
+});
+const end = ()=>{ if (drag && tool === 'stroke') wc.penUp(); drag = false; };
+host.addEventListener('pointerup', end);
+host.addEventListener('pointerleave', end);
+host.addEventListener('pointercancel', end);
+
+// ---- side panel ----
+document.querySelectorAll('[data-tool]').forEach(b => b.addEventListener('click', ()=>{
+  tool = b.dataset.tool;
+  document.querySelectorAll('[data-tool]').forEach(x=>x.classList.toggle('on', x===b));
+  status('tool: ' + tool);
+}));
+document.querySelectorAll('[data-pig]').forEach(b => b.addEventListener('click', ()=>{
+  pig = b.dataset.pig;
+  document.querySelectorAll('[data-pig]').forEach(x=>x.classList.toggle('on', x===b));
+  status('pigment: ' + pig);
+}));
+
+$('bsize').addEventListener('input', e => {
+  const f = Number(e.target.value);
+  wc.brushSize(f);
+  $('bsizeReadout').textContent = 'brushSize(' + f.toFixed(3) + ')';
+  status('brushSize(' + f.toFixed(3) + ')  — reads back ' + wc.brushSize().toFixed(3));
+});
+
+document.querySelectorAll('[data-run]').forEach(b => b.addEventListener('click', ()=>{
+  wc.run(b.dataset.run);
+  document.querySelectorAll('[data-run]').forEach(x=>x.classList.toggle('on', x===b));
+  status("run('" + b.dataset.run + "')  — reads back '" + wc.run() + "'");
+}));
+$('dryingToggle').addEventListener('click', ()=>{
+  wc.drying(!wc.drying());
+  $('dryingToggle').textContent = 'drying: ' + (wc.drying() ? 'on' : 'off');
+  status('drying(' + wc.drying() + ')');
+});
+
+$('replay').addEventListener('click', ()=>{
+  const seed = Number($('seed').value) || 0;
+  build(seed);
+  wc.once('idle').then(d => status("once('idle') resolved — the wash settled at wetness " + d.totalWetness.toFixed(1)));
+  status('create({ seed: ' + seed + ' }) — same seed, same painting');
+  syncPills();
+});
+
+$('snap').addEventListener('click', ()=>{
+  snapshot = wc.saveState();
+  const bytes = snapshot.fluid.byteLength + snapshot.pigment.byteLength + snapshot.deposit.byteLength + snapshot.paper.byteLength;
+  status('saveState() — ' + snapshot.GW + '×' + snapshot.GH + ' cells, ' + (bytes/1024/1024).toFixed(1) + ' MB of Float32');
+});
+$('restore').addEventListener('click', ()=>{
+  if (!snapshot) { status('no snapshot yet — click Snapshot first'); return; }
+  try { wc.loadState(snapshot); status('loadState(snapshot) — bit-exact restore'); }
+  catch (err) { status('loadState threw: ' + err.message); }
+});
+$('export').addEventListener('click', ()=>{
+  wc.exportImage({ asBlob: true }).then(blob => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'washes-2x.png';
+    a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+    status('exportImage({ asBlob: true }) — ' + (blob.size/1024).toFixed(0) + ' KB');
+  });
+});
+
+$('mosaic').addEventListener('click', ()=>{
+  const { gridWidth: GW, gridHeight: GH } = wc.grid.size();
+  const N = 8, r = Math.min(GW, GH) / 22;
+  for (let cy = 0; cy < N; cy++)
+    for (let cx = 0; cx < N; cx++)
+      if ((cx + cy) % 2 === 0)
+        wc.grid.paint(cx*GW/N + GW/(2*N), cy*GH/N + GH/(2*N), r, (cx*3 + cy) % 3, 0.45);
+  status('wc.grid.size() → ' + GW + '×' + GH + ' — mosaic via wc.grid.paint(gx, gy, r)');
+});
+$('splash').addEventListener('click', ()=>{
+  wc.splash([{ x: 0.5, y: 0.42, radius: 0.14 }], 'bigSplash');
+  status("splash([{x: 0.5, y: 0.42, radius: 0.14}], 'bigSplash') — normalized epicenters");
+});
+$('window').addEventListener('click', ()=>{
+  if (!windowed) {
+    wc.mask(0, 0, 1, 1, 0).unmask(0.3, 0.3, 0.4, 0.4, 24).maskTint(true);
+    wc.splash([{ x: 0.5, y: 0.5, radius: 0.18 }], 'deluge');
+    windowed = true;
+    status('mask(0,0,1,1) → unmask(0.3, 0.3, 0.4, 0.4, 24) — the deluge floods only the window');
+  } else {
+    wc.removeMask().maskTint(false);
+    windowed = false;
+    status('removeMask() — the whole sheet is live again');
+  }
+});
+
+document.querySelectorAll('[data-ambient]').forEach(b => b.addEventListener('click', ()=>{
+  wc.backgroundAnimation(b.dataset.ambient);
+  status("backgroundAnimation('" + b.dataset.ambient + "') — running: " + wc.backgroundAnimationRunning());
+}));
+document.querySelectorAll('[data-anim]').forEach(b => b.addEventListener('click', ()=>{
+  wc.animation(b.dataset.anim);
+  status("animation('" + b.dataset.anim + "') — reads back '" + wc.animation() + "'");
+}));
+$('ambientOff').addEventListener('click', ()=>{
+  wc.animation(null);
+  status("animation(null) — reads back '" + wc.animation() + "'");
+});
+
+$('reset').addEventListener('click', ()=>{
+  wc.reset(); windowed = false; intro(); status('reset');
+});
+
+function syncPills(){
+  document.querySelectorAll('[data-run]').forEach(x=>x.classList.toggle('on', x.dataset.run === wc.run()));
+  $('dryingToggle').textContent = 'drying: ' + (wc.drying() ? 'on' : 'off');
+}
+
+document.querySelector('[data-tool="paint"]').classList.add('on');
+document.querySelector('[data-pig="blue"]').classList.add('on');
+document.querySelector('[data-run="auto"]').classList.add('on');
+build(Number($('seed').value) || 42);
+status("ready — engine " + window.Washes.version + " · create({ seed: " + ($('seed').value) + " })");
+</script>
+</body>
+</html>

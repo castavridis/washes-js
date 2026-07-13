@@ -190,9 +190,23 @@ packaging, and GPU paths. Line references are into `engine/src/washes.js` /
 > in-repo but ships until 3.0. Playground DOCS sections still teach v1 —
 > separate editorial pass.
 >
+> **P2 slice 7 (branch `engine-review-v2-lab`): the v2 features lab.**
+> `showcase/labs/washes-v2-features.html` — the v1.1-features page's
+> interactive-lab format (every control labelled with the call it makes,
+> status line echoing real invocations), rebuilt for the 2.x surface:
+> normalized paint/stroke/stir/lift/blot tools sized by the live
+> brushSize(fraction), run()/drying() with the typed events driving a
+> live sim-state dot, create({seed}) replay (same seed = identical
+> painting, engine-side randomness only), saveState/loadState/
+> exportImage, wc.grid mosaic, normalized splash, mask/unmask window,
+> backgroundAnimation/animation. Every engine call smoke-tested
+> headlessly incl. the reproducibility claim. Linked from the landing
+> labs row; page count is now 28.
+>
 > **Open work, in priority order:** ① first
-> real-browser QA pass on Pages — the 27
-> live-engine pages, the hero, the CI Playwright job's first run, GPU
+> real-browser QA pass on Pages — the 28
+> live-engine pages (the new v2 lab included), the hero, the CI
+> Playwright job's first run, GPU
 > render validation (unblocks GPU-by-default + the falloff² parity fix);
 > ③ worker frame-loop integration in the browser (render-latency model);
 > ④ boundary-ring pressure fix (golden-regenerating, needs eyes);
