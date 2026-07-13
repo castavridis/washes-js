@@ -389,7 +389,7 @@ wc.paintNorm(0.5, 0.5, 0.06, 'blue', 0.8);
       const host = document.getElementById('wash-hero');
       const wc = Washes.compat1(Washes.create(host, { pigments: PALETTES[hour] }));  // v1-surface pin — survives the 2.0 rename batch
       wc.paperColor('#faf5ec');                      // seamless with the page
-      wc.evaporation(15);
+      wc.evaporation(7.5);                           // slower dry — washes linger and bloom longer
       wc.flow(REVEAL_BLUE.settings.flow);
       wc.quality('auto');                            // resolution belongs to the governor
       wc.fadePainting(20000);                        // 20s half-life: strokes visibly ghost away
