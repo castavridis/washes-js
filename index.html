@@ -371,30 +371,46 @@ wc.paint(0.5, 0.5, 0.06, 'blue', 0.8);
 </footer>
 
 <script type="module">
-  // The header is a painter.
+  // The header is an organism.
   //
-  // A small autonomous system running the real engine: a gesture vocabulary
-  // (blooms, arc drifts, sprays, basin-tips), composition anchors on a loose
-  // golden-section grid, and inks mixed for the local hour. It reads its own
-  // canvas (coverage) before deciding what to paint, yields while a human is
-  // painting, sleeps when offscreen, and under prefers-reduced-motion stamps
-  // one still composition instead of animating — same choreography code, the
-  // timeline sidecar collapses it. Falls back to the static CSS wash behind
-  // the canvas if module loading fails (e.g. file://).
+  // The hero runs the growth system from showcase/personality/v6-organism:
+  // wandering, branching tips that finger forward through the wet sheet
+  // (grow), settle (resolve), recede (dissolve), and regrow — never the
+  // same twice. Where the organism demo premixes ONE compound ink by
+  // stacking weighted dabs of the three stock pigments, the hero premixes
+  // a palette of three per local hour. Everything paints from the same
+  // three physical pigments — Quinacridone Rose, Hansa Yellow, Cerulean
+  // Blue (Curtis et al. Fig. 5) — and Kubelka–Munk does the mixing on the
+  // paper, exactly like a real palette well. It yields while a human is
+  // painting, sleeps when offscreen, and under prefers-reduced-motion
+  // grows one still organism instead of animating. Falls back to the
+  // static CSS wash if module loading fails (e.g. file://).
   (async () => {
     try {
-      const [{ Washes }, { WashesTimeline }, { REVEAL_BLUE }] = await Promise.all([
+      const [{ Washes }, { WashesTimeline }] = await Promise.all([
         import('./engine/src/index.js'),
         import('./engine/src/washes-timeline.js'),
-        import('./presets/reveal-blue.preset.js'),
       ]);
 
-      // ---- inks mixed for the hour ----
-      const PALETTES = {
-        dawn:  [{ color: '#b95d73' }, { color: '#d9a441' }, { color: '#6e87a8', granulation: 0.35 }],
-        day:   REVEAL_BLUE.palette,   // the saved preset, verbatim
-        dusk:  [{ color: '#c0492f' }, { color: '#6b5b9e', granulation: 0.30 }, { color: '#d9a441' }],
-        night: [{ color: '#34457e', granulation: 0.40 }, { color: '#2e6f6a' }, { color: '#8a8075' }],
+      // ---- premixed inks for the hour ----
+      // Each ink is a weight stack over the stock trio [rose, yellow, blue]
+      // — the organism demo's ink() generalized (its body ink stacks
+      // yellow·1.75, rose·1, blue·1). Deposits are physically mixed, so
+      // switching palettes changes what future strokes carry; paint
+      // already on the sheet keeps its color, like real watercolor.
+      const MIXES = {
+        dawn:  [{ n: 'rose light', r: 1.0,  y: 0.5,  b: 0.15 },
+                { n: 'first gold', r: 0.35, y: 1.2,  b: 0 },
+                { n: 'grey blue',  r: 0.3,  y: 0.25, b: 0.95 }],
+        day:   [{ n: 'sky',        r: 0.1,  y: 0.2,  b: 1.15 },
+                { n: 'sun',        r: 0.2,  y: 1.25, b: 0 },
+                { n: 'leaf',       r: 0,    y: 1.0,  b: 0.7 }],
+        dusk:  [{ n: 'ember',      r: 1.0,  y: 0.85, b: 0.1 },
+                { n: 'violet',     r: 0.85, y: 0.25, b: 0.85 },
+                { n: 'old gold',   r: 0.35, y: 1.1,  b: 0.2 }],
+        night: [{ n: 'indigo',     r: 0.6,  y: 0.15, b: 1.25 },
+                { n: 'sea teal',   r: 0.15, y: 0.55, b: 1.0 },
+                { n: 'stone',      r: 0.55, y: 0.6,  b: 0.65 }],
       };
       const h = new Date().getHours();
       const hour = h < 5 ? 'night' : h < 10 ? 'dawn' : h < 17 ? 'day' : h < 21 ? 'dusk' : 'night';
@@ -403,29 +419,62 @@ wc.paint(0.5, 0.5, 0.06, 'blue', 0.8);
       // v2.2 createAsync: paper generation is time-sliced, so the page no
       // longer freezes ~1s during boot. loader:false — the CSS
       // .hero-fallback behind the canvas is already this hero's veil.
-      const wc = await Washes.createAsync(host, { pigments: PALETTES[hour], loader: false });
+      // pointer:false — the premix brush paints through mixLine below
+      // (engine-native pointer strokes carry a single pigment).
+      const wc = await Washes.createAsync(host, { loader: false, pointer: false });
       wc.paperColor('#faf5ec');                      // seamless with the page
       wc.evaporation(7.5);                           // slower dry — washes linger and bloom longer
-      wc.flow(REVEAL_BLUE.settings.flow);
       wc.quality('auto');                            // resolution belongs to the governor
-      wc.fadePainting(20000);                        // 20s half-life: strokes visibly ghost away
       wc.run('until-dry');
-      wc.paintLoad(0.075).waterLoad(2);
+      // Deposit weight is a compromise between the old hero's feather
+      // strokes (0.075/2) and the organism's dense trails (1.3/1.2) — the
+      // premix stacks up to 3 passes per mark, so this is the first dial
+      // to turn in browser QA if strokes read too heavy or too pale.
+      wc.paintLoad(0.35).waterLoad(1.6);
       wc.edgeMode('closed-gravity');                 // sheet keeps its mass, but feels the tilt
       wc.gravityDirection('down');
       wc.gravityStrength(2);                         // double pull — washes race down the page
       wc.edgeDarkening(true);                        // dark rims as blooms dry (Curtis §4.3.3) — explicit, not default-dependent
       const fitBrush = () => wc.brushSize((host.clientHeight / 5) / 2 / Math.min(host.clientWidth, host.clientHeight));  // brush ⌀ = hero height / 5, as a v2 radius fraction
       fitBrush();
-      if (matchMedia('(pointer: fine)').matches) wc.cursorPreview(true);  // brush-ring cursor
 
       const hint = document.getElementById('hero-hint');
-      const hintFor = (name) => { hint.textContent = `inks mixed for ${name} — draw on it, or tap to splash`; };
+      const hintFor = (name) => { hint.textContent = `inks premixed for ${name} — draw on it, or tap to splash`; };
       hintFor(hour);
       hint.hidden = false;
 
       const rand = (a, b) => a + Math.random() * (b - a);
-      const pig  = () => (Math.random() * 3) | 0;
+
+      // ---- the mix: stacked stock-pigment dabs (organism ink(), generalized) ----
+      let palName = hour, paused = false;
+      let inkIdx = 0;
+      const ink = () => MIXES[palName][inkIdx];
+      const mixDab = (m, x, y, nr, a) => {
+        if (m.r) wc.paint(x, y, nr, 0, a * m.r);
+        if (m.y) wc.paint(x, y, nr, 1, a * m.y);
+        if (m.b) wc.paint(x, y, nr, 2, a * m.b);
+      };
+      const mixLine = (m, x0, y0, x1, y1, nr, a) => {
+        if (m.r) wc.line(x0, y0, x1, y1, { pigment: 0, nradius: nr, strength: a * m.r });
+        if (m.y) wc.line(x0, y0, x1, y1, { pigment: 1, nradius: nr, strength: a * m.y });
+        if (m.b) wc.line(x0, y0, x1, y1, { pigment: 2, nradius: nr, strength: a * m.b });
+      };
+      const mixComponent = (m) => {                  // weighted-random single pigment from a mix
+        const t = Math.random() * (m.r + m.y + m.b);
+        return t < m.r ? 0 : t < m.r + m.y ? 1 : 2;
+      };
+      // Approximate display color of a mix — multiplicative (subtractive)
+      // filtering of eyeballed stock hexes. UI dots only; the paper is truth.
+      const STOCK_T = [[0.76, 0.23, 0.44], [0.93, 0.77, 0.17], [0.18, 0.44, 0.62]];
+      const mixHex = (m) => {
+        const w = [m.r, m.y, m.b];
+        const ch = [0, 1, 2].map((c) => {
+          let t = 1;
+          for (let p = 0; p < 3; p++) t *= Math.pow(STOCK_T[p][c], w[p] * 0.8);
+          return Math.round(Math.pow(t, 1 / 1.8) * 255);
+        });
+        return `rgb(${ch[0]},${ch[1]},${ch[2]})`;
+      };
 
       // ---- awareness: only paint when someone could be watching ----
       const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -437,13 +486,72 @@ wc.paint(0.5, 0.5, 0.06, 'blue', 0.8);
       host.addEventListener('pointermove', noteHuman, { passive: true });
       const humanActive = () => performance.now() < quietUntil;
 
-      // ---- gesture vocabulary ----
-      const ANCHORS = [[0.24, 0.62], [0.38, 0.30], [0.62, 0.68], [0.76, 0.34], [0.50, 0.52]];
-      const anchor = () => {
-        const [x, y] = ANCHORS[(Math.random() * ANCHORS.length) | 0];
-        return [x + rand(-0.06, 0.06), y + rand(-0.06, 0.06)];
+      // ---- the organism (ported from v6-organism, normalized space) ----
+      // Genome, hero-tuned: excitement drives step + branching, sincerity
+      // the wander, ruggedness the sag + trail girth. No lattice masks here
+      // — mask lines would also reject the visitor's own strokes.
+      const EXCITE = 0.85, SINCERE = 0.7, RUGGED = 0.5;
+      let tips = [], phase = 'grow', phaseMs = 0, gen = 0, bodyMix = MIXES[hour][0];
+
+      const spawnGen = () => {
+        gen++;
+        bodyMix = MIXES[palName][gen % 3];           // each generation grows in the next premix
+        tips = [];
+        const k = 1 + Math.floor(Math.random() * 2);
+        for (let i = 0; i < k; i++) {
+          const a = Math.random() * 6.28318;
+          tips.push({ x: rand(0.3, 0.7), y: rand(0.3, 0.62), hx: Math.cos(a), hy: Math.sin(a), life: rand(90, 200) });
+        }
+        phase = 'grow'; phaseMs = 0;
       };
-      const bezier = (a, c, b, n = 24) => {          // start, control, end → sampled points
+
+      const grow = () => {
+        const step = 0.011 * (0.7 + EXCITE * 0.6);
+        const vmag = 0.5 + EXCITE * 0.45;
+        const jit = 0.14 + SINCERE * 0.45;
+        const branchP = 0.014 + EXCITE * 0.05;
+        const newTips = [];
+        for (const tp of tips) {
+          const ja = (Math.random() * 2 - 1) * jit, c = Math.cos(ja), s = Math.sin(ja);
+          let hx = tp.hx * c - tp.hy * s, hy = tp.hx * s + tp.hy * c;
+          hy += RUGGED * 0.045;                      // sediment sag, with the gravity story
+          const mag = Math.hypot(hx, hy) || 1; hx /= mag; hy /= mag; tp.hx = hx; tp.hy = hy;
+          tp.x += hx * step; tp.y += hy * step; tp.life--;
+          const nr = 0.013 + RUGGED * 0.012;
+          mixDab(bodyMix, tp.x, tp.y, nr, 0.5);
+          wc.stir(tp.x, tp.y, hx * vmag, hy * vmag, nr * 1.4);   // viscous fingering forward
+          if (Math.random() < branchP && tips.length + newTips.length < 28) {
+            const ba = (Math.random() < 0.5 ? 1 : -1) * (0.6 + Math.random() * 0.55);
+            const bc = Math.cos(ba), bs = Math.sin(ba);
+            newTips.push({ x: tp.x, y: tp.y, hx: hx * bc - hy * bs, hy: hx * bs + hy * bc, life: rand(50, 130) });
+          }
+        }
+        tips = tips.concat(newTips).filter((tp) => tp.life > 0 && tp.x > 0.02 && tp.x < 0.98 && tp.y > 0.03 && tp.y < 0.97);
+      };
+
+      // grow → resolve → dissolve → regrow, on a painter-clock that only
+      // advances while the painter is allowed to work (visible, unpaused,
+      // human not mid-stroke). Dissolve fades EVERYTHING — visitor marks
+      // recede with the organism, then the sheet regrows clean.
+      let frameParity = 0;
+      wc.onFrame((dt) => {
+        if (document.hidden || !inView || humanActive() || paused || reduced) return;
+        phaseMs += Math.min(dt, 100);
+        if (phase === 'grow') {
+          if ((frameParity ^= 1)) grow();            // every other frame — hero-size economy
+          if (tips.length === 0 || phaseMs > 14000) { wc.dry(); phase = 'resolve'; phaseMs = 0; }
+        } else if (phase === 'resolve') {
+          if (phaseMs > 2800) { wc.fadePainting(1400); phase = 'dissolve'; phaseMs = 0; }
+        } else if (phase === 'dissolve') {
+          // coverage() is a full-grid scan — sample it sparsely
+          if ((frameParity = (frameParity + 1) % 24) === 0 || phaseMs > 9000) {
+            if (wc.coverage(0.04) < 0.02 || phaseMs > 9000) { wc.fadePainting(0); spawnGen(); }
+          }
+        }
+      });
+
+      // ---- opening: sign the page in the hour's first premix, then grow ----
+      const bezier = (a, c, b, n = 24) => {
         const pts = [];
         for (let i = 0; i <= n; i++) {
           const t = i / n, u = 1 - t;
@@ -452,57 +560,6 @@ wc.paint(0.5, 0.5, 0.06, 'blue', 0.8);
         }
         return pts;
       };
-
-      const bloom = ([x, y]) => {                    // wet-on-wet: a body dab + bleeding satellites
-        const p = pig();
-        wc.paint(x, y, rand(0.06, 0.095), p, rand(0.45, 0.6));
-        for (let i = 0, n = 1 + (Math.random() * 2 | 0); i < n; i++)
-          wc.paint(x + rand(-0.06, 0.06), y + rand(-0.05, 0.05),
-                       rand(0.028, 0.048), (p + 1 + (Math.random() * 2 | 0)) % 3, rand(0.3, 0.45));
-      };
-      const spray = ([x, y]) => {                    // rainbow-spray technique: random ink per dab
-        const dx = rand(-0.12, 0.12), dy = rand(-0.06, 0.06);
-        for (let i = 0, n = 6 + (Math.random() * 3 | 0); i < n; i++)
-          wc.paint(x + dx * (i / n) + rand(-0.015, 0.015), y + dy * (i / n) + rand(-0.015, 0.015),
-                       rand(0.009, 0.017), pig(), 0.32);
-      };
-      const drift = () => {                          // an eased arc stroke between two anchors
-        const a = anchor(), b = anchor();
-        const c = [(a[0] + b[0]) / 2 + rand(-0.1, 0.1), (a[1] + b[1]) / 2 + rand(-0.12, 0.12)];
-        new WashesTimeline(wc).once(bezier(a, c, b), {
-          duration: rand(1700, 2400), easing: 'easeInOut',
-          pigment: pig(), nradius: rand(0.012, 0.02), strength: rand(0.35, 0.5),
-        });
-      };
-      const comet = () => {                          // a bold, quick arc that bursts at its tail
-        const a = anchor(), b = anchor();
-        const c = [(a[0] + b[0]) / 2 + rand(-0.14, 0.14), (a[1] + b[1]) / 2 + rand(-0.16, 0.16)];
-        new WashesTimeline(wc)
-          .stroke(bezier(a, c, b), {
-            duration: rand(1100, 1600), easing: 'easeOutCubic',
-            pigment: pig(), nradius: rand(0.016, 0.024), strength: rand(0.45, 0.6),
-          })
-          .call(() => spray(b))
-          .play();
-      };
-      const cascade = () => {                        // blooms stepping down the sheet — the gravity story
-        const tl = new WashesTimeline(wc);
-        let [cx, cy] = anchor(); cy = Math.min(cy, 0.5);
-        for (let i = 0, n = 2 + (Math.random() * 2 | 0); i < n; i++) {
-          const px = cx, py = cy, k = 1 - i * 0.24;  // each step lands smaller, downhill
-          tl.call(() => wc.paint(px, py, rand(0.05, 0.075) * k, pig(), rand(0.4, 0.55)))
-            .wait(rand(450, 750));
-          cx += rand(-0.045, 0.045); cy += rand(0.09, 0.14);
-        }
-        tl.play();
-      };
-      const tide = () => {                           // tip the basin; always level it again
-        if (wc.coverage(0.05) < 0.06) return bloom(anchor());
-        wc.pour(rand(-1, 1), rand(0.3, 1), 0.05);
-        setTimeout(() => wc.endPour(), 1600);
-      };
-
-      // ---- opening: sign the page, then two blooms ----
       const underline = () => {
         const t = document.querySelector('.hero-overlay h1').getBoundingClientRect();
         const r = host.getBoundingClientRect();
@@ -512,48 +569,55 @@ wc.paint(0.5, 0.5, 0.06, 'blue', 0.8);
         return bezier([x0, y], [(x0 + x1) / 2, y + 0.03], [x1, y - 0.008]);
       };
       const opening = async () => {
-        await new WashesTimeline(wc)
-          .wait(400)
-          .stroke(underline(), { duration: 1400, easing: 'easeOutCubic', pigment: 0, nradius: 0.011, strength: 0.55 })
-          .wait(500).call(() => bloom(anchor()))
-          .wait(650).call(() => bloom(anchor()))
-          .play();
+        // three concurrent timeline passes, one per stock pigment — the
+        // underline premixes live, on the paper
+        const pts = underline(), m = MIXES[palName][0];
+        const passes = [];
+        const pass = (pigment, w) => new WashesTimeline(wc).once(pts, {
+          duration: 1400, easing: 'easeOutCubic', pigment, nradius: 0.011, strength: 0.55 * w,
+        });
+        if (m.r) passes.push(pass(0, m.r));
+        if (m.y) passes.push(pass(1, m.y));
+        if (m.b) passes.push(pass(2, m.b));
+        await Promise.all(passes);
       };
 
-      // ---- the loop: look at the canvas, then paint with intent ----
-      const step = () => {
-        if (!document.hidden && inView && !humanActive() && !paused) {
-          if (wc.coverage(0.12) > 0.45) tide();      // crowded — move paint, let the fade thin it
-          else {
-            const r = Math.random();
-            if (r < 0.30) bloom(anchor());
-            else if (r < 0.54) drift();
-            else if (r < 0.72) comet();
-            else if (r < 0.86) spray(anchor());
-            else if (r < 0.95) cascade();
-            else tide();
-          }
-        }
-        setTimeout(step, rand(6500, 10500));
+      // ---- interaction: drag paints the premix; a clean tap splashes ----
+      const toNorm = (e) => {
+        const r = host.getBoundingClientRect();
+        return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height];
       };
+      let drawing = false, lx = 0, ly = 0, downAt = 0, downX = 0, downY = 0;
+      host.addEventListener('pointerdown', (e) => {
+        downAt = performance.now(); downX = e.clientX; downY = e.clientY;
+        drawing = true; [lx, ly] = toNorm(e);
+      }, { passive: true });
+      host.addEventListener('pointermove', (e) => {
+        if (!drawing || !(e.buttons & 1 || e.pointerType !== 'mouse')) return;
+        const [x, y] = toNorm(e);
+        if (Math.hypot(x - lx, y - ly) < 0.004) return;
+        mixLine(ink(), lx, ly, x, y, wc.brushSize(), 0.55);
+        lx = x; ly = y;
+      }, { passive: true });
+      const penOff = () => { drawing = false; };
+      host.addEventListener('pointerup', penOff, { passive: true });
+      host.addEventListener('pointercancel', penOff, { passive: true });
+      host.addEventListener('pointerleave', penOff, { passive: true });
 
-      // ---- interaction: drag paints (engine-native); a clean tap splashes ----
-      let downAt = 0, downX = 0, downY = 0;
-      host.addEventListener('pointerdown', (e) => { downAt = performance.now(); downX = e.clientX; downY = e.clientY; }, { passive: true });
       host.addEventListener('pointerup', (e) => {
         if (performance.now() - downAt > 260 || Math.hypot(e.clientX - downX, e.clientY - downY) > 9) return;
-        const rect = host.getBoundingClientRect();
-        const x = (e.clientX - rect.left) / rect.width, y = (e.clientY - rect.top) / rect.height;
+        const [x, y] = toNorm(e);
         const R = wc.brushSize();  // v2 brushSize() IS the normalized radius fraction
-        // impact blob — overlapping off-center dabs read as one irregular splat.
-        // Central size is random, up to half the brush; inks are random per
-        // dab (the pre-splash-rework behavior — every tap mixes the palette).
+        const m = ink();
+        // impact blob — the full premix stacked at a random size, up to
+        // half the brush; overlapping off-center dabs read as one splat
         const C = R * rand(0.3, 0.5);
-        wc.paint(x, y, C, pig(), 0.85);
+        mixDab(m, x, y, C, 0.85);
         for (let i = 0; i < 3; i++)
-          wc.paint(x + rand(-C, C) * 0.4, y + rand(-C, C) * 0.4, C * rand(0.55, 0.85), pig(), 0.6);
-        // ejecta — many near droplets, few far (u² bias); size and ink thin with
-        // distance; far droplets leave a short radial streak; gravity favors the
+          mixDab(m, x + rand(-C, C) * 0.4, y + rand(-C, C) * 0.4, C * rand(0.55, 0.85), 0.6);
+        // ejecta — droplets each carry ONE weighted-random component of the
+        // premix (a splash separates a mix back into its pigments); many
+        // near, few far (u² bias); far droplets streak; gravity favors the
         // downward throw and the fluid gets an outward shove
         for (let i = 0, n = 12; i < n; i++) {
           const a = (i / n) * Math.PI * 2 + rand(-0.25, 0.25);
@@ -561,7 +625,7 @@ wc.paint(0.5, 0.5, 0.06, 'blue', 0.8);
           const dy = Math.sin(a) * (Math.sin(a) > 0 ? 1.15 : 0.85);
           const px = x + Math.cos(a) * d, py = y + dy * d;
           const size = Math.max(0.004, R * (0.16 - 0.11 * u)), s = 0.55 - 0.25 * u;
-          const p = pig();                           // droplet + its streak share an ink
+          const p = mixComponent(m);                 // droplet + its streak share a pigment
           wc.paint(px, py, size, p, s);
           if (d > R * 1.5) wc.paint(px + Math.cos(a) * size * 2, py + dy * size * 2, size * 0.6, p, s * 0.7);
           if (i % 3 === 0) wc.stir(x + Math.cos(a) * R * 0.5, y + dy * R * 0.5, Math.cos(a) * 3, dy * 3, R * 0.5);
@@ -570,27 +634,31 @@ wc.paint(0.5, 0.5, 0.06, 'blue', 0.8);
 
       // ---- viewer controls: inks · pause · reset · save ----
       const controls = document.getElementById('hero-controls');
-      let palName = hour, paused = false;
       const dots = controls.querySelectorAll('.hc-dot');
+      const inkDots = controls.querySelectorAll('.hc-ink');
+      const paintInkDots = () => inkDots.forEach((d, i) => {
+        d.style.background = mixHex(MIXES[palName][i]);
+        d.dataset.tip = MIXES[palName][i].n;
+      });
       dots.forEach((dot) => {
         const name = dot.dataset.pal;
-        const [a, b, c] = PALETTES[name].map((p) => p.color);
+        const [a, b, c] = MIXES[name].map(mixHex);
         dot.style.background = `conic-gradient(${a} 0 33.4%, ${b} 0 66.7%, ${c} 0)`;
         dot.setAttribute('aria-pressed', String(name === palName));
         dot.addEventListener('click', () => {
-          wc.palette(PALETTES[palName = name]);      // live re-ink: the painting recomposites
+          // premixes are physical — new strokes (and the next generation)
+          // carry the new palette; paint already on the sheet keeps its
+          // color, exactly like a real palette swap mid-painting
+          palName = name;
+          bodyMix = MIXES[palName][gen % 3];
           hintFor(name);
-          paintInkDots();                            // the three brush inks changed with it
+          paintInkDots();
           dots.forEach((d) => d.setAttribute('aria-pressed', String(d === dot)));
         });
       });
-      const inkDots = controls.querySelectorAll('.hc-ink');
-      const paintInkDots = () => inkDots.forEach((d, i) => { d.style.background = PALETTES[palName][i].color; });
-      let inkIdx = 0;
-      wc.pigment(0);                                 // the pointer brush paints this ink
       paintInkDots();
       inkDots.forEach((dot, i) => dot.addEventListener('click', () => {
-        wc.pigment(inkIdx = i);
+        inkIdx = i;
         inkDots.forEach((d, j) => d.setAttribute('aria-pressed', String(j === i)));
       }));
       const pauseBtn = document.getElementById('hc-pause');
@@ -610,7 +678,9 @@ wc.paint(0.5, 0.5, 0.06, 'blue', 0.8);
       document.getElementById('hc-reset').addEventListener('click', () => {
         if (paused) { paused = false; wc.resume(); setPauseUI(); }
         wc.clearPaint();                             // keeps every setting; wipes the sheet
-        quietUntil = performance.now() + 9000;       // the fresh sheet is the human's first
+        wc.fadePainting(0);
+        spawnGen();                                  // a fresh organism takes the clean sheet
+        quietUntil = performance.now() + 9000;       // ...after the human's first marks
       });
       document.getElementById('hc-save').addEventListener('click', async () => {
         const blob = await wc.exportImage({ asBlob: true });
@@ -622,7 +692,8 @@ wc.paint(0.5, 0.5, 0.06, 'blue', 0.8);
       });
       controls.hidden = false;
 
-      // ---- resize: rebuild the grid, then repaint the opening in place ----
+      // ---- resize: rebuild the grid (preserving), re-sign the title ----
+      // tips live in normalized coords, so the organism survives rescale
       let lastW = host.clientWidth, lastH = host.clientHeight, rzTimer = 0;
       new ResizeObserver(() => {
         if (Math.abs(host.clientWidth - lastW) < 90 && Math.abs(host.clientHeight - lastH) < 90) return;
@@ -638,7 +709,15 @@ wc.paint(0.5, 0.5, 0.06, 'blue', 0.8);
       // wait for the display face so the underline lands under the real glyphs
       await Promise.race([document.fonts.ready, new Promise((res) => setTimeout(res, 1200))]);
       await opening();
-      if (!reduced) setTimeout(step, rand(7000, 10000));
+      try { wc.brushMode('salt'); } catch (_) {}     // organism grain — after the clean signature
+      if (reduced) {
+        // one still organism: grow synchronously, settle, done
+        spawnGen();
+        for (let i = 0; i < 130 && tips.length; i++) grow();
+        wc.dry();
+      } else {
+        spawnGen();
+      }
     } catch (err) {
       console.warn('Washes hero unavailable, using static fallback:', err);
     }
