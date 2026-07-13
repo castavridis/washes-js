@@ -2721,17 +2721,40 @@ function initGpuSim(gl, GW, GH) {
       }
     }
 
-    // Helper for substep mode — copies g_tmp back into g, clamping high
-    // at MAX_PIGMENT. The 0..N iteration (over the whole grid, not just
-    // the active rect) matches v0.56's behavior; cells outside the
-    // active rect are 0 in both buffers so the loop is just memory cost.
+    // v1.13 — row-band copy between the pigment buffers, restricted to the
+    // active rect padded by one cell. The advection passes write g_tmp only
+    // inside the rect (donor-cell reaches i±1/±GW, hence the pad), so
+    // everywhere else g_tmp and g are already identical from the previous
+    // pre-copy — the old full-grid copies were pure memory traffic
+    // (~9 full-grid passes per simStep at semilag defaults).
+    function _copyRectRows(dst, src, x0, x1, y0, y1) {
+      for (let y = y0; y <= y1; y++) {
+        const a = y * GW + x0;
+        dst.set(src.subarray(a, y * GW + x1 + 1), a);
+      }
+    }
+
+    // Copies g_tmp back into g, clamping high at MAX_PIGMENT. v1.13 —
+    // iterates the active rect padded by one cell instead of 0..N (the
+    // v0.56-compatible full-grid loop): the advection passes only write
+    // g_tmp inside that window, and outside it g_tmp equals g from the
+    // pre-copy, so the clamp-copy there was a per-element no-op.
     function _commitAdvectionCopyback() {
+      if (activeRectIsEmpty()) return;
+      const x0 = Math.max(0, activeMinX - 1),
+        x1 = Math.min(GW - 1, activeMaxX + 1);
+      const y0 = Math.max(0, activeMinY - 1),
+        y1 = Math.min(GH - 1, activeMaxY + 1);
       for (let k = 0; k < 3; k++) {
         const arr = g[k];
         const src = g_tmp[k];
-        for (let i = 0; i < N; i++) {
-          const vv = src[i];
-          arr[i] = vv > MAX_PIGMENT ? MAX_PIGMENT : vv;
+        for (let y = y0; y <= y1; y++) {
+          const yo = y * GW;
+          for (let x = x0; x <= x1; x++) {
+            const i = yo + x;
+            const vv = src[i];
+            arr[i] = vv > MAX_PIGMENT ? MAX_PIGMENT : vv;
+          }
         }
       }
     }
@@ -2854,6 +2877,12 @@ function initGpuSim(gl, GW, GH) {
       if (activeRectIsEmpty()) return;
       const baseAdt = DT * 0.7;
       const mode = _advectionMode;
+      // v1.13 — pre-copy/copyback window: active rect padded one cell
+      // (donor-cell writes reach i±1/±GW; the diffusion stencil reads ±1).
+      const cpx0 = Math.max(0, activeMinX - 1),
+        cpx1 = Math.min(GW - 1, activeMaxX + 1);
+      const cpy0 = Math.max(0, activeMinY - 1),
+        cpy1 = Math.min(GH - 1, activeMaxY + 1);
 
       if (mode === "substep") {
         // Compute global max L1 cell speed in the active rect so we know
@@ -2895,7 +2924,8 @@ function initGpuSim(gl, GW, GH) {
         const perSubstepCfl = maxL1 * subDt;
         const useClampSafety = perSubstepCfl > 1;
         for (let s = 0; s < numSubsteps; s++) {
-          for (let k = 0; k < 3; k++) g_tmp[k].set(g[k]);
+          for (let k = 0; k < 3; k++)
+            _copyRectRows(g_tmp[k], g[k], cpx0, cpx1, cpy0, cpy1);
           _advectStep(subDt, useClampSafety);
           _commitAdvectionCopyback();
         }
@@ -2905,13 +2935,15 @@ function initGpuSim(gl, GW, GH) {
         // Slightly diffusive (bilinear smoothing) which reads as natural
         // soft watercolor blending — typically a feature.
         _lastAdvectionSubsteps = 1;
-        for (let k = 0; k < 3; k++) g_tmp[k].set(g[k]);
+        for (let k = 0; k < 3; k++)
+          _copyRectRows(g_tmp[k], g[k], cpx0, cpx1, cpy0, cpy1);
         _advectStepSemiLagrangian(baseAdt);
         _commitAdvectionCopyback();
       } else {
         // 'standard' or 'clamp' — single pass at baseAdt.
         _lastAdvectionSubsteps = 1;
-        for (let k = 0; k < 3; k++) g_tmp[k].set(g[k]);
+        for (let k = 0; k < 3; k++)
+          _copyRectRows(g_tmp[k], g[k], cpx0, cpx1, cpy0, cpy1);
         _advectStep(baseAdt, mode === "clamp");
         _commitAdvectionCopyback();
       }
@@ -2930,9 +2962,9 @@ function initGpuSim(gl, GW, GH) {
       const arr0 = g[0],
         arr1 = g[1],
         arr2 = g[2];
-      tmp0.set(arr0);
-      tmp1.set(arr1);
-      tmp2.set(arr2);
+      _copyRectRows(tmp0, arr0, cpx0, cpx1, cpy0, cpy1);
+      _copyRectRows(tmp1, arr1, cpx0, cpx1, cpy0, cpy1);
+      _copyRectRows(tmp2, arr2, cpx0, cpx1, cpy0, cpy1);
       const PD = PIGMENT_DIFFUSION;
       for (let y = y0; y <= y1; y++) {
         const yo = y * GW;
