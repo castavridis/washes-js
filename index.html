@@ -440,24 +440,46 @@ wc.paint(0.5, 0.5, 0.06, 'blue', 0.8);
 
       const bloom = ([x, y]) => {                    // wet-on-wet: a body dab + bleeding satellites
         const p = pig();
-        wc.paint(x, y, rand(0.045, 0.07), p, rand(0.45, 0.6));
+        wc.paint(x, y, rand(0.06, 0.095), p, rand(0.45, 0.6));
         for (let i = 0, n = 1 + (Math.random() * 2 | 0); i < n; i++)
-          wc.paint(x + rand(-0.05, 0.05), y + rand(-0.04, 0.04),
-                       rand(0.02, 0.035), (p + 1 + (Math.random() * 2 | 0)) % 3, rand(0.3, 0.45));
+          wc.paint(x + rand(-0.06, 0.06), y + rand(-0.05, 0.05),
+                       rand(0.028, 0.048), (p + 1 + (Math.random() * 2 | 0)) % 3, rand(0.3, 0.45));
       };
       const spray = ([x, y]) => {                    // rainbow-spray technique: random ink per dab
-        const dx = rand(-0.1, 0.1), dy = rand(-0.05, 0.05);
+        const dx = rand(-0.12, 0.12), dy = rand(-0.06, 0.06);
         for (let i = 0, n = 6 + (Math.random() * 3 | 0); i < n; i++)
           wc.paint(x + dx * (i / n) + rand(-0.015, 0.015), y + dy * (i / n) + rand(-0.015, 0.015),
-                       rand(0.007, 0.013), pig(), 0.32);
+                       rand(0.009, 0.017), pig(), 0.32);
       };
       const drift = () => {                          // an eased arc stroke between two anchors
         const a = anchor(), b = anchor();
         const c = [(a[0] + b[0]) / 2 + rand(-0.1, 0.1), (a[1] + b[1]) / 2 + rand(-0.12, 0.12)];
         new WashesTimeline(wc).once(bezier(a, c, b), {
           duration: rand(1700, 2400), easing: 'easeInOut',
-          pigment: pig(), nradius: rand(0.009, 0.015), strength: rand(0.35, 0.5),
+          pigment: pig(), nradius: rand(0.012, 0.02), strength: rand(0.35, 0.5),
         });
+      };
+      const comet = () => {                          // a bold, quick arc that bursts at its tail
+        const a = anchor(), b = anchor();
+        const c = [(a[0] + b[0]) / 2 + rand(-0.14, 0.14), (a[1] + b[1]) / 2 + rand(-0.16, 0.16)];
+        new WashesTimeline(wc)
+          .stroke(bezier(a, c, b), {
+            duration: rand(1100, 1600), easing: 'easeOutCubic',
+            pigment: pig(), nradius: rand(0.016, 0.024), strength: rand(0.45, 0.6),
+          })
+          .call(() => spray(b))
+          .play();
+      };
+      const cascade = () => {                        // blooms stepping down the sheet — the gravity story
+        const tl = new WashesTimeline(wc);
+        let [cx, cy] = anchor(); cy = Math.min(cy, 0.5);
+        for (let i = 0, n = 2 + (Math.random() * 2 | 0); i < n; i++) {
+          const px = cx, py = cy, k = 1 - i * 0.24;  // each step lands smaller, downhill
+          tl.call(() => wc.paint(px, py, rand(0.05, 0.075) * k, pig(), rand(0.4, 0.55)))
+            .wait(rand(450, 750));
+          cx += rand(-0.045, 0.045); cy += rand(0.09, 0.14);
+        }
+        tl.play();
       };
       const tide = () => {                           // tip the basin; always level it again
         if (wc.coverage(0.05) < 0.06) return bloom(anchor());
@@ -489,13 +511,15 @@ wc.paint(0.5, 0.5, 0.06, 'blue', 0.8);
           if (wc.coverage(0.12) > 0.45) tide();      // crowded — move paint, let the fade thin it
           else {
             const r = Math.random();
-            if (r < 0.38) bloom(anchor());
-            else if (r < 0.72) drift();
-            else if (r < 0.92) spray(anchor());
+            if (r < 0.30) bloom(anchor());
+            else if (r < 0.54) drift();
+            else if (r < 0.72) comet();
+            else if (r < 0.86) spray(anchor());
+            else if (r < 0.95) cascade();
             else tide();
           }
         }
-        setTimeout(step, rand(8000, 13000));
+        setTimeout(step, rand(6500, 10500));
       };
 
       // ---- interaction: drag paints (engine-native); a clean tap splashes ----
@@ -506,10 +530,13 @@ wc.paint(0.5, 0.5, 0.06, 'blue', 0.8);
         const rect = host.getBoundingClientRect();
         const x = (e.clientX - rect.left) / rect.width, y = (e.clientY - rect.top) / rect.height;
         const R = wc.brushSize();  // v2 brushSize() IS the normalized radius fraction
-        // impact blob — overlapping off-center dabs read as one irregular splat
-        wc.paint(x, y, R * 0.7, inkIdx, 0.85);
+        // impact blob — overlapping off-center dabs read as one irregular splat.
+        // Central size is random, up to half the brush; inks are random per
+        // dab (the pre-splash-rework behavior — every tap mixes the palette).
+        const C = R * rand(0.3, 0.5);
+        wc.paint(x, y, C, pig(), 0.85);
         for (let i = 0; i < 3; i++)
-          wc.paint(x + rand(-R, R) * 0.3, y + rand(-R, R) * 0.3, R * rand(0.4, 0.6), inkIdx, 0.6);
+          wc.paint(x + rand(-C, C) * 0.4, y + rand(-C, C) * 0.4, C * rand(0.55, 0.85), pig(), 0.6);
         // ejecta — many near droplets, few far (u² bias); size and ink thin with
         // distance; far droplets leave a short radial streak; gravity favors the
         // downward throw and the fluid gets an outward shove
@@ -519,8 +546,9 @@ wc.paint(0.5, 0.5, 0.06, 'blue', 0.8);
           const dy = Math.sin(a) * (Math.sin(a) > 0 ? 1.15 : 0.85);
           const px = x + Math.cos(a) * d, py = y + dy * d;
           const size = Math.max(0.004, R * (0.16 - 0.11 * u)), s = 0.55 - 0.25 * u;
-          wc.paint(px, py, size, inkIdx, s);
-          if (d > R * 1.5) wc.paint(px + Math.cos(a) * size * 2, py + dy * size * 2, size * 0.6, inkIdx, s * 0.7);
+          const p = pig();                           // droplet + its streak share an ink
+          wc.paint(px, py, size, p, s);
+          if (d > R * 1.5) wc.paint(px + Math.cos(a) * size * 2, py + dy * size * 2, size * 0.6, p, s * 0.7);
           if (i % 3 === 0) wc.stir(x + Math.cos(a) * R * 0.5, y + dy * R * 0.5, Math.cos(a) * 3, dy * 3, R * 0.5);
         }
       }, { passive: true });
