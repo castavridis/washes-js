@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, engine-review-p0, engine-review-p1]
+    branches: [main, "engine-review-*"]
   pull_request:
 
 jobs:

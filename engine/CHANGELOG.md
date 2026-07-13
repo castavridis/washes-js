@@ -2,6 +2,32 @@
 
 All notable changes to **washes** are documented here. Dates are ISO 8601.
 
+## [1.15.0] — 2026-07-12
+
+P1 slice 2: the GPU dual-copy is now generated, not hand-maintained, and
+"headless" finally means bare Node.
+
+### Changed
+- **The embedded GPU sim is generated from `washes-gpu-sim.js`.** The
+  standalone entry is the source of truth; the block inside `washes.js`
+  sits between `GPU-SIM SYNC` sentinels and is rebuilt by
+  `npm run sync:gpu` (`scripts/sync-gpu.cjs`). The transform is
+  byte-stable — its first run reproduced the previously hand-maintained
+  copy exactly. CI enforces both `sync-gpu --check` and the shader-diff
+  guard, so a one-sided edit fails two ways. (Full module-level
+  single-sourcing still arrives with the extraction; this removes the
+  hand-sync hazard today.)
+
+### Added
+- **`createHeadless()` runs in bare Node.** It previously dereferenced
+  `document`, so "headless" meant "headless if the caller stubs ~100
+  lines of DOM first" (exactly what the test harness does). When no
+  `document` exists it now installs a minimal internal environment on
+  globalThis — the same surface the harness proved sufficient to run
+  the entire engine. Browsers and jsdom-style embedders never reach it.
+  `tests/headless-bare.test.mjs` exercises create/paint/coverage/
+  sample/state/diagnose/destroy with deliberately no shim; in CI.
+
 ## [1.14.0] — 2026-07-12
 
 The first P1 slice: render-path work under a new byte-level safety net,

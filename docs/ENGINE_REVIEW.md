@@ -32,6 +32,17 @@ packaging, and GPU paths. Line references are into `engine/src/washes.js` /
 > closure item was examined and deliberately left (hoisting trades a 10 Hz
 > allocation for per-cell context reads). Still open in P1: the extraction
 > itself (#6), true headless (#7), worker sim (#8).
+>
+> **P1 slice 2 (branch `engine-review-p1-slice2` → engine 1.15.0):** the
+> GPU dual-copy is now *generated* — `washes-gpu-sim.js` is the source of
+> truth and `scripts/sync-gpu.cjs` rebuilds the embedded block between
+> sentinels (byte-stable transform; CI runs `--check` alongside the shader
+> guard). And #7's interim deliverable landed: `createHeadless()` installs
+> a minimal internal environment when no DOM exists, so it runs in bare
+> Node with zero caller-side shims (`tests/headless-bare.test.mjs`). Still
+> open in P1: the module extraction (#6 proper, including the
+> environment-free core that retires the interim shim) and the worker sim
+> (#8).
 
 ---
 
