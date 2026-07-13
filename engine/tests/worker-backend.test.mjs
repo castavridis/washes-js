@@ -32,6 +32,10 @@ const LIVE = {
   edgeMode: 'closed-gravity', fadeEnabled: false, dVel: null,
   VEL_CLAMP: 1.5, PIGMENTS: [pigment, pigment, pigment],
 };
+// the worker must start from a PRISTINE live snapshot: the local run's mask
+// stamp mutates LIVE via the commit hook, and the worker's own mask stamp
+// performs the same mutation on its own copy
+const LIVE_INITIAL = structuredClone(LIVE);
 
 // ---- local reference run ----
 const F = () => new Float32Array(N);
@@ -45,6 +49,13 @@ const local = createSimCore({
   bindings: () => ({ GW, GH, N, ...BINDINGS, ...fields }),
   live: () => LIVE,
   markCanvasActive: () => {},
+  commitMaskStamp: (rMinX, rMaxX, rMinY, rMaxY) => {
+    LIVE.maskActive = true;
+    if (rMinX < LIVE.maskRectMinX) LIVE.maskRectMinX = rMinX;
+    if (rMaxX > LIVE.maskRectMaxX) LIVE.maskRectMaxX = rMaxX;
+    if (rMinY < LIVE.maskRectMinY) LIVE.maskRectMinY = rMinY;
+    if (rMaxY > LIVE.maskRectMaxY) LIVE.maskRectMaxY = rMaxY;
+  },
 });
 local.generatePaper();
 // a wet, moving pigment blob — exercises diffusion, advection, gravity,
@@ -62,18 +73,35 @@ for (let dy = -3; dy <= 3; dy++) {
 // snapshot the shared starting state BEFORE stepping
 const start = packState(fields, allocState(N));
 
+// v1.20 — the run now PAINTS midway on both sides: resolved stamps of every
+// worker-routable kind (pigment, rainbow-with-carried-weights, water, mask),
+// applied through core.applyStamp locally and via backend.stampBrush remotely.
+const STAMPS = [
+  { kind: 'pigment', cx: 30, cy: 20, radius: 6, strength: 0.8, channel: 1,
+    depositMult: 1, wetGain: 0.45, presGain: 0.18, texture: null },
+  { kind: 'rainbow', cx: 60, cy: 50, radius: 7, strength: 0.7,
+    weights: [0.5, 0.3, 0.2], depositMult: 1, wetGain: 0.45, presGain: 0.18 },
+  { kind: 'water', cx: 48, cy: 36, radius: 8, strength: 0.6,
+    wetGain: 0.55, presGain: 0.18, liftGain: 0.18 },
+  { kind: 'mask', cx: 75, cy: 30, radius: 5, strength: 0.9 },
+];
+
 // mirror the upload policy on the local side so both runs begin identically
 local.setActiveRectFull();
+for (let s = 0; s < STEPS; s++) local.simStep();
+for (const s of STAMPS) { local.expandActiveRect(s.cx, s.cy, s.radius); local.applyStamp(s); }
 for (let s = 0; s < STEPS; s++) local.simStep();
 const localEnd = packState(fields, allocState(N));
 
 // ---- worker run ----
 const worker = new Worker(new URL('../src/washes-sim-worker.js', import.meta.url));
 const backend = createWorkerBackend(wrapWorkerPort(worker), {
-  GW, GH, bindings: BINDINGS, live: LIVE,
+  GW, GH, bindings: BINDINGS, live: LIVE_INITIAL,
 });
 await backend.ready;
 await backend.uploadState(start);
+await backend.stepN(STEPS);
+backend.stampBrush(STAMPS);
 await backend.stepN(STEPS);
 const workerEnd = allocState(N);
 await backend.downloadState(workerEnd);
@@ -97,8 +125,11 @@ const sum = (a) => a.reduce((s, x) => s + x, 0);
 assert.ok(sum(workerEnd.deposit) > 0.5, 'pigment deposited during the run');
 assert.ok(sum(workerEnd.fluid) !== 0, 'fluid state evolved');
 
-// contract edges
-assert.throws(() => backend.stampBrush([]), /Phase 1/, 'stampBrush fails loud with guidance');
+// contract edges — raw (unresolved) stamps and texture stamps fail loud
+assert.throws(() => backend.stampBrush([{ cx: 1, cy: 1, radius: 2, brushType: 0 }]),
+  /RESOLVED/, 'raw scaffold stamps fail loud with guidance');
+assert.throws(() => backend.stampBrush([{ kind: 'pigment', cx: 1, cy: 1, radius: 2, strength: 1, channel: 0, depositMult: 1, wetGain: 0.45, presGain: 0.18, texture: { field: null } }]),
+  /texture/, 'texture stamps fail loud pending the brush-field protocol');
 backend.destroy();
 await new Promise((res) => worker.on('exit', res));
 

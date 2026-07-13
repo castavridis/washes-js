@@ -90,6 +90,18 @@ packaging, and GPU paths. Line references are into `engine/src/washes.js` /
 > Phase 1 brush extraction, and browser frame-loop integration
 > (render-latency model, stamp routing, rebuild protocol) is the
 > remaining #8 work.
+>
+> **P1 slice 7 (branch `engine-review-p1-slice7` → engine 1.20.0):
+> migration Phase 1 — the worker paints.** The six paintAt deposit
+> branches moved verbatim into the core as `applyStamp(resolvedStamp)`;
+> paintAt keeps all UI semantics and delegates; the worker backend's
+> `stampBrush` now routes pigment/rainbow/water/lift/paper/mask stamps
+> (texture stamps fail loud pending a brush-field upload protocol).
+> Coverage landed BEFORE the surgery (deterministic clock + tool-brushes
+> golden); after it, every golden is bit-exact (249 checks) and the
+> worker parity test paints mid-run — 240 steps with stamps on both
+> paths, byte-identical. Remaining #8: browser frame-loop integration;
+> texture brush-field protocol.
 
 ---
 

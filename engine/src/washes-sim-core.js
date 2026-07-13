@@ -1487,11 +1487,266 @@ export function createSimCore(env) {
     }
 
 
+  // ============================================================
+  // BRUSH STAMP DEPOSIT (v1.20 — migration Phase 1)
+  // Moved verbatim from the host's paintAt: the six deposit branches,
+  // driven by a FULLY RESOLVED stamp. The host (or the worker protocol)
+  // resolves everything UI-flavored before calling — pigment identity to
+  // a channel or weights (rainbow included), load sliders to gains,
+  // brush mode to a texture descriptor carrying the noise field — so
+  // this function is pure field math and runs identically in-process or
+  // in a worker.
+  //
+  //   stamp = {
+  //     kind: 'pigment'|'rainbow'|'water'|'lift'|'paper'|'mask',
+  //     cx, cy, radius,            // grid units, already canvas-scaled
+  //     strength,
+  //     // pigment:  channel, depositMult, wetGain, presGain, texture|null
+  //     // rainbow:  weights [w0,w1,w2], depositMult, wetGain, presGain
+  //     // water:    wetGain, presGain, liftGain
+  //     // paper:    wetGain
+  //     // texture:  { field, baseThresh, bandHalf, anisoK, paperWeight,
+  //     //             bristleK, motionX, motionY }
+  //   }
+  //
+  // Callers own expandActiveRect + the wake hook (the host's paintAt
+  // keeps doing both before delegating); mask stamps report the cells
+  // that crossed the threshold via env.commitMaskStamp(minX, maxX,
+  // minY, maxY) so mask-rect bookkeeping stays host-owned.
+  // ============================================================
+  function applyStamp(stamp) {
+    const gx = stamp.cx,
+      gy = stamp.cy,
+      strength = stamp.strength;
+    const r = stamp.radius;
+    const r2 = r * r;
+    const minX = Math.max(0, Math.floor(gx - r));
+    const maxX = Math.min(GW - 1, Math.ceil(gx + r));
+    const minY = Math.max(0, Math.floor(gy - r));
+    const maxY = Math.min(GH - 1, Math.ceil(gy + r));
+
+    if (stamp.kind === "mask") {
+      let anyAboveThreshold = false;
+      let rMinX = GW,
+        rMaxX = -1,
+        rMinY = GH,
+        rMaxY = -1;
+      for (let py = minY; py <= maxY; py++) {
+        for (let px = minX; px <= maxX; px++) {
+          const dx = px - gx,
+            dy = py - gy;
+          const d2 = dx * dx + dy * dy;
+          if (d2 > r2) continue;
+          const i = py * GW + px;
+          const falloff = 1 - Math.sqrt(d2) / r;
+          const m = mask[i] + falloff * strength;
+          mask[i] = m > 1 ? 1 : m;
+          if (mask[i] > MASK_THRESHOLD) {
+            anyAboveThreshold = true;
+            if (px < rMinX) rMinX = px;
+            if (px > rMaxX) rMaxX = px;
+            if (py < rMinY) rMinY = py;
+            if (py > rMaxY) rMaxY = py;
+          }
+        }
+      }
+      if (anyAboveThreshold && env.commitMaskStamp) {
+        env.commitMaskStamp(rMinX, rMaxX, rMinY, rMaxY);
+        _refreshLive(); // the host just updated mask state — re-read it
+      }
+      return;
+    }
+
+    if (stamp.kind === "water") {
+      const wetGain = stamp.wetGain;
+      const presGain = stamp.presGain;
+      const liftGain = stamp.liftGain;
+      for (let py = minY; py <= maxY; py++) {
+        for (let px = minX; px <= maxX; px++) {
+          const dx = px - gx,
+            dy = py - gy;
+          const d2 = dx * dx + dy * dy;
+          if (d2 > r2) continue;
+          const i = py * GW + px;
+          if (maskActive && mask[i] > MASK_THRESHOLD) continue;
+          const falloff = 1 - Math.sqrt(d2) / r;
+          const f2 = falloff * falloff;
+          const ww = wet[i] + wetGain * falloff;
+          wet[i] = ww > 1 ? 1 : ww;
+          pressure[i] += presGain * f2;
+          const liftFrac = liftGain * f2;
+          if (liftFrac > 0) {
+            for (let k = 0; k < 3; k++) {
+              const dval = d[k][i];
+              if (dval < 0.001) continue;
+              const lift = dval * liftFrac;
+              d[k][i] = dval - lift;
+              const nv = g[k][i] + lift;
+              g[k][i] = nv > MAX_PIGMENT ? MAX_PIGMENT : nv;
+            }
+          }
+        }
+      }
+      return;
+    }
+
+    if (stamp.kind === "lift") {
+      for (let py = minY; py <= maxY; py++) {
+        for (let px = minX; px <= maxX; px++) {
+          const dx = px - gx,
+            dy = py - gy;
+          const d2 = dx * dx + dy * dy;
+          if (d2 > r2) continue;
+          const i = py * GW + px;
+          if (maskActive && mask[i] > MASK_THRESHOLD) continue;
+          const falloff = 1 - Math.sqrt(d2) / r;
+          const f2 = falloff * falloff;
+          const subFrac = 0.22 * f2;
+          if (subFrac <= 0) continue;
+          const keep = 1 - subFrac;
+          for (let k = 0; k < 3; k++) {
+            g[k][i] *= keep;
+            d[k][i] *= keep;
+          }
+        }
+      }
+      return;
+    }
+
+    if (stamp.kind === "paper") {
+      const wetGain = stamp.wetGain;
+      for (let py = minY; py <= maxY; py++) {
+        for (let px = minX; px <= maxX; px++) {
+          const dx = px - gx,
+            dy = py - gy;
+          const d2 = dx * dx + dy * dy;
+          if (d2 > r2) continue;
+          const i = py * GW + px;
+          if (maskActive && mask[i] > MASK_THRESHOLD) continue;
+          const falloff = 1 - Math.sqrt(d2) / r;
+          const f2 = falloff * falloff;
+          const clearAmount = strength * f2;
+          const keep = Math.max(0, 1 - clearAmount);
+          d[0][i] *= keep;
+          d[1][i] *= keep;
+          d[2][i] *= keep;
+          g[0][i] *= keep;
+          g[1][i] *= keep;
+          g[2][i] *= keep;
+          const wetAdd = f2 * strength * wetGain;
+          const nw = wet[i] + wetAdd;
+          wet[i] = nw > 1 ? 1 : nw;
+        }
+      }
+      return;
+    }
+
+    if (stamp.kind === "rainbow") {
+      const w0 = stamp.weights[0],
+        w1 = stamp.weights[1],
+        w2 = stamp.weights[2];
+      const g0 = g[0],
+        g1 = g[1],
+        g2 = g[2];
+      const wetGain = stamp.wetGain;
+      const presGain = stamp.presGain;
+      const depositMult = stamp.depositMult;
+      for (let py = minY; py <= maxY; py++) {
+        for (let px = minX; px <= maxX; px++) {
+          const dx = px - gx,
+            dy = py - gy;
+          const d2 = dx * dx + dy * dy;
+          if (d2 > r2) continue;
+          const i = py * GW + px;
+          if (maskActive && mask[i] > MASK_THRESHOLD) continue;
+          const falloff = 1 - Math.sqrt(d2) / r;
+          const f2 = falloff * falloff;
+          const add = strength * f2 * depositMult;
+          let na = g0[i] + add * w0;
+          if (na > MAX_PIGMENT) na = MAX_PIGMENT;
+          g0[i] = na;
+          na = g1[i] + add * w1;
+          if (na > MAX_PIGMENT) na = MAX_PIGMENT;
+          g1[i] = na;
+          na = g2[i] + add * w2;
+          if (na > MAX_PIGMENT) na = MAX_PIGMENT;
+          g2[i] = na;
+          const ww = wet[i] + wetGain * falloff;
+          wet[i] = ww > 1 ? 1 : ww;
+          pressure[i] += presGain * f2;
+        }
+      }
+      return;
+    }
+
+    // kind === 'pigment' — single channel, optional texture modulation
+    const arr = g[stamp.channel];
+    const pigDepositMult = stamp.depositMult;
+    const tex = stamp.texture;
+    const textureActive = !!tex;
+    const textureField = tex ? tex.field : null;
+    const textureBaseThresh = tex ? tex.baseThresh : 0;
+    const textureBandHalf = tex ? tex.bandHalf : 0.05;
+    const textureAnisoK = tex ? tex.anisoK : 0;
+    const texturePaperWeight = tex ? tex.paperWeight : 0.55;
+    const textureMotionX = tex ? tex.motionX : 0;
+    const textureMotionY = tex ? tex.motionY : 0;
+    const textureBristleK = tex ? tex.bristleK : 0;
+    const effPigWetGain = stamp.wetGain;
+    const effPigPresGain = stamp.presGain;
+    const rInv = r > 0 ? 1 / r : 0;
+
+    for (let py = minY; py <= maxY; py++) {
+      for (let px = minX; px <= maxX; px++) {
+        const dx = px - gx,
+          dy = py - gy;
+        const d2 = dx * dx + dy * dy;
+        if (d2 > r2) continue;
+        const i = py * GW + px;
+        if (maskActive && mask[i] > MASK_THRESHOLD) continue;
+        const falloff = 1 - Math.sqrt(d2) / r;
+        const f2 = falloff * falloff;
+        let textureMul = 1.0;
+        if (textureActive) {
+          let nval = textureField ? textureField[i] : 0.5;
+          if (texturePaperWeight > 0) {
+            nval = nval * (1 - texturePaperWeight) +
+                   paperH[i] * texturePaperWeight;
+          }
+          if (textureAnisoK !== 0) {
+            const dxN = dx * rInv,
+              dyN = dy * rInv;
+            const align = dxN * textureMotionX + dyN * textureMotionY;
+            nval += textureAnisoK * align * 0.05;
+          }
+          const lo = textureBaseThresh - textureBandHalf;
+          const hi = textureBaseThresh + textureBandHalf;
+          const t = (nval - lo) / Math.max(1e-6, hi - lo);
+          const smoothT = t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t);
+          textureMul = smoothT;
+          if (textureBristleK > 0) {
+            const r1 = (((i * 2654435761) >>> 0) & 0xffff) / 0xffff;
+            if (r1 < textureBristleK) textureMul = 0;
+          }
+          if (textureMul <= 0) continue;
+        }
+        let na = arr[i] + strength * f2 * pigDepositMult * textureMul;
+        if (na > MAX_PIGMENT) na = MAX_PIGMENT;
+        arr[i] = na;
+        const ww =
+          wet[i] + effPigWetGain * falloff * (textureActive ? textureMul : 1);
+        wet[i] = ww > 1 ? 1 : ww;
+        pressure[i] += effPigPresGain * f2 * (textureActive ? textureMul : 1);
+      }
+    }
+  }
+
   refreshBindings();
   _refreshLive();
   const _rectOut = { minX: 0, maxX: -1, minY: 0, maxY: -1 };
   return {
     refreshBindings,
+    applyStamp(stamp) { _refreshLive(); return applyStamp(stamp); },
     rectBounds() {
       _rectOut.minX = activeMinX; _rectOut.maxX = activeMaxX;
       _rectOut.minY = activeMinY; _rectOut.maxY = activeMaxY;

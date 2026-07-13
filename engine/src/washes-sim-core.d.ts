@@ -58,7 +58,33 @@ export interface SimCoreEnv {
   live(): SimCoreLive;
   /** Wake hook — invoked where the closure original called markCanvasActive. */
   markCanvasActive?(): void;
+  /** Mask stamps report the cells that crossed the threshold; the host owns
+   *  the mask-rect bookkeeping (v1.20). */
+  commitMaskStamp?(minX: number, maxX: number, minY: number, maxY: number): void;
 }
+
+/** A fully RESOLVED brush stamp (v1.20 — migration Phase 1). The caller
+ *  resolves everything UI-flavored: pigment identity to a channel or
+ *  weights, load sliders to gains, brush mode to a texture descriptor.
+ *  Callers also own expandActiveRect + the wake hook. */
+export type ResolvedStamp =
+  | { kind: 'mask'; cx: number; cy: number; radius: number; strength: number }
+  | { kind: 'lift'; cx: number; cy: number; radius: number; strength: number }
+  | { kind: 'water'; cx: number; cy: number; radius: number; strength: number;
+      wetGain: number; presGain: number; liftGain: number }
+  | { kind: 'paper'; cx: number; cy: number; radius: number; strength: number;
+      wetGain: number }
+  | { kind: 'rainbow'; cx: number; cy: number; radius: number; strength: number;
+      weights: [number, number, number]; depositMult: number;
+      wetGain: number; presGain: number }
+  | { kind: 'pigment'; cx: number; cy: number; radius: number; strength: number;
+      channel: number; depositMult: number; wetGain: number; presGain: number;
+      texture: {
+        field: Float32Array | null;
+        baseThresh: number; bandHalf: number; anisoK: number;
+        paperWeight: number; bristleK: number;
+        motionX: number; motionY: number;
+      } | null };
 
 export interface SimCore {
   /** Re-snapshot bindings. MUST be called after the host rebuilds arrays/dims. */
@@ -68,6 +94,8 @@ export interface SimCore {
   lastAdvectionSubsteps(): number;
 
   simStep(params?: unknown): void;
+  /** Apply one fully resolved brush stamp (v1.20). */
+  applyStamp(stamp: ResolvedStamp): void;
   movePigment(): void;
   transferPigment(): void;
   diffuseWet(): void;

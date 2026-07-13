@@ -64,6 +64,15 @@ port.on((msg) => {
         bindings: () => ({ ...dims, ...bindConsts, ...fields }),
         live: () => live,
         markCanvasActive: () => {},
+        // mask stamps report threshold-crossing cells; the worker owns its
+        // live mask state, so expand it here (same logic as the host glue)
+        commitMaskStamp: (rMinX, rMaxX, rMinY, rMaxY) => {
+          live.maskActive = true;
+          if (rMinX < live.maskRectMinX) live.maskRectMinX = rMinX;
+          if (rMaxX > live.maskRectMaxX) live.maskRectMaxX = rMaxX;
+          if (rMinY < live.maskRectMinY) live.maskRectMinY = rMinY;
+          if (rMaxY > live.maskRectMaxY) live.maskRectMaxY = rMaxY;
+        },
       });
       if (msg.generatePaper) core.generatePaper();
       port.post({ t: 'ready' });
@@ -78,6 +87,20 @@ port.on((msg) => {
       const n = msg.n == null ? 1 : msg.n;
       for (let i = 0; i < n; i++) core.simStep(msg.params);
       if (msg.id != null) port.post({ t: 'stepped', id: msg.id, n });
+      break;
+    }
+    case 'stamp': {
+      // v1.20 — resolved stamps (see washes-sim-core.js applyStamp). The
+      // caller owns rect growth, so mirror the host's paintAt preamble.
+      for (const s of msg.stamps) {
+        if (s.texture) {
+          port.post({ t: 'error', error: 'texture stamps need a brush-field upload protocol (follow-up); send kind pigment/rainbow/water/lift/paper/mask' });
+          continue;
+        }
+        core.expandActiveRect(s.cx, s.cy, s.radius);
+        core.applyStamp(s);
+      }
+      if (msg.id != null) port.post({ t: 'stamped', id: msg.id });
       break;
     }
     case 'upload': {

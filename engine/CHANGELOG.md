@@ -2,6 +2,39 @@
 
 All notable changes to **washes** are documented here. Dates are ISO 8601.
 
+## [1.20.0] — 2026-07-13
+
+P1 slice 7 (migration Phase 1): the brush deposit lives in the core —
+the worker paints.
+
+### Changed
+- **`applyStamp` — the six paintAt deposit branches, extracted verbatim
+  into the sim core.** Stamps are FULLY RESOLVED by the caller (pigment
+  identity → channel or rainbow weights, load sliders → gains, brush
+  mode → a texture descriptor carrying the noise field), so the deposit
+  is pure field math and runs identically in-process or in a worker.
+  `paintAt` keeps everything UI-flavored — resolution, the GPU-forward
+  branch, the rainbow clock, stroke-motion tracking — and delegates.
+  Mask stamps report threshold-crossing cells via the new
+  `env.commitMaskStamp` hook so mask-rect bookkeeping stays host-owned.
+- **The worker backend accepts stamps.** `stampBrush(resolvedStamps)`
+  posts to the worker, which applies them with the identical core math
+  (pigment / rainbow / water / lift / paper / mask). The one remaining
+  gap is texture-mode stamps — their noise field is a grid-sized host
+  array needing a brush-field upload protocol (follow-up) — and they
+  fail loud with that guidance, as do raw unresolved stamps.
+
+### Testing
+- Golden coverage landed BEFORE the surgery: a deterministic
+  `performance.now` in the DOM shim (verified benign — all prior goldens
+  bit-exact under it) plus the `tool-brushes` equivalence scenario
+  exercising every branch (rainbow included, now deterministic). After
+  the extraction: every golden still bit-exact (249 checks).
+- The worker parity test now paints mid-run: 240 steps with
+  pigment/rainbow/water/mask stamps applied locally via `applyStamp` and
+  remotely via `stampBrush` are **bit-exact** across all four state
+  planes — including the symmetric mask-commit hooks on both sides.
+
 ## [1.19.0] — 2026-07-12
 
 P1 slice 6: the worker backend — the simulation runs off-thread.

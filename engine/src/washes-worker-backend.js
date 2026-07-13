@@ -111,12 +111,32 @@ export function createWorkerBackend(port, opts) {
       return request({ t: 'step', n: 0 });
     },
 
-    stampBrush() {
-      throw new Error(
-        'washes worker backend: brush stamps are not routed yet (migration Phase 1 — ' +
-        'the deposit math lives in the host). Use the CPU backend for interactive ' +
-        'brushes, or paint into a state array and uploadState().'
-      );
+    /**
+     * v1.20 — accepts RESOLVED stamps (the washes-sim-core applyStamp
+     * shape: kind + grid coords + pre-resolved gains/weights), which the
+     * worker applies with the identical deposit math. Texture-mode stamps
+     * are the one remaining gap: their noise field is a grid-sized host
+     * array that needs a brush-field upload protocol (follow-up) — the
+     * worker rejects them with that guidance.
+     */
+    stampBrush(stamps) {
+      if (destroyed || !stamps || !stamps.length) return;
+      for (const s of stamps) {
+        if (!s.kind) {
+          throw new Error(
+            'washes worker backend: expected RESOLVED stamps ({kind, cx, cy, radius, ' +
+            'strength, …} — see washes-sim-core applyStamp). Raw pointer stamps are ' +
+            'resolved by the host paintAt; build the resolved form instead.'
+          );
+        }
+        if (s.texture) {
+          throw new Error(
+            'washes worker backend: texture-mode stamps are not routed yet ' +
+            '(their noise field needs a brush-field upload protocol).'
+          );
+        }
+      }
+      port.post({ t: 'stamp', stamps });
     },
 
     uploadState(state) {
