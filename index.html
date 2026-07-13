@@ -362,12 +362,12 @@ wc.paintNorm(0.5, 0.5, 0.06, 'blue', 0.8);
       const host = document.getElementById('wash-hero');
       const wc = Washes.create(host, { pigments: PALETTES[hour] });
       wc.paperColor('#faf5ec');                      // seamless with the page
-      wc.evaporation(REVEAL_BLUE.settings.evaporation);
+      wc.evaporation(15);
       wc.flow(REVEAL_BLUE.settings.flow);
       wc.quality('auto');                            // resolution belongs to the governor
       wc.fadePainting(45000);                        // 45s half-life: old gestures ghost away
       wc.runUntilDry(true);
-      wc.paintLoad(0.25).waterLoad(0.2);
+      wc.paintLoad(0.075).waterLoad(2);
       wc.edgeMode('closed-gravity');                 // sheet keeps its mass, but feels the tilt
       wc.gravityDirection('down');
       wc.gravityStrength(1);                         // full pull — washes run down the page
