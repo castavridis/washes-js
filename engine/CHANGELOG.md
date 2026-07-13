@@ -2,6 +2,37 @@
 
 All notable changes to **washes** are documented here. Dates are ISO 8601.
 
+## [1.19.0] — 2026-07-12
+
+P1 slice 6: the worker backend — the simulation runs off-thread.
+
+### Added
+- **`washes/worker-backend` + `washes/sim-worker`.** A SimBackend
+  implementation over a worker-hosted `createSimCore`:
+  `washes-sim-worker.js` is the worker entry (owns its own fields + core,
+  speaks an init/live/step/upload/download/destroy protocol with
+  SimStateArrays crossing as transferables, and runs identically under a
+  browser module Worker and Node's worker_threads via a port adapter);
+  `createWorkerBackend(wrapWorkerPort(worker), opts)` is the host side.
+  Parity is the strongest claim available: because the extracted core is
+  fully deterministic (zero `Math.random` on any path — paper generation
+  is hash-noise), `tests/worker-backend.test.mjs` asserts 120 steps on a
+  real worker thread are **bit-exact** against the in-process core.
+- **`washes/state-codec`** — the SimStateArrays pack/unpack as a shared
+  module (matches the host codec byte-for-byte), plus the transfer-list
+  helper.
+
+### Contract notes (stated in the module header too)
+- `step()` on the worker backend is fire-and-forget
+  (`capabilities.async = true`); `stepN()`/`flush()` are the awaitable
+  forms. The in-process CPU adapter remains the synchronous backend.
+- `stampBrush()` throws with guidance: brush deposit math still lives in
+  the host (`paintAt`), so routing stamps is the migration plan's
+  Phase 1. Interactive painting stays on the CPU backend; batch users
+  paint into a state array and `uploadState()`.
+- Wiring the browser frame loop to this backend (render-latency model,
+  stamp routing, rebuild protocol) is the remaining #8 work.
+
 ## [1.18.0] — 2026-07-12
 
 P1 slice 5: the first SEMANTIC extraction — the simulation core is a real

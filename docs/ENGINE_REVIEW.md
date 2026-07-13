@@ -78,6 +78,18 @@ packaging, and GPU paths. Line references are into `engine/src/washes.js` /
 > DOM, or canvas at all — which also caught two closure leaks the inlined
 > form masks. Remaining in P1: worker backend (#8, now: implement
 > SimBackend over a worker-hosted core) and further part graduations.
+>
+> **P1 slice 6 (branch `engine-review-p1-slice6` → engine 1.19.0): the
+> worker backend exists.** `washes/worker-backend` implements SimBackend
+> over a worker-hosted `createSimCore` (`washes/sim-worker`, portable
+> across browser Workers and node worker_threads; `washes/state-codec`
+> shared). Proven the strongest way available: 120 steps on a real worker
+> thread are **bit-exact** vs the in-process core (possible because the
+> extracted core has zero `Math.random` on any path). Honest edges:
+> `step()` is async fire-and-forget, `stampBrush()` throws pending the
+> Phase 1 brush extraction, and browser frame-loop integration
+> (render-latency model, stamp routing, rebuild protocol) is the
+> remaining #8 work.
 
 ---
 

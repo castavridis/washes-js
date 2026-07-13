@@ -1,6 +1,6 @@
 {
   "name": "washes",
-  "version": "1.18.0",
+  "version": "1.19.0",
   "description": "An interactive watercolor simulation for the browser, built on Curtis et al.'s 1997 SIGGRAPH paper. Three-layer fluid + pigment + paper model with Kubelka-Munk compositing, with an optional WebGL2 GPU backend.",
   "type": "module",
   "main": "./src/index.js",
@@ -26,6 +26,18 @@
       "types": "./src/washes-sim-core.d.ts",
       "import": "./src/washes-sim-core.js",
       "default": "./src/washes-sim-core.js"
+    },
+    "./sim-worker": {
+      "import": "./src/washes-sim-worker.js",
+      "default": "./src/washes-sim-worker.js"
+    },
+    "./worker-backend": {
+      "import": "./src/washes-worker-backend.js",
+      "default": "./src/washes-worker-backend.js"
+    },
+    "./state-codec": {
+      "import": "./src/washes-state-codec.js",
+      "default": "./src/washes-state-codec.js"
     }
   },
   "files": [
@@ -39,6 +51,9 @@
     "src/washes-timeline.d.ts",
     "src/washes-sim-core.js",
     "src/washes-sim-core.d.ts",
+    "src/washes-sim-worker.js",
+    "src/washes-worker-backend.js",
+    "src/washes-state-codec.js",
     "src/shaders/brush_stamp.frag",
     "dist/washes.standalone.js",
     "README.md",
@@ -81,7 +96,8 @@
     "test:browser": "playwright test",
     "build": "node scripts/build-standalone.cjs",
     "prepublishOnly": "node scripts/sync-gpu.cjs --check && node scripts/build-standalone.cjs && npm test && npm run test:texture-parity && npm run test:api && npm run test:gpu-sync && npm run test:headless",
-    "test:sim-core": "node tests/sim-core-standalone.test.mjs"
+    "test:sim-core": "node tests/sim-core-standalone.test.mjs",
+    "test:worker": "node tests/worker-backend.test.mjs"
   },
   "sideEffects": [
     "./src/washes.js",
