@@ -43,6 +43,8 @@ jobs:
         run: node tests/events.test.mjs
       - name: v2 additive surface (run/drying/grid/splashNorm/exportImage)
         run: node tests/api-v2-additive.test.mjs
+      - name: createAsync loader (chunked paper bit-exact + ready event)
+        run: node tests/create-async.test.mjs
       - name: compat1 surface (v1 snapshot contract)
         run: node tests/compat-surface.test.mjs
       - name: npm pack sanity (tarball assembles with declared files)

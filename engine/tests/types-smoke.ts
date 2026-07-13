@@ -223,6 +223,19 @@ const ver: string = Washes.version;
 const coreTier: (keyof WashesInstance)[] = Washes.tiers.core;
 console.log(ver, coreTier.length, Washes.brushModes.join(','));
 
+// --- createAsync + ready (v2.2) ---
+async function loaderExample() {
+  const wcAsync: WashesInstance = await Washes.createAsync(hostElement, {
+    canvasScale: 0.6,
+    loader: false,          // bring-your-own veil; listen for 'ready'
+  });
+  await wcAsync.once('ready');            // resolves immediately post-boot
+  const offReady = wcAsync.on('ready', () => {});
+  offReady();
+  wcAsync.destroy();
+}
+loaderExample();
+
 // --- Window global also typed ---
 if (typeof window !== 'undefined') {
   const wc3 = window.Washes.create(hostElement);

@@ -2,6 +2,50 @@
 
 All notable changes to **washes** are documented here. Dates are ISO 8601.
 
+## [2.2.0] — 2026-07-13
+
+**The loader: `createAsync()` + the `'ready'` event.** "It takes a moment
+before it can be used" was measured and grounded: `create()` is
+synchronous, and paper generation is ~80% of its cost (17 sin-based hash
+calls per cell — ~12.7M at 1080p, ~1s of main-thread block). No host-side
+spinner can even *paint* during that block, so the fix has to live in the
+engine.
+
+### Added
+- **`Washes.createAsync(target, opts)` → `Promise<instance>`** — yields a
+  frame (so a veil can paint), creates the instance with paper generation
+  **time-sliced ~12ms per frame** (`deferPaper` internally), and resolves
+  after the first rendered frame. The page never freezes; scrolling stays
+  live through boot.
+- **Built-in loading veil** — a paper-toned cover (matches
+  `opts.paperColor` when given) with three soft drifting wash blobs,
+  faded out on ready. `{ loader: false }` opts out for hosts with their
+  own cover (the landing hero keeps its CSS fallback and passes this).
+  Honors `prefers-reduced-motion` (static veil, no pulse).
+- **`'ready'` event** on both create paths — fires once, on the first
+  frame after the boot render (paper exists, canvas has pixels, input
+  live). Subscribe via `on()`/`once()` or the lowercase DOM mirror.
+  On sync `create()` it fires on the first RAF tick after return, so
+  same-task subscription always catches it.
+- `tests/create-async.test.mjs` — proves the chunked paper is
+  **bit-identical** to the sync path (`saveState().paper` byte-compare),
+  that `createAsync` resolves to a painting instance with the veil torn
+  down, and that `'ready'` fires on both paths. In CI.
+
+### Changed
+- `generatePaper(yFrom?, yTo?)` is row-ranged (sim-core). Rows are
+  independent, so any partition is bit-identical — all 249 goldens
+  unchanged, by construction and by run.
+- Until the deferred paper completes, the frame loop runs nothing else
+  (no sim step, no render, no pending pointer deposits) — the canvas
+  stays blank under the veil rather than painting on half-generated
+  paper. `createHeadless` remains fully synchronous.
+
+### Notes
+- The perf governor's mid-session rebuilds still regenerate paper
+  synchronously (full/half/quarter shifts) — a same-size memo is a
+  natural follow-up if those hitches ever bother in practice.
+
 ## [2.1.1] — 2026-07-13
 
 **Types-only patch — no runtime change of any kind** (the only edit to

@@ -14,7 +14,7 @@ links to everything below. The flagship demo is the
 |---|---|
 | `index.html` | Landing page (GitHub Pages entry) — a live, paintable engine hero plus navigation |
 | `demos/` | `playground.html` (the full instrument, with built-in docs + changelog) · `snake.html` ("Serpentine") · `mask-reveal.html` ("Develop") · `washes-lab.html` (the sim as live texture on a 3D sheet, react-three-fiber) · `washes-physics.html` (rigid bodies painting wet paper, matter.js) |
-| `engine/` | The `washes` npm-shaped package, v2.1.1 — `src/` (core, GPU sim, timeline sidecar, typings, shader), `tests/`, `dist/washes.standalone.js` for classic script tags |
+| `engine/` | The `washes` npm-shaped package, v2.2.0 — `src/` (core, GPU sim, timeline sidecar, typings, shader), `tests/`, `dist/washes.standalone.js` for classic script tags |
 | `presets/` | Saved brush/palette modules (`rainbow-spray`, `reveal-blue`) |
 | `showcase/` | Finished pieces: `pages/` (GRAIN, Surfacing, VANTAGE) · `studio/` (six brand studies) · `personality/` (ten temperament studies) · `labs/` (physics + experiments) |
 | `reference/papers/` | Seven interactive explainers of the papers the engine is built on |
@@ -23,7 +23,7 @@ links to everything below. The flagship demo is the
 
 ## Two changelogs, by design
 
-- **`engine/CHANGELOG.md`** tracks the engine package (0.98.0 → 2.1.1).
+- **`engine/CHANGELOG.md`** tracks the engine package (0.98.0 → 2.2.0).
 - **The playground's in-app changelog** (docs panel) tracks the demo itself
   (v0.1 → v1.0.22). Since v1.0.18 the playground — and every demo and
   showcase page — loads the live engine build
