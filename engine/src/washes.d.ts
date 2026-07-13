@@ -7,9 +7,10 @@
 // helpers, debug methods (`_debug_*`), and private state are intentionally
 // omitted.
 //
-// Authored against lib v0.98. When the lib adds new public methods, add
-// them here. Methods removed from the lib should be removed here too —
-// keep this file in sync with the actual API.
+// When the lib adds new public methods, add them here; methods removed from
+// the lib should be removed here too. tests/api-surface.test.mjs enforces
+// this mechanically — it reflects over a live instance and fails on any
+// drift in either direction.
 
 // =============================================================================
 // Core types
@@ -796,9 +797,6 @@ export interface WashesInstance {
    */
   gpuSim(handle: object | null): WashesInstance;
 
-  /** Enable/disable the WebGL render path. Required for GPU sim output. */
-  webgl(v?: boolean): boolean;
-
   /** Read the current paper color (0..1 RGB). */
   paperColor(): { r: number; g: number; b: number };
   /**
@@ -915,6 +913,21 @@ export interface WashesInstance {
   webgl(v?: boolean): boolean;
   /** Whether WebGL2 was available at init. */
   webglAvailable(): boolean;
+  /**
+   * GPU/WebGL isolation toggles (debug tier). Each renders or simulates a
+   * single stage in isolation so browser QA can pinpoint which GPU pass
+   * diverges from the CPU reference; all are plain boolean getter/setters
+   * and no-ops until the corresponding GPU path is enabled.
+   */
+  webglSmokeTest(v?: boolean): boolean;
+  webglGpuTextureTest(v?: boolean): boolean;
+  webglGpuWetTextureTest(v?: boolean): boolean;
+  webglGpuVelocityTextureTest(v?: boolean): boolean;
+  gpuSimBrushOnlyTest(v?: boolean): boolean;
+  gpuSimAdvectionOnlyTest(v?: boolean): boolean;
+  gpuSimVelocityOnlyTest(v?: boolean): boolean;
+  gpuSimWetDiffusionOnlyTest(v?: boolean): boolean;
+  gpuSimTransferOnlyTest(v?: boolean): boolean;
   /** Debug: tint visible cells green so you can see the active region. */
   webglDebugTint(v?: boolean): boolean;
 
