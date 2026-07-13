@@ -112,6 +112,14 @@ export type BrushMode = 'wet' | 'crayon' | 'dry' | 'dryBrush' | 'salt' | 'splatt
  */
 export type QualityPreset = 'auto' | 'high' | 'medium' | 'low' | 'minimum';
 
+/**
+ * v0.89 — static device hint for {@link CreateOptions.qualityHint}. The only
+ * accepted value, `'auto-mobile'`, raises the starting cell scale on
+ * coarse-pointer devices (one-shot: initial SCALE only, no runtime
+ * adaptation). Explicit `scale` always wins.
+ */
+export type QualityHint = 'auto-mobile';
+
 /** Intensity tier passed to `obliterate({ intensity })`. */
 export type ObliterateIntensity = 'gentle' | 'normal' | 'extreme';
 
@@ -161,7 +169,7 @@ export interface SplashOptions {
 }
 
 /** Style of splash. Different presets shape the radial profile differently. */
-export type SplashStyle = 'deluge' | 'splash' | 'spray';
+export type SplashStyle = 'default' | 'bigSplash' | 'fineSpritz' | 'deluge';
 
 // =============================================================================
 // SVG / image / text rendering
@@ -172,25 +180,38 @@ export type SplashStyle = 'deluge' | 'splash' | 'spray';
  * pen-stroke paths, and animates drawing them onto the canvas.
  */
 export interface TraceSVGOptions {
-  /** Pigment to use for paths without a recognized fill/stroke color. */
+  /** Pigment to use for paths without a recognized fill/stroke color. Default: current pigment. */
   pigment?: PigmentOption;
-  /** Display-pixel brush size while tracing. */
+  /** Display-pixel brush size while tracing. Default: current brushSize. */
   brushSize?: number;
-  /** Stroke speed in display pixels per second. */
-  speed?: number;
+  /** 0..1 stamp strength. Default: current pressure. */
+  strength?: number;
   /** Recognize chroma-key and pigment-hex colors as direct pigment assignments. Default true. */
   triggerColors?: boolean;
+  /** v0.41 backwards-compat alias for {@link TraceSVGOptions.triggerColors}. */
+  colorMap?: boolean;
+  /** Decompose arbitrary element colors into a rose+yellow+blue mix (subtractive color theory). Default false. */
+  approximateColor?: boolean;
   /** Mirror the trace horizontally. */
   flipX?: boolean;
   /** Mirror the trace vertically. */
   flipY?: boolean;
-  /** Multiplicative scale for the SVG path coordinates. */
-  scale?: number;
-  /** Translation in display pixels. */
-  translateX?: number;
-  translateY?: number;
-  /** Called once when the trace completes. */
-  onComplete?: () => void;
+  /** Paint every point synchronously in one frame — no animation. */
+  instant?: boolean;
+  /** v0.90 — `animate: false` is the user-facing alias for `instant: true`. */
+  animate?: boolean;
+  /** Spread the animated trace over roughly this many milliseconds. */
+  durationMs?: number;
+  /** Easing curve for durationMs-based traces. Default 'linear'. */
+  easing?: 'linear' | 'easeIn' | 'easeOut' | 'easeInOut' | 'penStroke';
+  /** Pause this many ms at each path boundary during animated traces. Default 0. */
+  perStrokePauseMs?: number;
+  /** Stamp closed shapes' fills (not just outlines). Default true. */
+  fillShapes?: boolean;
+  /** Fills paint all at once even during animated traces. Default true. */
+  fillInstant?: boolean;
+  /** v0.53 — GRID-coordinate rect to aspect-fit the SVG into, instead of the default 70% centered fit. */
+  bounds?: { x: number; y: number; w: number; h: number };
 }
 
 /** Options for `paintImage`. Source can be a URL, a data URL, or an HTMLImageElement. */
@@ -446,6 +467,8 @@ export interface CreateOptions {
   canvasScale?: number;
   /** Force mobile-mode heuristics (palm rejection, etc.). Default auto-detected via `matchMedia('(pointer: coarse)')`. */
   mobile?: boolean;
+  /** v0.89 — pre-resolve the starting cell scale from a static device signal. See {@link QualityHint}. */
+  qualityHint?: QualityHint;
   /** Show floating cursor preview circle. Default true on desktop. */
   cursorPreview?: boolean;
   /** Initial gouache mode. Default `false`. Pass `'auto'` for paper-darkness-driven LERP. */
@@ -458,6 +481,15 @@ export interface CreateOptions {
   paperColor?: { r: number; g: number; b: number };
   /** Start with drying paused. Default false. Toggle later via {@link WashesInstance.pauseDrying}. */
   pauseDrying?: boolean;
+  /**
+   * v1.23 — seed for the instance's PRNG (mulberry32), used everywhere the
+   * host draws randomness: splash epicenters and jitter, auto-paint
+   * strategies, animations, paper regeneration timing. The sim core is
+   * already deterministic, so two instances created with the same seed and
+   * size replay identically. Folded to a uint32 (`seed >>> 0`); non-finite
+   * values throw. Omit for `Math.random` (the pre-1.23 behavior).
+   */
+  seed?: number;
 }
 
 // =============================================================================
@@ -557,6 +589,10 @@ export interface WashesInstance {
 
   /** Inject a splash at one or more epicenters. */
   splash(epicenters: SplashEpicenter[], style?: SplashStyle, opts?: SplashOptions): WashesInstance;
+  /** Named preset (or nothing for `'default'`) with pigment-density-sampled random epicenters. The second argument is ignored in this form — `opts` is always positional third. */
+  splash(style?: SplashStyle, ignored?: null, opts?: SplashOptions): WashesInstance;
+  /** Object form: explicit coords and/or preset in one argument. */
+  splash(spec: { coords?: SplashEpicenter[]; preset?: SplashStyle }, ignored?: null, opts?: SplashOptions): WashesInstance;
 
   /** List of named splash presets (e.g. `'default'`, `'bigSplash'`, `'fineSpritz'`). */
   splashPresets(): string[];
@@ -655,8 +691,8 @@ export interface WashesInstance {
   /** Stamp an image using the active brush (light/dark map to pigment density). */
   paintImage(source: string | HTMLImageElement, opts?: PaintImageOptions): Promise<void>;
 
-  /** Trace an SVG, drawing each path with the active brush over time. */
-  traceSVG(svgText: string, opts?: TraceSVGOptions): Promise<void>;
+  /** Trace an SVG, drawing each path with the active brush over time. Returns the total point count synchronously (0 when nothing parsed); the animation itself runs over subsequent frames unless `instant`/`animate: false`. */
+  traceSVG(svgText: string, opts?: TraceSVGOptions): number;
   /** Cancel any in-flight SVG trace. */
   cancelSVGTrace(): WashesInstance;
 
@@ -1215,6 +1251,7 @@ export interface WashesInstance {
    * isn't transparent), the lib composites the paper color underneath
    * before encoding so the resulting image is self-contained.
    */
+  exportPNG(opts: { asBlob: true; transparent?: boolean; mimeType?: string; quality?: number }): Promise<Blob>;
   exportPNG(opts?: {
     /** Force transparent background. Default: follows `transparent()` setting. */
     transparent?: boolean;
@@ -1225,7 +1262,6 @@ export interface WashesInstance {
     /** Encoder quality, 0..1, for lossy formats like `'image/jpeg'`. */
     quality?: number;
   }): string;
-  exportPNG(opts: { asBlob: true; transparent?: boolean; mimeType?: string; quality?: number }): Promise<Blob>;
 
   // -----------------------------------------------------------------------
   // Preset / state

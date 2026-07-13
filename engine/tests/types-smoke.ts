@@ -27,6 +27,7 @@ const opts: CreateOptions = {
   gouacheMode: 'auto',
   scale: 2,
   cursorPreview: false,
+  seed: 42,
 };
 const wc2 = Washes.create(hostElement, opts);
 
@@ -64,7 +65,9 @@ async function example() {
   console.log('will paint ' + points + ' points');
   // v0.90: animate: false renders the SVG instantly with no animation
   wc.traceSVG(svg, { animate: false, pigment: 'blue' });
-  const blob = await wc.exportPNG();
+  const dataUrl: string = wc.exportPNG();
+  console.log(dataUrl.length);
+  const blob = await wc.exportPNG({ asBlob: true });
   console.log(blob.size);
 }
 example();
@@ -106,11 +109,11 @@ wc.background(null);
 const bg: string = wc.background();
 
 // --- v0.90: pause / resume ---
-import type { PauseState } from '../src/washes';
+import type { PausedState } from '../src/washes';
 
 wc.pause();
 wc.pause({ acceptInput: true });
-const pauseState: PauseState = wc.paused();
+const pauseState: PausedState = wc.paused();
 if (pauseState) {
   const accepting: boolean = pauseState.acceptInput;
   console.log('paused, acceptInput =', accepting);

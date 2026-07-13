@@ -1156,6 +1156,35 @@ function initGpuSim(gl, GW, GH) {
   function createInstance(targetEl, options) {
     options = options || {};
 
+    // v1.23 — create({ seed }) gives the instance a seeded PRNG (mulberry32)
+    // used everywhere the host draws randomness: splash epicenters + jitter,
+    // auto-paint strategies, animations, paper regeneration timing. The sim
+    // core is already fully deterministic, so a seeded instance replays a
+    // whole piece reproducibly. Unseeded instances keep Math.random — the
+    // default path is byte-identical to 1.22. Deliberately a late-bound
+    // wrapper, not a captured reference: the test harness (and any host
+    // that patches Math.random) swaps the global after instances may
+    // already exist, and pre-1.23 every draw read the current global.
+    // The seed is folded to a uint32 (`seed >>> 0`); non-finite /
+    // non-number seeds are programmer error and throw.
+    let _rand = function () {
+      return Math.random();
+    };
+    if (options.seed !== undefined) {
+      if (typeof options.seed !== "number" || !Number.isFinite(options.seed))
+        throw new TypeError(
+          "washes: create({ seed }) expects a finite number, got " +
+            String(options.seed),
+        );
+      let _seedState = options.seed >>> 0;
+      _rand = function () {
+        _seedState = (_seedState + 0x6d2b79f5) | 0;
+        let t = Math.imul(_seedState ^ (_seedState >>> 15), 1 | _seedState);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+
     // ----- Canvas + render-canvas setup, per instance -----
     // The display canvas mounts inside targetEl. Its size is
     // determined by targetEl's bounding rect at creation time;
@@ -5377,16 +5406,16 @@ function createSimCore(env) {
 
         const range = preset.epiMax - preset.epiMin;
         const numEpicenters =
-          preset.epiMin + Math.floor(Math.random() * (range + 1));
+          preset.epiMin + Math.floor(_rand() * (range + 1));
         epicenters = [];
         for (let ec = 0; ec < numEpicenters; ec++) {
           let cx, cy;
           if (hasPigment) {
             let found = false;
             for (let tries = 0; tries < 200; tries++) {
-              const i = Math.floor(Math.random() * N);
+              const i = Math.floor(_rand() * N);
               const p = (g0[i] + g1[i] + g2[i]) / maxPigment;
-              if (Math.random() < p) {
+              if (_rand() < p) {
                 cx = i % GW;
                 cy = Math.floor(i / GW);
                 found = true;
@@ -5394,12 +5423,12 @@ function createSimCore(env) {
               }
             }
             if (!found) {
-              cx = Math.floor(Math.random() * GW);
-              cy = Math.floor(Math.random() * GH);
+              cx = Math.floor(_rand() * GW);
+              cy = Math.floor(_rand() * GH);
             }
           } else {
-            cx = Math.floor(Math.random() * GW);
-            cy = Math.floor(Math.random() * GH);
+            cx = Math.floor(_rand() * GW);
+            cy = Math.floor(_rand() * GH);
           }
           epicenters.push({
             x: cx,
@@ -5533,13 +5562,13 @@ function createSimCore(env) {
             // v0.59 — per-cell angular jitter. Applied AFTER the global
             // rotation so the two compose: jitter perturbs every cell
             // individually around whatever direction the global rotation
-            // (if any) has settled on. Each cell gets a fresh Math.random
+            // (if any) has settled on. Each cell gets a fresh _rand()
             // call, which is cheap on V8 (xorshift internally). On a 900-
             // radius splash that's ~2.5M random calls — measured at <2ms
             // in V8 on commodity hardware, negligible vs. the post-splash
             // sim work.
             if (_hasJitter) {
-              const ja = (Math.random() * 2 - 1) * _jitterRange;
+              const ja = (_rand() * 2 - 1) * _jitterRange;
               const cj = Math.cos(ja),
                 sj = Math.sin(ja);
               const nx = ux * cj - uy * sj;
@@ -5835,7 +5864,7 @@ function createSimCore(env) {
     function aiPickWeighted(items) {
       let total = 0;
       for (const it of items) total += it.weight;
-      let r = Math.random() * total;
+      let r = _rand() * total;
       for (const it of items) {
         r -= it.weight;
         if (r <= 0) return it;
@@ -5862,22 +5891,22 @@ function createSimCore(env) {
       // Brush size in display px, clamped to the slider's viewport max
       const bpMin = Math.min(strat.brushPx[0], MAX_BRUSH);
       const bpMax = Math.min(strat.brushPx[1], MAX_BRUSH);
-      const brushPx = bpMin + Math.random() * (bpMax - bpMin);
+      const brushPx = bpMin + _rand() * (bpMax - bpMin);
 
       // Stroke endpoints in grid coordinates
       const minDim = Math.min(GW, GH);
       const distF =
-        strat.dist[0] + Math.random() * (strat.dist[1] - strat.dist[0]);
+        strat.dist[0] + _rand() * (strat.dist[1] - strat.dist[0]);
       const distGrid = distF * minDim;
 
       // Bias the start point toward the canvas interior so strokes don't
       // always sail out off the edge
       const margin = 0.12;
-      const sx = margin * GW + Math.random() * (1 - 2 * margin) * GW;
-      const sy = margin * GH + Math.random() * (1 - 2 * margin) * GH;
+      const sx = margin * GW + _rand() * (1 - 2 * margin) * GW;
+      const sy = margin * GH + _rand() * (1 - 2 * margin) * GH;
 
       // Random direction; clamp the end inside canvas
-      const angle = Math.random() * Math.PI * 2;
+      const angle = _rand() * Math.PI * 2;
       let ex = sx + Math.cos(angle) * distGrid;
       let ey = sy + Math.sin(angle) * distGrid;
       ex = Math.max(0, Math.min(GW - 1, ex));
@@ -5886,18 +5915,18 @@ function createSimCore(env) {
       // Perpendicular control-point offset → curved Bezier path
       const dx = ex - sx,
         dy = ey - sy;
-      const curve = (Math.random() - 0.5) * 0.35;
+      const curve = (_rand() - 0.5) * 0.35;
       const cx = (sx + ex) / 2 + -dy * curve;
       const cy = (sy + ey) / 2 + dx * curve;
 
       const duration = Math.floor(
-        strat.dur[0] + Math.random() * (strat.dur[1] - strat.dur[0]),
+        strat.dur[0] + _rand() * (strat.dur[1] - strat.dur[0]),
       );
 
       const pigment =
         strat.pigment !== null
           ? strat.pigment
-          : Math.floor(Math.random() * PIGMENTS.length);
+          : Math.floor(_rand() * PIGMENTS.length);
 
       return {
         phase: "stroke",
@@ -5927,12 +5956,12 @@ function createSimCore(env) {
         if (aiState.progress > aiState.duration) {
           // ~18% of strokes are followed by a long pause so the canvas has
           // time to dry between bursts of activity; the rest are short rests.
-          const longRest = Math.random() < 0.18;
+          const longRest = _rand() < 0.18;
           aiState = {
             phase: "rest",
             framesLeft: longRest
-              ? 120 + Math.floor(Math.random() * 240)
-              : 8 + Math.floor(Math.random() * 60),
+              ? 120 + Math.floor(_rand() * 240)
+              : 8 + Math.floor(_rand() * 60),
           };
           return;
         }
@@ -5995,7 +6024,7 @@ function createSimCore(env) {
       // Weighted pick. Sum once and walk; cheap enough at 3 entries.
       let total = 0;
       for (const t of RAIN_DROP_TYPES) total += t[1];
-      let r = Math.random() * total;
+      let r = _rand() * total;
       let chosen = RAIN_DROP_TYPES[0];
       for (const t of RAIN_DROP_TYPES) {
         r -= t[1];
@@ -6008,13 +6037,13 @@ function createSimCore(env) {
       return {
         // Start above the top edge so the drop fades in via the falling
         // motion rather than popping into existence at y=0.
-        x: Math.random() * GW,
-        y: -10 - Math.random() * 20,
-        vx: (Math.random() - 0.5) * 0.6, // slight horizontal drift
-        vy: 4.0 + Math.random() * 5.0, // grid cells per frame
-        brushPx: bLo + Math.random() * (bHi - bLo),
+        x: _rand() * GW,
+        y: -10 - _rand() * 20,
+        vx: (_rand() - 0.5) * 0.6, // slight horizontal drift
+        vy: 4.0 + _rand() * 5.0, // grid cells per frame
+        brushPx: bLo + _rand() * (bHi - bLo),
         pigment,
-        strength: sLo + Math.random() * (sHi - sLo),
+        strength: sLo + _rand() * (sHi - sLo),
       };
     }
 
@@ -6023,7 +6052,7 @@ function createSimCore(env) {
       // can spawn multiple per frame if probability is high; with
       // RAIN_SPAWN_PER_SEC=30 at 60fps it averages 0.5 spawn-attempts/frame.
       const spawnProb = RAIN_SPAWN_PER_SEC / 60;
-      while (rainDrops.length < RAIN_MAX_DROPS && Math.random() < spawnProb) {
+      while (rainDrops.length < RAIN_MAX_DROPS && _rand() < spawnProb) {
         rainDrops.push(rainSpawnDrop());
       }
 
@@ -6069,25 +6098,25 @@ function createSimCore(env) {
     function sunnySpawn() {
       // Bezier sweep across canvas, biased toward the top third. Direction
       // alternates randomly so strokes don't all go the same way.
-      const direction = Math.random() < 0.5 ? 1 : -1;
+      const direction = _rand() < 0.5 ? 1 : -1;
       const sx = direction > 0 ? -GW * 0.1 : GW * 1.1;
       const ex = direction > 0 ? GW * 1.1 : -GW * 0.1;
-      const sy = GH * (0.05 + Math.random() * 0.35);
-      const ey = sy + (Math.random() - 0.5) * GH * 0.15;
+      const sy = GH * (0.05 + _rand() * 0.35);
+      const ey = sy + (_rand() - 0.5) * GH * 0.15;
       const cx = (sx + ex) / 2;
-      const cy = (sy + ey) / 2 + (Math.random() - 0.5) * GH * 0.25;
+      const cy = (sy + ey) / 2 + (_rand() - 0.5) * GH * 0.25;
       return {
         progress: 0,
-        duration: 80 + Math.floor(Math.random() * 80),
+        duration: 80 + Math.floor(_rand() * 80),
         sx,
         sy,
         cx,
         cy,
         ex,
         ey,
-        pigment: Math.random() < 0.75 ? 1 : 0, // 75% yellow, 25% rose
-        strength: 0.16 + Math.random() * 0.1,
-        brushPx: 80 + Math.random() * 100,
+        pigment: _rand() < 0.75 ? 1 : 0, // 75% yellow, 25% rose
+        strength: 0.16 + _rand() * 0.1,
+        brushPx: 80 + _rand() * 100,
       };
     }
 
@@ -6097,7 +6126,7 @@ function createSimCore(env) {
         sunnyStrokes.push(sunnySpawn());
         sunnySpawnTimer =
           SUNNY_SPAWN_INTERVAL_MIN +
-          Math.floor(Math.random() * SUNNY_SPAWN_INTERVAL_RAND);
+          Math.floor(_rand() * SUNNY_SPAWN_INTERVAL_RAND);
       }
       const rect = canvas.getBoundingClientRect();
       const pxToGridRadius = (GW / rect.width) * 0.5;
@@ -6132,29 +6161,29 @@ function createSimCore(env) {
       return {
         x:
           windDirection > 0
-            ? -10 - Math.random() * 30
-            : GW + 10 + Math.random() * 30,
-        y: Math.random() * GH,
-        vx: windDirection * (5 + Math.random() * 6),
-        vy: (Math.random() - 0.5) * 0.3,
-        brushPx: 6 + Math.random() * 14,
+            ? -10 - _rand() * 30
+            : GW + 10 + _rand() * 30,
+        y: _rand() * GH,
+        vx: windDirection * (5 + _rand() * 6),
+        vy: (_rand() - 0.5) * 0.3,
+        brushPx: 6 + _rand() * 14,
         // Cool-air cerulean dominates, occasional warm yellow streak. Water
         // adds variation by lifting deposited paint (visible only where the
         // canvas already has pigment, but that's the point — wind erodes).
         pigment: (() => {
-          const r = Math.random();
+          const r = _rand();
           if (r < 0.7) return 2; // cerulean
           if (r < 0.85) return WATER_INDEX; // water lift
           return 1; // yellow
         })(),
-        strength: 0.1 + Math.random() * 0.1,
+        strength: 0.1 + _rand() * 0.1,
         life: 200,
       };
     }
 
     function windyStep() {
-      if (Math.random() < WINDY_GUST_PROB) windDirection *= -1;
-      while (windyStreaks.length < WINDY_MAX && Math.random() < 0.35) {
+      if (_rand() < WINDY_GUST_PROB) windDirection *= -1;
+      while (windyStreaks.length < WINDY_MAX && _rand() < 0.35) {
         windyStreaks.push(windySpawn());
       }
       const rect = canvas.getBoundingClientRect();
@@ -6189,7 +6218,7 @@ function createSimCore(env) {
     let stormLightningCooldown = 120; // initial delay before first flash
 
     function stormSpawnDrop() {
-      const r = Math.random();
+      const r = _rand();
       let pigment;
       if (r < 0.65)
         pigment = 2; // cerulean — dominant
@@ -6197,13 +6226,13 @@ function createSimCore(env) {
         pigment = WATER_INDEX; // water lift
       else pigment = 0; // rose
       return {
-        x: Math.random() * GW,
-        y: -10 - Math.random() * 30,
-        vx: (Math.random() - 0.5) * 1.0, // more turbulent than rainy
-        vy: 6 + Math.random() * 6, // harder rain
-        brushPx: 10 + Math.random() * 18,
+        x: _rand() * GW,
+        y: -10 - _rand() * 30,
+        vx: (_rand() - 0.5) * 1.0, // more turbulent than rainy
+        vy: 6 + _rand() * 6, // harder rain
+        brushPx: 10 + _rand() * 18,
         pigment,
-        strength: 0.2 + Math.random() * 0.2,
+        strength: 0.2 + _rand() * 0.2,
       };
     }
 
@@ -6211,15 +6240,15 @@ function createSimCore(env) {
       // Build a jagged vertical path top → bottom; paint many small dabs
       // along each segment so the bolt reads as a continuous stroke. Yellow
       // at high strength against the wet, cool canvas pops cleanly.
-      const segments = 6 + Math.floor(Math.random() * 5);
-      const startX = GW * 0.15 + Math.random() * GW * 0.7;
+      const segments = 6 + Math.floor(_rand() * 5);
+      const startX = GW * 0.15 + _rand() * GW * 0.7;
       const jitter = GW * 0.04;
       let cx = startX;
       let cy = -2;
       const segDY = GH / segments;
       for (let s = 0; s < segments; s++) {
-        const nx = cx + (Math.random() - 0.5) * jitter * 2;
-        const ny = cy + segDY * (0.8 + Math.random() * 0.4);
+        const nx = cx + (_rand() - 0.5) * jitter * 2;
+        const ny = cy + segDY * (0.8 + _rand() * 0.4);
         // Walk the segment with small steps — denser steps for a more
         // solid-looking bolt.
         const stepsPer = 8;
@@ -6241,7 +6270,7 @@ function createSimCore(env) {
     function thunderstormStep() {
       // Rain phase
       const spawnProb = STORM_SPAWN_PER_SEC / 60;
-      while (stormDrops.length < STORM_MAX_DROPS && Math.random() < spawnProb) {
+      while (stormDrops.length < STORM_MAX_DROPS && _rand() < spawnProb) {
         stormDrops.push(stormSpawnDrop());
       }
       const rect = canvas.getBoundingClientRect();
@@ -6266,7 +6295,7 @@ function createSimCore(env) {
         stormFlashLightning();
         stormLightningCooldown =
           STORM_LIGHTNING_MIN_COOLDOWN +
-          Math.floor(Math.random() * STORM_LIGHTNING_RAND_COOLDOWN);
+          Math.floor(_rand() * STORM_LIGHTNING_RAND_COOLDOWN);
       }
     }
 
@@ -6282,14 +6311,14 @@ function createSimCore(env) {
     let cloudSpawnTimer = 60;
 
     function cloudSpawn() {
-      const direction = Math.random() < 0.5 ? 1 : -1;
+      const direction = _rand() < 0.5 ? 1 : -1;
       return {
         x: direction > 0 ? -GW * 0.15 : GW * 1.15,
-        y: GH * (0.1 + Math.random() * 0.4),
-        vx: direction * (0.4 + Math.random() * 0.5),
-        halfWidth: GW * (0.1 + Math.random() * 0.1), // half-extent for dab spread
-        halfHeight: GH * (0.04 + Math.random() * 0.04),
-        brushPx: 70 + Math.random() * 60,
+        y: GH * (0.1 + _rand() * 0.4),
+        vx: direction * (0.4 + _rand() * 0.5),
+        halfWidth: GW * (0.1 + _rand() * 0.1), // half-extent for dab spread
+        halfHeight: GH * (0.04 + _rand() * 0.04),
+        brushPx: 70 + _rand() * 60,
         life: 600,
       };
     }
@@ -6298,7 +6327,7 @@ function createSimCore(env) {
       cloudSpawnTimer--;
       if (cloudSpawnTimer <= 0 && clouds.length < CLOUD_MAX) {
         clouds.push(cloudSpawn());
-        cloudSpawnTimer = 180 + Math.floor(Math.random() * 240);
+        cloudSpawnTimer = 180 + Math.floor(_rand() * 240);
       }
       const rect = canvas.getBoundingClientRect();
       const pxToGridRadius = (GW / rect.width) * 0.5;
@@ -6312,12 +6341,12 @@ function createSimCore(env) {
         }
         // 2-3 dabs per frame, scattered within the cloud's footprint, so
         // each cloud lays down a wide soft band rather than a thin trail.
-        const dabs = 2 + Math.floor(Math.random() * 2);
+        const dabs = 2 + Math.floor(_rand() * 2);
         for (let j = 0; j < dabs; j++) {
-          const ox = (Math.random() - 0.5) * 2 * c.halfWidth;
-          const oy = (Math.random() - 0.5) * 2 * c.halfHeight;
+          const ox = (_rand() - 0.5) * 2 * c.halfWidth;
+          const oy = (_rand() - 0.5) * 2 * c.halfHeight;
           // Mostly water (lifts to highlight), occasional cerulean for shadow.
-          const pig = Math.random() < 0.75 ? WATER_INDEX : 2;
+          const pig = _rand() < 0.75 ? WATER_INDEX : 2;
           paintAt(c.x + ox, c.y + oy, c.brushPx * pxToGridRadius, pig, 0.07);
         }
       }
@@ -6359,17 +6388,17 @@ function createSimCore(env) {
 
     function snowSpawnFlake() {
       return {
-        x: Math.random() * GW,
-        y: -10 - Math.random() * 30,
-        vy: 0.9 + Math.random() * 1.3,
-        flutterPhase: Math.random() * Math.PI * 2,
-        flutterAmp: 0.3 + Math.random() * 0.5,
-        flutterFreq: 0.04 + Math.random() * 0.04,
-        brushPx: 6 + Math.random() * 10,
+        x: _rand() * GW,
+        y: -10 - _rand() * 30,
+        vy: 0.9 + _rand() * 1.3,
+        flutterPhase: _rand() * Math.PI * 2,
+        flutterAmp: 0.3 + _rand() * 0.5,
+        flutterFreq: 0.04 + _rand() * 0.04,
+        brushPx: 6 + _rand() * 10,
         // 90% water (lifts cerulean → reveals paper-cream "white"),
         // 10% tiny cerulean replenish dabs so the sky doesn't deplete.
-        pigment: Math.random() < 0.9 ? WATER_INDEX : 2,
-        strength: 0.1 + Math.random() * 0.1, // only used by cerulean dabs
+        pigment: _rand() < 0.9 ? WATER_INDEX : 2,
+        strength: 0.1 + _rand() * 0.1, // only used by cerulean dabs
       };
     }
 
@@ -6383,9 +6412,9 @@ function createSimCore(env) {
       // and tuning as the time-of-day day preset.
       if (snowState.washFrame < SNOW_WASH_FRAMES) {
         for (let i = 0; i < SNOW_WASH_DABS_PER_FRAME; i++) {
-          const x = Math.random() * GW;
-          const y = Math.random() * GH;
-          const brushPx = 70 + Math.random() * 80;
+          const x = _rand() * GW;
+          const y = _rand() * GH;
+          const brushPx = 70 + _rand() * 80;
           paintAt(x, y, brushPx * pxToGridRadius, 2, SNOW_WASH_STRENGTH);
         }
         snowState.washFrame++;
@@ -6399,7 +6428,7 @@ function createSimCore(env) {
       const spawnProb = SNOW_SPAWN_PER_SEC / 60;
       while (
         snowState.drops.length < SNOW_MAX_DROPS &&
-        Math.random() < spawnProb
+        _rand() < spawnProb
       ) {
         snowState.drops.push(snowSpawnFlake());
       }
@@ -6434,17 +6463,17 @@ function createSimCore(env) {
 
     function snowAddSpawnDrop() {
       return {
-        x: Math.random() * GW,
-        y: -10 - Math.random() * 30,
-        vy: 0.9 + Math.random() * 1.3,
-        flutterPhase: Math.random() * Math.PI * 2,
-        flutterAmp: 0.3 + Math.random() * 0.4,
-        flutterFreq: 0.04 + Math.random() * 0.04,
-        brushPx: 4 + Math.random() * 8,
+        x: _rand() * GW,
+        y: -10 - _rand() * 30,
+        vy: 0.9 + _rand() * 1.3,
+        flutterPhase: _rand() * Math.PI * 2,
+        flutterAmp: 0.3 + _rand() * 0.4,
+        flutterFreq: 0.04 + _rand() * 0.04,
+        brushPx: 4 + _rand() * 8,
         // Cerulean dominates with occasional rose for warm flecks; γ=0.75
         // granulation makes the dabs settle into a snowflake-like speckle.
-        pigment: Math.random() < 0.88 ? 2 : 0,
-        strength: 0.1 + Math.random() * 0.1,
+        pigment: _rand() < 0.88 ? 2 : 0,
+        strength: 0.1 + _rand() * 0.1,
       };
     }
 
@@ -6452,7 +6481,7 @@ function createSimCore(env) {
       const spawnProb = SNOW_ADD_SPAWN_PER_SEC / 60;
       while (
         snowAddDrops.length < SNOW_ADD_MAX_DROPS &&
-        Math.random() < spawnProb
+        _rand() < spawnProb
       ) {
         snowAddDrops.push(snowAddSpawnDrop());
       }
@@ -6517,39 +6546,39 @@ function createSimCore(env) {
       // feels like a tornado. Phases are fully random (0 to 2π).
       // Amplitudes jitter ±25% so different passes have different
       // "agitation" levels.
-      const jitter = (base, pct) => base * (1 - pct + Math.random() * 2 * pct);
+      const jitter = (base, pct) => base * (1 - pct + _rand() * 2 * pct);
       tornadoState.sinesX = [
         {
           freq: jitter(0.018, 0.3),
           amp: jitter(1.5, 0.25),
-          phase: Math.random() * Math.PI * 2,
+          phase: _rand() * Math.PI * 2,
         },
         {
           freq: jitter(0.043, 0.3),
           amp: jitter(0.6, 0.25),
-          phase: Math.random() * Math.PI * 2,
+          phase: _rand() * Math.PI * 2,
         },
         {
           freq: jitter(0.097, 0.3),
           amp: jitter(0.25, 0.25),
-          phase: Math.random() * Math.PI * 2,
+          phase: _rand() * Math.PI * 2,
         },
       ];
       tornadoState.sinesY = [
         {
           freq: jitter(0.022, 0.3),
           amp: jitter(0.9, 0.25),
-          phase: Math.random() * Math.PI * 2,
+          phase: _rand() * Math.PI * 2,
         },
         {
           freq: jitter(0.039, 0.3),
           amp: jitter(0.4, 0.25),
-          phase: Math.random() * Math.PI * 2,
+          phase: _rand() * Math.PI * 2,
         },
         {
           freq: jitter(0.071, 0.3),
           amp: jitter(0.18, 0.25),
-          phase: Math.random() * Math.PI * 2,
+          phase: _rand() * Math.PI * 2,
         },
       ];
 
@@ -6559,24 +6588,24 @@ function createSimCore(env) {
           // Even phase distribution so the orbital ring is uniformly populated
           // around the cone surface. Small random jitter prevents perfect
           // mirror symmetry (which would read as artificial).
-          phase: (a / TORNADO_NUM_AGENTS) * Math.PI * 2 + Math.random() * 0.25,
+          phase: (a / TORNADO_NUM_AGENTS) * Math.PI * 2 + _rand() * 0.25,
           // Uniform heightFrac — each agent picks a random height along the
           // cone. With N=14 agents this gives reasonable coverage; the
           // cone surface area is larger at top so density visually fades
           // upward naturally.
-          heightFrac: Math.random(),
+          heightFrac: _rand(),
           // Tight cluster against the outer cone surface (0.85-1.0). The
           // user-spec phrase "bring the cursors closer together" → tight
           // radial band rather than scattered across the funnel interior.
-          radiusFrac: 0.85 + Math.random() * 0.15,
+          radiusFrac: 0.85 + _rand() * 0.15,
           // Independent rotation rates so the funnel doesn't look like a
           // rigid disk spinning — different agents at different heights
           // shear past each other.
-          rotSpeed: 0.2 + Math.random() * 0.1,
+          rotSpeed: 0.2 + _rand() * 0.1,
           // Pigment mix biased toward cerulean for the dark column body;
           // occasional rose adds brownish debris tint, occasional yellow
           // brings the sky color back into the funnel.
-          pigment: Math.random() < 0.65 ? 2 : Math.random() < 0.5 ? 0 : 1,
+          pigment: _rand() < 0.65 ? 2 : _rand() < 0.5 ? 0 : 1,
         });
       }
       tornadoState.agents = agents;
@@ -6673,7 +6702,7 @@ function createSimCore(env) {
         // (1.0× unit at base, 1.2× near the top for slight visual variety
         // — debris reads heavier in the wider cloud-top region).
         const brushPx = TORNADO_UNIT_PX * (1.0 + 0.2 * widthFrac);
-        const strength = 0.22 + Math.random() * 0.1;
+        const strength = 0.22 + _rand() * 0.1;
         paintAt(px, py, brushPx * pxToGridRadius, agent.pigment, strength);
       }
     }
@@ -6799,10 +6828,10 @@ function createSimCore(env) {
           // Result: organic curve trails that fill the annulus over the
           // phase duration. The 6-fold symmetry turns each curve into a
           // flower-like ring.
-          s.masterTheta = Math.random() * Math.PI * 2;
-          s.thetaVel = 0.014 + Math.random() * 0.006;
-          s.masterR = GH * (0.1 + Math.random() * 0.15);
-          s.rVel = 0.35 + Math.random() * 0.35;
+          s.masterTheta = _rand() * Math.PI * 2;
+          s.thetaVel = 0.014 + _rand() * 0.006;
+          s.masterR = GH * (0.1 + _rand() * 0.15);
+          s.rVel = 0.35 + _rand() * 0.35;
           break;
         case "dot-burst":
           // Discrete stamps at random positions within an annulus, painted
@@ -6817,9 +6846,9 @@ function createSimCore(env) {
           // symmetry from the rotated cursors, this creates intricate
           // nested-flower patterns. k is randomized per phase for variety.
           s.masterTheta = 0;
-          s.thetaVel = 0.018 + Math.random() * 0.008;
-          s.petalK = 2 + Math.floor(Math.random() * 4); // 2-5 petals
-          s.petalR = GH * (0.28 + Math.random() * 0.1);
+          s.thetaVel = 0.018 + _rand() * 0.008;
+          s.petalK = 2 + Math.floor(_rand() * 4); // 2-5 petals
+          s.petalR = GH * (0.28 + _rand() * 0.1);
           break;
       }
     }
@@ -6862,9 +6891,9 @@ function createSimCore(env) {
         case "dot-burst": {
           // Re-roll position every tapEvery frames; paint only on tap frames.
           if (s.phaseFrame % s.tapEvery === 0) {
-            s.masterR = GH * (0.08 + Math.random() * 0.32);
-            s.masterTheta = Math.random() * Math.PI * 2;
-            brushPx = 12 + Math.random() * 6;
+            s.masterR = GH * (0.08 + _rand() * 0.32);
+            s.masterTheta = _rand() * Math.PI * 2;
+            brushPx = 12 + _rand() * 6;
             strength = 0.48;
           } else {
             shouldPaint = false;
@@ -6996,11 +7025,11 @@ function createSimCore(env) {
       // Refill the pool so the canvas stays animated indefinitely
       while (s.particles.length < FLOW_FIELD_PARTICLES) {
         s.particles.push({
-          x: Math.random() * GW,
-          y: Math.random() * GH,
+          x: _rand() * GW,
+          y: _rand() * GH,
           age: 0,
-          maxAge: 150 + Math.random() * 200,
-          pigment: Math.floor(Math.random() * 3),
+          maxAge: 150 + _rand() * 200,
+          pigment: Math.floor(_rand() * 3),
         });
       }
     }
@@ -7030,14 +7059,14 @@ function createSimCore(env) {
       // Spawn new pulse on a jittered cadence (60-120 frames apart)
       if (s.t - s.lastSpawn >= s.nextSpawnGap) {
         s.pulses.push({
-          x: GW * (0.15 + Math.random() * 0.7),
-          y: GH * (0.15 + Math.random() * 0.7),
+          x: GW * (0.15 + _rand() * 0.7),
+          y: GH * (0.15 + _rand() * 0.7),
           r: 0,
-          maxR: GH * (0.18 + Math.random() * 0.28),
-          pigment: Math.floor(Math.random() * 3),
+          maxR: GH * (0.18 + _rand() * 0.28),
+          pigment: Math.floor(_rand() * 3),
         });
         s.lastSpawn = s.t;
-        s.nextSpawnGap = 60 + Math.floor(Math.random() * 60);
+        s.nextSpawnGap = 60 + Math.floor(_rand() * 60);
       }
 
       // Advance each pulse and paint its ring at the current radius
@@ -7297,10 +7326,10 @@ function createSimCore(env) {
       const rect = canvas.getBoundingClientRect();
       const pxToGridRadius = (GW / rect.width) * 0.5;
       for (let i = 0; i < dabsPerFrame; i++) {
-        const x = Math.random() * GW;
-        const y = Math.random() * GH;
+        const x = _rand() * GW;
+        const y = _rand() * GH;
         const yFrac = y / GH;
-        const brushPx = 70 + Math.random() * 80;
+        const brushPx = 70 + _rand() * 80;
         const gridRadius = brushPx * pxToGridRadius;
         // Evaluate every layer's curve at this y. Each non-zero result
         // produces a paintAt at the same (x, y) — pigments stack into the

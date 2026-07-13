@@ -124,8 +124,17 @@ packaging, and GPU paths. Line references are into `engine/src/washes.js` /
 > release reaches every page automatically; ~15.5 MB of duplicated source
 > deleted; playground → demo v1.0.18.
 >
+> **P2 slice 2 (branch `engine-review-seed` → engine 1.23.0):**
+> `create({ seed })` shipped — the ~130 host-side `Math.random` sites
+> (splash epicenters/jitter, auto-paint, animations, paper regen) now go
+> through a per-instance mulberry32 PRNG when seeded; same seed + size
+> replays bit-exactly across all four state planes (`tests/seed.test.mjs`,
+> in CI). Unseeded stays late-bound to the live `Math.random` global, so
+> the default path and every golden are unchanged. Roadmap feature 5
+> (seeded reproducibility) closes; API 2.0 sequencing item 2 done.
+>
 > **Open work, in priority order:** ① the five API 2.0 taste decisions
-> (design doc tail) → then its additive sequence (seed 1.23, event map
+> (design doc tail) → then its additive sequence (event map + once()
 > 1.24, rename batch 2.0); ② first real-browser QA pass on Pages — the 27
 > live-engine pages, the hero, the CI Playwright job's first run, GPU
 > render validation (unblocks GPU-by-default + the falloff² parity fix);

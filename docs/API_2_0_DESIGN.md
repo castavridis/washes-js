@@ -103,14 +103,18 @@ use. Settings stay a separate concern (`getPreset`/`applyPreset`); pair
 them for a full document. v2 may add `{ resample: true }` on load for
 dims-mismatched snapshots; v1.22 throws with a clear message.
 
-## 6. Determinism: `create({ seed })`
+## 6. Determinism: `create({ seed })` — SHIPPED (1.23, additive)
 
 The extracted sim core is already fully deterministic; the remaining
-`Math.random` call sites (~130) are host-side — splash jitter, spray,
+`Math.random` call sites (~130) were host-side — splash jitter, spray,
 animations, paper regeneration timing. `create({ seed })` gives the
-instance a seeded PRNG (mulberry32) used everywhere the host currently
-calls `Math.random`, making whole pieces reproducible and enabling
-golden-image tests downstream. Roadmap feature 5 closes here.
+instance a seeded PRNG (mulberry32) used everywhere the host previously
+called `Math.random`, making whole pieces reproducible and enabling
+golden-image tests downstream. Roadmap feature 5 closed here. Unseeded
+instances stay late-bound to the live `Math.random` global (the harness's
+per-pattern seeding depends on it); seeds fold to uint32; bad seeds throw.
+Proof: `tests/seed.test.mjs` (same-seed scripts replay bit-exactly across
+all four state planes).
 
 ## 7. Sim-behavior fixes batched with 2.0 (need visual QA)
 
@@ -137,7 +141,7 @@ golden-image tests downstream. Roadmap feature 5 closes here.
 ## Sequencing
 
 1. (done) serialization — additive, in 1.22
-2. `seed` — additive, 1.23
+2. (done) `seed` — additive, in 1.23
 3. event map + `once` — additive (new names first, old kept), 1.24
 4. the rename/convention batch + compat shim → **2.0.0**
 5. sim-behavior fixes (browser QA) → 2.1

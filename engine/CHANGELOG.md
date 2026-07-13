@@ -2,6 +2,55 @@
 
 All notable changes to **washes** are documented here. Dates are ISO 8601.
 
+## [1.23.0] — 2026-07-13
+
+P2 continues down the API 2.0 sequencing: determinism reaches the host.
+Roadmap feature 5 (seeded reproducibility) closes here.
+
+### Added
+- **`create({ seed })`.** The instance gets a seeded PRNG (mulberry32)
+  used everywhere the host draws randomness — splash epicenters and
+  per-cell jitter, auto-paint strategies, all the weather/figure
+  animations, paper regeneration timing (~130 call sites). The sim core
+  was already fully deterministic, so two instances created with the
+  same seed and size replay a script **bit-exactly** across all four
+  state planes — whole pieces are now reproducible, and golden-image
+  tests of full compositions become possible downstream. The seed is
+  folded to a uint32 (`seed >>> 0`); non-number / non-finite seeds
+  throw. Unseeded instances keep reading the *live* `Math.random`
+  global on every draw (late-bound, exactly the pre-1.23 behavior —
+  the test harness's per-pattern seeding depends on it), so the
+  default path is unchanged and every golden suite stays bit-exact.
+- `tests/seed.test.mjs` — same-seed bit-exactness, different-seed
+  divergence, uint32 folding, loud bad-seed edges, and the late-bound
+  unseeded contract. Runs in bare Node; wired into CI.
+
+### Fixed
+- **The declarations stopped lying** — running CI's `tsc --strict` types
+  step locally for the first time surfaced eight mismatches between
+  `washes.d.ts` and the runtime (the api-surface test compares member
+  *names*, not signatures, so these had survived it):
+  - `SplashStyle` listed `'deluge' | 'splash' | 'spray'`; the runtime
+    presets are `'default' | 'bigSplash' | 'fineSpritz' | 'deluge'`.
+    The preset-only and `{coords, preset}` object calling forms of
+    `splash()` (both documented at the implementation since v0.x) are
+    now declared as overloads.
+  - `traceSVG` was declared `Promise<void>`; it returns the total point
+    count synchronously. Its options type described five members the
+    runtime never reads (`speed`, `scale`, `translateX/Y`,
+    `onComplete`) and omitted eleven it does (`instant`, `animate`,
+    `durationMs`, `easing`, `perStrokePauseMs`, `fillShapes`,
+    `fillInstant`, `colorMap`, `approximateColor`, `bounds`,
+    `strength`).
+  - `CreateOptions` was missing `qualityHint` (v0.89, accepted at
+    runtime all along); `QualityHint` is now an exported type.
+  - `exportPNG`'s `asBlob: true` overload was declared *after* the
+    general form, so TypeScript never selected it — `Promise<Blob>`
+    callers wouldn't type-check.
+  - `tests/types-smoke.ts` itself had two bugs masked by never being
+    run: a `PauseState` (sic) import and an awaited default-form
+    `exportPNG`.
+
 ## [1.22.0] — 2026-07-13
 
 P2 opens: the API 2.0 design proposal is on paper, and its first item —
