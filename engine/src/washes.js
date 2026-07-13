@@ -2259,11 +2259,81 @@ function initGpuSim(gl, GW, GH) {
     const MAX_PIGMENT = 1.0;
     let wetBinary = new Float32Array(N);
     let wetBlurLarge = new Float32Array(N);
+
+    // v1.13 — sub-rect box blur. Same separable running-sum math as
+    // boxBlur, but produces dst valid only on [x0..x1]×[y0..y1], reading
+    // src within ±radius of that window (grid-edge clamps identical to
+    // the full pass). The horizontal pass fills wetBlurTmp on the padded
+    // row band; the vertical pass consumes exactly that band. Cells
+    // outside the window keep whatever dst held before — callers must
+    // only read dst inside the window.
+    function boxBlurRect(src, dst, radius, x0, y0, x1, y1) {
+      const inv = 1 / (2 * radius + 1);
+      const r = radius;
+      const gw = GW,
+        gh = GH;
+      const tmp = wetBlurTmp;
+      const ry0 = Math.max(0, y0 - r),
+        ry1 = Math.min(gh - 1, y1 + r);
+      // ---- HORIZONTAL PASS: src -> wetBlurTmp on rows ry0..ry1 ----
+      for (let y = ry0; y <= ry1; y++) {
+        const yo = y * gw;
+        let sum = 0;
+        for (let xx = x0 - r; xx <= x0 + r; xx++) {
+          const ix = xx < 0 ? 0 : xx > gw - 1 ? gw - 1 : xx;
+          sum += src[yo + ix];
+        }
+        for (let x = x0; x <= x1; x++) {
+          tmp[yo + x] = sum * inv;
+          const addX = x + r + 1;
+          const subX = x - r;
+          sum +=
+            src[yo + (addX > gw - 1 ? gw - 1 : addX)] -
+            src[yo + (subX < 0 ? 0 : subX)];
+        }
+      }
+      // ---- VERTICAL PASS: wetBlurTmp -> dst on rows y0..y1 ----
+      for (let x = x0; x <= x1; x++) {
+        let sum = 0;
+        for (let yy = y0 - r; yy <= y0 + r; yy++) {
+          const iy = yy < 0 ? 0 : yy > gh - 1 ? gh - 1 : yy;
+          sum += tmp[iy * gw + x];
+        }
+        for (let y = y0; y <= y1; y++) {
+          dst[y * gw + x] = sum * inv;
+          const addY = y + r + 1;
+          const subY = y - r;
+          sum +=
+            tmp[(addY > gh - 1 ? gh - 1 : addY) * gw + x] -
+            tmp[(subY < 0 ? 0 : subY) * gw + x];
+        }
+      }
+    }
+
     function applyEdgeDarkening() {
-      for (let i = 0; i < N; i++) wetBinary[i] = wet[i] > 0.04 ? 1 : 0;
-      boxBlur(wetBinary, wetBlur, EDGE_KERNEL);
-      boxBlur(wetBinary, wetBlurLarge, EDGE_KERNEL_LARGE);
       if (activeRectIsEmpty()) return;
+      // v1.13 — binarize + blur only around the active rect instead of
+      // ~5 full-grid passes per call. wetBlur / wetBlurLarge are consumed
+      // solely by the pressure loop below, which reads inside the rect;
+      // values outside go stale but are never read. The binarize window
+      // pads by the LARGE kernel so both blurs read fresh source
+      // everywhere their windows can reach.
+      const padB = EDGE_KERNEL_LARGE;
+      const bx0 = Math.max(0, activeMinX - padB),
+        bx1 = Math.min(GW - 1, activeMaxX + padB);
+      const by0 = Math.max(0, activeMinY - padB),
+        by1 = Math.min(GH - 1, activeMaxY + padB);
+      for (let y = by0; y <= by1; y++) {
+        const yo = y * GW;
+        for (let x = bx0; x <= bx1; x++) {
+          const i = yo + x;
+          wetBinary[i] = wet[i] > 0.04 ? 1 : 0;
+        }
+      }
+      boxBlurRect(wetBinary, wetBlur, EDGE_KERNEL,
+        activeMinX, activeMinY, activeMaxX, activeMaxY);
+      boxBlurRect(wetBinary, wetBlurLarge, EDGE_KERNEL_LARGE,
+        activeMinX, activeMinY, activeMaxX, activeMaxY);
       const activeRange = EDGE_WET_ACTIVE - EDGE_WET_OFF;
       const y0 = Math.max(0, activeMinY);
       const y1 = Math.min(GH - 1, activeMaxY);
