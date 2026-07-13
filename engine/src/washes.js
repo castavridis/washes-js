@@ -3085,8 +3085,28 @@ function initGpuSim(gl, GW, GH) {
       // rect. The old code did `maskActive && mask[i] > MASK_THRESHOLD`
       // on every one of N cells (whole grid, not active rect), even when
       // a mask only covered a small region.
+      //
+      // v1.13 — settled-cell skip. evaporate deliberately runs the whole
+      // grid (global drying must continue with an empty active rect), but
+      // the dry-settle branch was rewriting ~10 values per cell for cells
+      // that settled long ago: wet 0 stays 0, there is no suspended
+      // pigment to fold into d, velocity was zeroed when the cell dried,
+      // and (when fading) the spring velocity was reset at settle time.
+      // Those cells are an exact no-op — skip them instead of re-writing.
+      const sg0 = g[0], sg1 = g[1], sg2 = g[2];
+      const fadeSpring = fadeEnabled && dVel !== null;
+      const dv0 = fadeSpring ? dVel[0] : null,
+        dv1 = fadeSpring ? dVel[1] : null,
+        dv2 = fadeSpring ? dVel[2] : null;
       if (!maskActive) {
         for (let i = 0; i < N; i++) {
+          if (
+            wet[i] === 0 &&
+            sg0[i] === 0 && sg1[i] === 0 && sg2[i] === 0 &&
+            u[i] === 0 && v[i] === 0 &&
+            (!fadeSpring || (dv0[i] === 0 && dv1[i] === 0 && dv2[i] === 0))
+          )
+            continue;
           let w = wet[i] * evaporationRate;
           if (w < 0.025) {
             for (let k = 0; k < 3; k++) {
@@ -3125,6 +3145,14 @@ function initGpuSim(gl, GW, GH) {
               x >= maskRectMinX &&
               x <= maskRectMaxX &&
               mask[i] > MASK_THRESHOLD
+            )
+              continue;
+            // v1.13 — settled-cell skip; see the twin fast-path block above.
+            if (
+              wet[i] === 0 &&
+              sg0[i] === 0 && sg1[i] === 0 && sg2[i] === 0 &&
+              u[i] === 0 && v[i] === 0 &&
+              (!fadeSpring || (dv0[i] === 0 && dv1[i] === 0 && dv2[i] === 0))
             )
               continue;
             let w = wet[i] * evaporationRate;
