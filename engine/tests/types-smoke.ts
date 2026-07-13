@@ -128,6 +128,34 @@ async function example() {
 }
 example();
 
+// --- paintImage: File/Blob/element/URL sources, resolves to stamp count
+//     (v2.1.1 — the declaration previously said Promise<void> and only
+//     string | HTMLImageElement; these mirror the runtime) ---
+declare const photoFile: File;
+declare const photoEl: HTMLImageElement;
+async function paintImageExample() {
+  const stamps: number = await wc.paintImage(photoFile, {
+    brushSize: 24,          // display px — drives sample spacing
+    strength: 0.6,
+    alphaThreshold: 0.1,
+    density: 1.5,
+    maxStamps: 5000,
+    flipX: false,
+    flipY: false,
+    pigment: 'rose',
+  });
+  console.log(stamps);
+  await wc.paintImage(photoEl);
+  await wc.paintImage('photo.png');
+}
+paintImageExample();
+
+// @ts-expect-error — 'threshold' was d.ts fiction; the runtime reads alphaThreshold
+wc.paintImage('photo.png', { threshold: 0.5 });
+
+// @ts-expect-error — 'onComplete' was d.ts fiction; await the Promise instead
+wc.paintImage('photo.png', { onComplete: () => {} });
+
 // --- Preset round-trip ---
 const preset: Preset = wc.getPreset();
 const copy = Washes.create(hostElement);
