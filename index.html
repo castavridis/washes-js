@@ -709,7 +709,8 @@ wc.paint(0.5, 0.5, 0.06, 'blue', 0.8);
       // wait for the display face so the underline lands under the real glyphs
       await Promise.race([document.fonts.ready, new Promise((res) => setTimeout(res, 1200))]);
       await opening();
-      try { wc.brushMode('salt'); } catch (_) {}     // organism grain — after the clean signature
+      // no texture mode — the default 'wet' brush everywhere (the organism
+      // page runs salt grain; the hero reads cleaner without it)
       if (reduced) {
         // one still organism: grow synchronously, settle, done
         spawnGen();
