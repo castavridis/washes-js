@@ -14435,7 +14435,7 @@ function _ensureTextureNoise(mode) {
     // declared but never implemented — undefined at runtime through all
     // of v1; the api-surface test only reflects the instance, so statics
     // could lie.) Bump alongside package.json.
-    version: '2.1.0',
+    version: '2.1.1',
   };
   // v0.53 — Brand alias. `Washes` is the user-facing brand for the
   // library; `Watercolor` is preserved as the long-standing internal /

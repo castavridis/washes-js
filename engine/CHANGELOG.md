@@ -2,6 +2,31 @@
 
 All notable changes to **washes** are documented here. Dates are ISO 8601.
 
+## [2.1.1] — 2026-07-13
+
+**Types-only patch — no runtime change of any kind** (the only edit to
+`washes.js` is the version constant; all goldens bit-exact by
+construction).
+
+### Fixed
+- **`PaintImageOptions` was d.ts fiction** — the declaration listed
+  `threshold` / `invert` / `scale` / `translateX` / `translateY` /
+  `onComplete`, none of which the runtime has ever read, and omitted
+  five options it does: `strength`, `alphaThreshold`, `density`,
+  `maxStamps`, plus the long-documented px `brushSize` semantics. The
+  interface now matches the implementation exactly. (Found while
+  auditing the playground's teaching docs against the runtime for demo
+  v1.0.22 — the last known survivor of the d.ts-fiction hunt that ran
+  1.23 → 2.0; the full-surface rewrite checked signatures but this
+  options bag slipped through.)
+- `paintImage` itself: declared `Promise<void>`, actually resolves to
+  the number of stamps painted; declared `string | HTMLImageElement`
+  sources, actually also accepts `File`/`Blob` (object-URL path since
+  v0.49). Both now declared.
+- `tests/types-smoke.ts` grows a paintImage block with
+  `@ts-expect-error` guards on two of the fictional fields, so this
+  can't silently regress.
+
 ## [2.1.0] — 2026-07-13
 
 **API 2.0 tranche 3: the pages go native.** All 27 live pages migrated

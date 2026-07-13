@@ -228,20 +228,29 @@ export interface TraceSVGOptions {
   bounds?: { x: number; y: number; w: number; h: number };
 }
 
-/** Options for `paintImage`. Source can be a URL, a data URL, or an HTMLImageElement. */
+/**
+ * Options for `paintImage`. Source can be a URL, a data URL, an
+ * HTMLImageElement, or a File/Blob. (v2.1.1 — this interface previously
+ * declared fields the runtime never read; it now matches the
+ * implementation exactly.)
+ */
 export interface PaintImageOptions {
+  /** Pigment for pixels the color decomposition skips. Default: current pigment. */
   pigment?: PigmentOption;
+  /** Display-pixel brush size while stamping (drives sample spacing). Default: current brushSize. */
   brushSize?: number;
-  /** 0..1 threshold for which pixels become pigment. */
-  threshold?: number;
+  /** Base stamp strength, 0..1. Default: current pressure. */
+  strength?: number;
+  /** 0..1 alpha below which a pixel is skipped. Default 0.05. */
+  alphaThreshold?: number;
+  /** Sample-spacing multiplier — <1 denser, >1 sparser. Default 1. */
+  density?: number;
+  /** Hard cap on total stamps; spacing widens to stay under it. Default 20000. */
+  maxStamps?: number;
+  /** Mirror horizontally. Default false. */
   flipX?: boolean;
+  /** Mirror vertically. Default false. */
   flipY?: boolean;
-  /** Reverse light/dark mapping. */
-  invert?: boolean;
-  scale?: number;
-  translateX?: number;
-  translateY?: number;
-  onComplete?: () => void;
 }
 
 /**
@@ -740,8 +749,15 @@ export interface WashesInstance {
   /** Stamp text as wet pigment. Returns the number of stamps painted (synchronous). */
   paintText(text: string, opts?: PaintTextOptions): number;
 
-  /** Stamp an image using the active brush (light/dark map to pigment density). */
-  paintImage(source: string | HTMLImageElement, opts?: PaintImageOptions): Promise<void>;
+  /**
+   * Stamp a raster image as a watercolor reproduction — each sampled pixel
+   * decomposes into a rose+yellow+blue mix (subtractive color theory, same
+   * as traceSVG's `approximateColor`). Resolves to the number of stamps
+   * painted (0 for a tainted canvas or undecodable source). (v0.49; v2.1.1
+   * corrects this declaration — it said `Promise<void>` and omitted
+   * File/Blob sources.)
+   */
+  paintImage(source: string | HTMLImageElement | Blob, opts?: PaintImageOptions): Promise<number>;
 
   /** Trace an SVG, drawing each path with the active brush over time. Returns the total point count synchronously (0 when nothing parsed); the animation itself runs over subsequent frames unless `instant`/`animate: false`. */
   traceSVG(svgText: string, opts?: TraceSVGOptions): number;
