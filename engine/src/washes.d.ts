@@ -638,6 +638,14 @@ export interface WashesInstance {
     readonly height: number;
     /** Paint a dab at grid coords with a grid-cell radius (v1's paintAt, exactly). */
     paint(gx: number, gy: number, gridRadius: number, pigment?: PigmentOption, strength?: number): WashesInstance;
+    /** v2.1.0 — the verb family for cell-thinking pieces (v1's grid-space stir/rewet/dry/sample, exactly). */
+    stir(gx: number, gy: number, vx: number, vy: number, gridRadius?: number): WashesInstance;
+    /** v2.1.0 */
+    rewet(gx: number, gy: number, gridRadius?: number): WashesInstance;
+    /** v2.1.0 */
+    dry(gx: number, gy: number, gridRadius?: number): WashesInstance;
+    /** v2.1.0 */
+    sample(gx: number, gy: number): SampleResult;
     toNorm(gx: number, gy: number): { nx: number; ny: number };
     fromNorm(nx: number, ny: number): { gx: number; gy: number };
     size(): { gridWidth: number; gridHeight: number };

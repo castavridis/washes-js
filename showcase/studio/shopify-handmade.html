@@ -57,12 +57,12 @@ if(Washes&&sim){
   const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
   let wc=null,G=null,ed=1,count=0,painting=false;
   function init(){
-    wc=Washes.compat1(Washes.create(sim,{gpu:false,pointer:false,paperColor:{r:0.992,g:0.984,b:0.957}}));  // v1-surface pin
+    wc=Washes.create(sim,{gpu:false,pointer:false,paperColor:{r:0.992,g:0.984,b:0.957}});  // native v2 (migrated off compat1)
     G=wc.state(); const gx=n=>n*G.gridWidth, gy=n=>n*G.gridHeight;
     safe(()=>wc.flow(0.12)); safe(()=>wc.evaporation(1.2)); safe(()=>wc.quality('auto'));
     const J=a=>(Math.random()-0.5)*a;
     function stroke(pts,pig,r,st,delay,per){ // choreographed: one dab at a time
-      pts.forEach((p,i)=>setTimeout(()=>{ safe(()=>wc.paintNorm(p[0],p[1],r,pig,st)); }, delay+i*(reduce?0:per)));
+      pts.forEach((p,i)=>setTimeout(()=>{ safe(()=>wc.paint(p[0],p[1],r,pig,st)); }, delay+i*(reduce?0:per)));
       return delay+pts.length*(reduce?0:per);
     }
     const seg=(a,b,n,j)=>{const o=[];for(let i=0;i<=n;i++){const t=i/n;o.push([a[0]+(b[0]-a[0])*t+J(j),a[1]+(b[1]-a[1])*t+J(j)]);}return o;};
@@ -82,14 +82,14 @@ if(Washes&&sim){
       t=stroke(arc(0.59,1),'blue',0.018,0.8,t,30);
       // the maker's mark — one ochre dot
       t=stroke([[0.5+J(0.02),0.62+J(0.02)]],'yellow',0.03,0.85,t,0);
-      setTimeout(()=>{ safe(()=>wc.runUntilDry&&wc.runUntilDry(true)); painting=false;
+      setTimeout(()=>{ safe(()=>wc.run('until-dry')); painting=false;
         meta.textContent='edition № '+String(ed).padStart(3,'0')+' · brushed just now'; }, t+200);
     }
     paintTote();
-    document.getElementById('remix').addEventListener('click',()=>{ if(painting)return; ed++; safe(()=>wc.runUntilDry&&wc.runUntilDry(false)); paintTote(); });
+    document.getElementById('remix').addEventListener('click',()=>{ if(painting)return; ed++; safe(()=>wc.run('auto')); paintTote(); });
     document.getElementById('add').addEventListener('click',()=>{
       count++; badge.textContent=count; badge.classList.remove('show'); void badge.offsetWidth; badge.classList.add('show');
-      safe(()=>{ const s=[{x:gx(0.5),y:gy(0.3),velocity:34}]; wc.splash?wc.splash(s,'spray'):wc.paintNorm(0.5,0.3,0.04,'yellow',0.5); });
+      safe(()=>wc.splash([{x:0.5,y:0.3,velocity:34}],'fineSpritz'));
     });
   }
   (function wait(){ if(sim.clientWidth>4&&sim.clientHeight>4) init(); else requestAnimationFrame(wait); })();

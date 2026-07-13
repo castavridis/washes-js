@@ -59,8 +59,8 @@ if(Washes&&sim){
   const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
   let wc=null,G=null;
   function init(){
-    wc=Washes.compat1(Washes.create(sim,{gpu:false,pointer:false,paperColor:{r:0.95,g:0.937,b:0.905}}));  // v1-surface pin
-    G=wc.state(); const gx=n=>n*G.gridWidth, gy=n=>n*G.gridHeight;
+    wc=Washes.create(sim,{gpu:false,pointer:false,paperColor:{r:0.95,g:0.937,b:0.905}});  // native v2 (migrated off compat1)
+    G=wc.state(); const gx=n=>n*G.gridWidth, gy=n=>n*G.gridHeight, nr=n=>n*G.gridWidth/Math.min(G.gridWidth,G.gridHeight);  // gx/gy: paintText opts speak grid units
     safe(()=>wc.flow(0.14)); safe(()=>wc.evaporation(0.9)); safe(()=>wc.quality('auto'));
     safe(()=>wc.on('perflevel',d=>{ vb.textContent='auto · '+d.level; }));
     const moods={ STORM:{pig:['blue','blue','rose'],g:[0,1.2],ev:0.6}, EMBER:{pig:['rose','yellow','yellow'],g:[0,-0.9],ev:2.2}, REEF:{pig:['blue','yellow','blue'],g:[0.5,0.1],ev:0.7}, DEFAULT:{pig:['blue','rose','yellow'],g:[0,0.3],ev:0.9} };
@@ -77,12 +77,12 @@ if(Washes&&sim){
       // never-blank guarantee: if the text path failed for any reason,
       // lay the word's energy down as a pigment ribbon instead.
       safe(()=>{ if((wc.coverage()||0)<0.0015){ for(let i=0;i<=26;i++){ const t=i/26;
-        wc.paintNorm(0.12+0.76*t, 0.5+Math.sin(t*6.3)*0.08, 0.05, m.pig[i%3], 0.45); } } });
-      safe(()=>wc.rewet(gx(0.5),gy(0.5),G.gridWidth*0.32));
+        wc.paint(0.12+0.76*t, 0.5+Math.sin(t*6.3)*0.08, 0.05, m.pig[i%3], 0.45); } } });
+      safe(()=>wc.rewet(0.5,0.5,nr(0.32)));
       safe(()=>wc.gravityVector(m.g[0],m.g[1])); safe(()=>wc.gravityStrength&&wc.gravityStrength(0.7));
       safe(()=>wc.evaporation(m.ev));
       if(!reduce){ let k=0; const id=setInterval(()=>{ if(k++>24){clearInterval(id);vb.textContent='drifting';return;}
-        safe(()=>wc.addVelocity(gx(0.2+Math.random()*0.6),gy(0.3+Math.random()*0.45),(Math.random()-0.5)*0.8,(Math.random()-0.3)*0.6,G.gridWidth*0.05)); },70); }
+        safe(()=>wc.stir(0.2+Math.random()*0.6,0.3+Math.random()*0.45,(Math.random()-0.5)*0.8,(Math.random()-0.3)*0.6,nr(0.05))); },70); }
     }
     document.getElementById('go').addEventListener('click',()=>render(document.getElementById('q').value));
     document.getElementById('q').addEventListener('keydown',e=>{ if(e.key==='Enter') render(e.target.value); });

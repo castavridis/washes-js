@@ -46,9 +46,9 @@
     if (Washes && stage){
       const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
       // pointer:false → the engine won't paint with its default brush; WE own the bubble brush.
-      const wc = Washes.compat1(Washes.create(stage, { gpu:true, pointer:false, paperColor:{ r:0.05, g:0.18, b:0.27 } }));  // v1-surface pin
+      const wc = Washes.create(stage, { gpu:true, pointer:false, paperColor:{ r:0.05, g:0.18, b:0.27 } });  // native v2 (migrated off compat1)
       let G = wc.state();
-      const gx=nx=>nx*G.gridWidth, gy=ny=>ny*G.gridHeight, safe=fn=>{try{return fn();}catch(_){}};
+      const nr=n=>n*G.gridWidth/Math.min(G.gridWidth,G.gridHeight), safe=fn=>{try{return fn();}catch(_){}};
       addEventListener('resize', ()=>safe(()=>{G=wc.state();}), {passive:true});
 
       const DEEP=[0.05,0.18,0.27], SURF=[0.16,0.42,0.50], SKY=[0.78,0.90,0.95];
@@ -62,10 +62,8 @@
       let curAlt = 0;   // shared so the bubble brush knows if we're under water
 
       function burst(nx,ny,vel){
-        const X=gx(nx),Y=gy(ny);
-        try{ if(typeof wc.splash==='function'){ wc.splash([-0.18,-0.06,0.06,0.18].map(d=>({x:gx(nx+d),y:Y,velocity:vel||38})),'spray'); return; } }catch(_){}
-        for(let i=0;i<14;i++){ const a=Math.PI*(i/14)-Math.PI/2; wc.addVelocity(X,Y,Math.cos(a)*0.9,-Math.abs(Math.sin(a))*1.1,G.gridWidth*0.05); }
-        wc.paintNorm(nx,ny,0.06,'blue',0.5);
+        for(let i=0;i<14;i++){ const a=Math.PI*(i/14)-Math.PI/2; wc.stir(nx,ny,Math.cos(a)*0.9,-Math.abs(Math.sin(a))*1.1,nr(0.05)); }
+        wc.paint(nx,ny,0.06,'blue',0.5);
       }
 
       // ---- the bubble brush: LIFT pigment off the murk so pale bubbles rise ----
@@ -75,8 +73,8 @@
         for(let i=0;i<n;i++){
           const jx=nx+(Math.random()-0.5)*0.045, jy=ny+(Math.random()-0.5)*0.045;
           const r=0.012+Math.random()*0.02;
-          safe(()=>wc.paintNorm(jx,jy,r,0,0.55));          // lift (pigment arg ignored in crayon)
-          safe(()=>wc.addVelocity(gx(jx),gy(jy),(Math.random()-0.5)*0.3,-0.7-Math.random()*0.7,G.gridWidth*0.03)); // rise
+          safe(()=>wc.paint(jx,jy,r,0,0.55));          // lift (pigment arg ignored in crayon)
+          safe(()=>wc.stir(jx,jy,(Math.random()-0.5)*0.3,-0.7-Math.random()*0.7,nr(0.03))); // rise
         }
         safe(()=>wc.brushMode('wet'));
       }
@@ -99,20 +97,20 @@
       function underwater(a){
         const top=a+0.015;
         if(frame%2===0){ const x=Math.random(), y=top+Math.random()*(1-top);
-          wc.paintNorm(x,y,0.05+Math.random()*0.06,'blue',0.20+y*0.22);
-          wc.addVelocity(gx(x),gy(y),(Math.random()-0.5)*0.18,-0.22-Math.random()*0.3,G.gridWidth*0.04); }
+          wc.paint(x,y,0.05+Math.random()*0.06,'blue',0.20+y*0.22);
+          wc.stir(x,y,(Math.random()-0.5)*0.18,-0.22-Math.random()*0.3,nr(0.04)); }
         if(frame%26===0){ const x=0.2+Math.random()*0.6;
-          wc.paintNorm(x,top+0.04,0.03,'yellow',0.10); wc.paintNorm(x,top+0.14,0.05,'blue',0.08);
-          wc.addVelocity(gx(x),gy(top+0.05),0,0.5,G.gridWidth*0.03); }
+          wc.paint(x,top+0.04,0.03,'yellow',0.10); wc.paint(x,top+0.14,0.05,'blue',0.08);
+          wc.stir(x,top+0.05,0,0.5,nr(0.03)); }
       }
       function airborne(a){
         if(frame%3===0){ const x=Math.random(), y=Math.random()*Math.max(0.05,a*0.7);
-          safe(()=>wc.brushMode('splatter')); wc.paintNorm(x,y,0.02+Math.random()*0.03,'blue',0.18);
-          wc.addVelocity(gx(x),gy(y),(Math.random()-0.5)*0.1,0.6+Math.random()*0.5,G.gridWidth*0.02); safe(()=>wc.brushMode('wet')); }
+          safe(()=>wc.brushMode('splatter')); wc.paint(x,y,0.02+Math.random()*0.03,'blue',0.18);
+          wc.stir(x,y,(Math.random()-0.5)*0.1,0.6+Math.random()*0.5,nr(0.02)); safe(()=>wc.brushMode('wet')); }
       }
       function step(a){
         curAlt=a;
-        safe(()=>{ wc.removeMask(); if(a>0.004) wc.maskNorm(0,0,1,Math.min(0.999,a)); });
+        safe(()=>{ wc.removeMask(); if(a>0.004) wc.mask(0,0,1,Math.min(0.999,a)); });
         const down=a*2-0.15;
         safe(()=>{ wc.gravityVector&&wc.gravityVector(0,down); wc.gravityStrength&&wc.gravityStrength(0.4+a*1.1); });
         const pc=paper(a); safe(()=>wc.paperColor(pc[0],pc[1],pc[2]));

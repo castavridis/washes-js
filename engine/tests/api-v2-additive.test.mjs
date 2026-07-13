@@ -53,6 +53,23 @@ assert.equal(wc.grid.paint(10, 10, 4, 'blue', 0.7), wc, 'grid.paint chains to th
 const gd = wc.grid.fromDisplay(0, 0);
 assert.ok(typeof gd.gx === 'number' && typeof gd.gy === 'number', 'grid.fromDisplay bridges');
 
+// v2.1.0 — the grid verb family (v1's grid-space implementations, exactly)
+assert.equal(wc.grid.stir(20, 20, 1, 0, 5), wc, 'grid.stir chains');
+assert.equal(wc.grid.rewet(20, 20, 5), wc, 'grid.rewet chains');
+assert.equal(wc.grid.dry(20, 20, 5), wc, 'grid.dry chains');
+assert.ok(typeof wc.grid.sample(20, 20) === 'object', 'grid.sample reads a cell');
+{
+  const a = Washes.createHeadless({ width: 320, height: 240, seed: 31 });
+  const b = Washes.createHeadless({ width: 320, height: 240, seed: 31 });
+  a.grid.paint(40, 30, 6, 0, 0.8); a.grid.stir(40, 30, 1.2, -0.4, 8); a.grid.rewet(50, 35, 7); a.grid.dry(30, 25, 6);
+  const cb = Washes.compat1(b, { warn: false });
+  cb.paintAt(40, 30, 6, 0, 0.8); cb.stir(40, 30, 1.2, -0.4, 8); cb.rewet(50, 35, 7); cb.dry(30, 25, 6);
+  const pa = planes2(a.saveState()), pb = planes2(b.saveState());
+  pa.forEach((buf, i) => assert.equal(Buffer.compare(buf, pb[i]), 0, `grid verbs ≡ v1 grid calls (plane ${i})`));
+  a.destroy(); b.destroy();
+}
+function planes2(snap) { return ['fluid', 'pigment', 'deposit', 'paper'].map((p) => Buffer.from(snap[p].buffer)); }
+
 // v2 paint ≡ v1 paintNorm, bit-exactly (same seed, same script)
 function planes(snap) { return ['fluid', 'pigment', 'deposit', 'paper'].map((p) => Buffer.from(snap[p].buffer)); }
 {

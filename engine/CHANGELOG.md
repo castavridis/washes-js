@@ -2,6 +2,49 @@
 
 All notable changes to **washes** are documented here. Dates are ISO 8601.
 
+## [2.1.0] — 2026-07-13
+
+**API 2.0 tranche 3: the pages go native.** All 27 live pages migrated
+off `compat1()` to the v2 surface — the wrapper served exactly its
+designed purpose (nothing broke through the flip) and is now unused in
+the repository, though it ships until 3.0 for external embedders.
+
+### Added
+- **`wc.grid` grows the verb family**: `stir`, `rewet`, `dry`, `sample`
+  join `paint` — v1's grid-space implementations, exactly. The showcase's
+  cell-thinking pieces (the ten `personality/` studies especially)
+  position AND size everything in grid units; the namespace exists so
+  cells keep a first-class home, and their migration proved the demand.
+
+### Fixed
+- **The ten `showcase/personality/` pages were broken in production
+  since 2.0.0** — they alias `window.Washes` to a local `N`, so the
+  tranche-1 `Washes.create(` sweep never found them and they reached the
+  flip unpinned (`wc.paintAt is not a function`). Now migrated natively.
+  Lesson recorded: sweep by *member call* (`.paintAt(`), not by factory
+  spelling.
+- The gallery's stencil/scratch mask pieces used canvas-relative
+  coordinates where `maskRect` wanted client coordinates — wrong
+  whenever the page scrolled. Their normalized `mask()`/`unmask()`
+  rewrites are origin-free, fixing the bug as a side effect.
+- `shopify-handmade`'s celebration splash named a preset that never
+  existed (`'spray'`), so it threw silently inside its `safe()` wrapper
+  and did nothing — since v0.x. It now fires a real `fineSpritz`.
+  `dolphin` had the same dead call with a live stir-ring fallback; there
+  the dead branch is simply removed (behavior unchanged).
+
+### Migration notes (pages)
+- Radii tuned as `gridWidth × k` convert to v2 fractions with the
+  aspect-ratio helper `nr(k) = k·GW/min(GW,GH)` — rescale-invariant.
+- px-diameter UI (playground Size slider, two-layer slider, saved brush
+  presets) keeps its px semantics through a `brushPx()`/`setBrushPx()`
+  bridge pair over `displayRect()`.
+- The playground's scale slider now PRESERVES the painting (v2
+  `scale()` default) — dragging resolution no longer erases the canvas.
+- Playground → demo v1.0.21. The playground's *docs* sections still
+  show v1-era snippets (historical changelog entries stay that way by
+  design; the teaching sections await their own editorial pass).
+
 ## [2.0.0] — 2026-07-13
 
 **The API 2.0 rename batch** (tranche 2 of the plan; design:

@@ -26,7 +26,7 @@
 const N = window.Washes;
 const PAPER = '#dad8d2';
 const clamp = (v,a,b)=> v<a?a:v>b?b:v;
-function ink(wc,x,y,r,a){ wc.paintAt(x,y,r,'yellow',a*1.3); wc.paintAt(x,y,r,'rose',a); wc.paintAt(x,y,r,'blue',a); wc.paintAt(x,y,r,'yellow',a*0.45); }
+function ink(wc,x,y,r,a){ wc.grid.paint(x,y,r,'yellow',a*1.3); wc.grid.paint(x,y,r,'rose',a); wc.grid.paint(x,y,r,'blue',a); wc.grid.paint(x,y,r,'yellow',a*0.45); }
 
 const wc = N.create(document.getElementById('cv'), { gpu:false, pointer:false });
 const S = wc.state(), GW = S.gridWidth, GH = S.gridHeight;
@@ -37,8 +37,8 @@ const NL = LANES.length, TOP=0.07, BOT=0.93, LH=(BOT-TOP)/NL, AMP=LH*0.40;
 const laneY = (i)=> TOP + (i+0.5)*LH;
 
 // Sophistication: crisp lane separators — the chart's grid
-for(let i=1;i<NL;i++){ const yy=TOP+i*LH; wc.maskNorm(0, yy-0.0028, 1, 0.0056); }
-wc.maskNorm(0, TOP-0.0028, 1, 0.0056); wc.maskNorm(0, BOT-0.0028, 1, 0.0056);
+for(let i=1;i<NL;i++){ const yy=TOP+i*LH; wc.mask(0, yy-0.0028, 1, 0.0056); }
+wc.mask(0, TOP-0.0028, 1, 0.0056); wc.mask(0, BOT-0.0028, 1, 0.0056);
 wc.paintLoad(1.2).waterLoad(1.0);
 wc.fadePainting(9000);                                   // comet-tail behind the pen
 

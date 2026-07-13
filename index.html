@@ -203,7 +203,7 @@
 <header class="hero" id="hero">
   <div class="hero-fallback" aria-hidden="true"></div>
   <div id="wash-hero" aria-label="Live watercolor canvas — draw on it, or tap to splash"></div>
-  <div class="hero-badge">demo v1.0.20 · engine 2.0.0</div>
+  <div class="hero-badge">demo v1.0.21 · engine 2.1.0</div>
   <div class="hero-overlay">
     <h1>Washes</h1>
     <p class="tag">An interactive watercolor simulation for the browser — a three-layer
@@ -246,7 +246,7 @@
         <h3><span class="swatch b"></span>Playground</h3>
         <p>The full instrument: every brush, pigment palettes, masks, transparency,
         the timeline flourish — with built-in docs and the complete changelog
-        (v0.1&nbsp;→&nbsp;v1.0.20).</p>
+        (v0.1&nbsp;→&nbsp;v1.0.21).</p>
       </a>
       <a class="card" href="demos/snake.html">
         <h3><span class="swatch r"></span>Serpentine</h3>
@@ -307,7 +307,7 @@
     <h2>The engine</h2>
     <p><code>washes</code> is a dependency-free npm-shaped package
     (<a href="https://github.com/castavridis/washes-js/blob/main/engine/README.md">README</a> ·
-    <a href="https://github.com/castavridis/washes-js/blob/main/engine/CHANGELOG.md">changelog 0.98&nbsp;→&nbsp;2.0.0</a>)
+    <a href="https://github.com/castavridis/washes-js/blob/main/engine/CHANGELOG.md">changelog 0.98&nbsp;→&nbsp;2.1.0</a>)
     living in <code>engine/</code>. The header above is the engine painting for
     itself — inks mixed for the local hour, strokes choreographed by the
     timeline sidecar, resolution governed by <code>quality('auto')</code>, and it
@@ -353,7 +353,7 @@ wc.paint(0.5, 0.5, 0.06, 'blue', 0.8);
 </main>
 
 <footer>
-  Washes · MIT · Stephanie · demo v1.0.20 · engine 2.0.0 ·
+  Washes · MIT · Stephanie · demo v1.0.21 · engine 2.1.0 ·
   after <a href="https://doi.org/10.1145/258734.258896">Curtis et al., SIGGRAPH 1997</a>
 </footer>
 
@@ -387,19 +387,19 @@ wc.paint(0.5, 0.5, 0.06, 'blue', 0.8);
       const hour = h < 5 ? 'night' : h < 10 ? 'dawn' : h < 17 ? 'day' : h < 21 ? 'dusk' : 'night';
 
       const host = document.getElementById('wash-hero');
-      const wc = Washes.compat1(Washes.create(host, { pigments: PALETTES[hour] }));  // v1-surface pin — survives the 2.0 rename batch
+      const wc = Washes.create(host, { pigments: PALETTES[hour] });  // native v2 (migrated off compat1)
       wc.paperColor('#faf5ec');                      // seamless with the page
       wc.evaporation(7.5);                           // slower dry — washes linger and bloom longer
       wc.flow(REVEAL_BLUE.settings.flow);
       wc.quality('auto');                            // resolution belongs to the governor
       wc.fadePainting(20000);                        // 20s half-life: strokes visibly ghost away
-      wc.runUntilDry(true);
+      wc.run('until-dry');
       wc.paintLoad(0.075).waterLoad(2);
       wc.edgeMode('closed-gravity');                 // sheet keeps its mass, but feels the tilt
       wc.gravityDirection('down');
       wc.gravityStrength(2);                         // double pull — washes race down the page
       wc.edgeDarkening(true);                        // dark rims as blooms dry (Curtis §4.3.3) — explicit, not default-dependent
-      const fitBrush = () => wc.brushSize(host.clientHeight / 5);  // brush ⌀ = hero height / 5
+      const fitBrush = () => wc.brushSize((host.clientHeight / 5) / 2 / Math.min(host.clientWidth, host.clientHeight));  // brush ⌀ = hero height / 5, as a v2 radius fraction
       fitBrush();
       if (matchMedia('(pointer: fine)').matches) wc.cursorPreview(true);  // brush-ring cursor
 
@@ -439,15 +439,15 @@ wc.paint(0.5, 0.5, 0.06, 'blue', 0.8);
 
       const bloom = ([x, y]) => {                    // wet-on-wet: a body dab + bleeding satellites
         const p = pig();
-        wc.paintNorm(x, y, rand(0.045, 0.07), p, rand(0.45, 0.6));
+        wc.paint(x, y, rand(0.045, 0.07), p, rand(0.45, 0.6));
         for (let i = 0, n = 1 + (Math.random() * 2 | 0); i < n; i++)
-          wc.paintNorm(x + rand(-0.05, 0.05), y + rand(-0.04, 0.04),
+          wc.paint(x + rand(-0.05, 0.05), y + rand(-0.04, 0.04),
                        rand(0.02, 0.035), (p + 1 + (Math.random() * 2 | 0)) % 3, rand(0.3, 0.45));
       };
       const spray = ([x, y]) => {                    // rainbow-spray technique: random ink per dab
         const dx = rand(-0.1, 0.1), dy = rand(-0.05, 0.05);
         for (let i = 0, n = 6 + (Math.random() * 3 | 0); i < n; i++)
-          wc.paintNorm(x + dx * (i / n) + rand(-0.015, 0.015), y + dy * (i / n) + rand(-0.015, 0.015),
+          wc.paint(x + dx * (i / n) + rand(-0.015, 0.015), y + dy * (i / n) + rand(-0.015, 0.015),
                        rand(0.007, 0.013), pig(), 0.32);
       };
       const drift = () => {                          // an eased arc stroke between two anchors
@@ -504,11 +504,11 @@ wc.paint(0.5, 0.5, 0.06, 'blue', 0.8);
         if (performance.now() - downAt > 260 || Math.hypot(e.clientX - downX, e.clientY - downY) > 9) return;
         const rect = host.getBoundingClientRect();
         const x = (e.clientX - rect.left) / rect.width, y = (e.clientY - rect.top) / rect.height;
-        const R = (wc.brushSize() / 2) / Math.min(rect.width, rect.height);  // brush radius, normalized
+        const R = wc.brushSize();  // v2 brushSize() IS the normalized radius fraction
         // impact blob — overlapping off-center dabs read as one irregular splat
-        wc.paintNorm(x, y, R * 0.7, inkIdx, 0.85);
+        wc.paint(x, y, R * 0.7, inkIdx, 0.85);
         for (let i = 0; i < 3; i++)
-          wc.paintNorm(x + rand(-R, R) * 0.3, y + rand(-R, R) * 0.3, R * rand(0.4, 0.6), inkIdx, 0.6);
+          wc.paint(x + rand(-R, R) * 0.3, y + rand(-R, R) * 0.3, R * rand(0.4, 0.6), inkIdx, 0.6);
         // ejecta — many near droplets, few far (u² bias); size and ink thin with
         // distance; far droplets leave a short radial streak; gravity favors the
         // downward throw and the fluid gets an outward shove
@@ -518,9 +518,9 @@ wc.paint(0.5, 0.5, 0.06, 'blue', 0.8);
           const dy = Math.sin(a) * (Math.sin(a) > 0 ? 1.15 : 0.85);
           const px = x + Math.cos(a) * d, py = y + dy * d;
           const size = Math.max(0.004, R * (0.16 - 0.11 * u)), s = 0.55 - 0.25 * u;
-          wc.paintNorm(px, py, size, inkIdx, s);
-          if (d > R * 1.5) wc.paintNorm(px + Math.cos(a) * size * 2, py + dy * size * 2, size * 0.6, inkIdx, s * 0.7);
-          if (i % 3 === 0) wc.stirNorm(x + Math.cos(a) * R * 0.5, y + dy * R * 0.5, Math.cos(a) * 3, dy * 3, R * 0.5);
+          wc.paint(px, py, size, inkIdx, s);
+          if (d > R * 1.5) wc.paint(px + Math.cos(a) * size * 2, py + dy * size * 2, size * 0.6, inkIdx, s * 0.7);
+          if (i % 3 === 0) wc.stir(x + Math.cos(a) * R * 0.5, y + dy * R * 0.5, Math.cos(a) * 3, dy * 3, R * 0.5);
         }
       }, { passive: true });
 
@@ -569,7 +569,7 @@ wc.paint(0.5, 0.5, 0.06, 'blue', 0.8);
         quietUntil = performance.now() + 9000;       // the fresh sheet is the human's first
       });
       document.getElementById('hc-save').addEventListener('click', async () => {
-        const blob = await wc.exportPNG({ asBlob: true });
+        const blob = await wc.exportImage({ asBlob: true });
         const url = URL.createObjectURL(blob);
         const a = Object.assign(document.createElement('a'),
           { href: url, download: `washes-${palName}-${Date.now()}.png` });

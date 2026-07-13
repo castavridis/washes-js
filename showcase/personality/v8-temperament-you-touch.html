@@ -26,7 +26,7 @@
 const N = window.Washes;
 const PAPER = '#dad8d2';
 const rnd = (a,b)=> a + Math.random()*(b-a);
-function ink(wc,x,y,r,a){ wc.paintAt(x,y,r,'yellow',a*1.3); wc.paintAt(x,y,r,'rose',a); wc.paintAt(x,y,r,'blue',a); wc.paintAt(x,y,r,'yellow',a*0.45); }
+function ink(wc,x,y,r,a){ wc.grid.paint(x,y,r,'yellow',a*1.3); wc.grid.paint(x,y,r,'rose',a); wc.grid.paint(x,y,r,'blue',a); wc.grid.paint(x,y,r,'yellow',a*0.45); }
 
 const stage = document.getElementById('cv');
 const wc = N.create(stage, { gpu:false, pointer:false });   // we drive it ourselves
@@ -36,7 +36,7 @@ const G = { excite:1.0, compet:1.0, sincere:0.8, sophist:0.8, rugged:0.8 };   //
 
 // Sophistication: an invisible lattice the marks discipline to
 const DIV = Math.round(3 + G.sophist*4), LT = 0.006;
-for (let i=1;i<DIV;i++){ const f=i/DIV; wc.maskNorm(f-LT/2,0,LT,1); wc.maskNorm(0,f-LT/2,1,LT); }
+for (let i=1;i<DIV;i++){ const f=i/DIV; wc.mask(f-LT/2,0,LT,1); wc.mask(0,f-LT/2,1,LT); }
 wc.paintLoad(1.2).waterLoad(1.1);
 wc.fadePainting(7000);                                       // a living surface that slowly recedes
 
@@ -54,7 +54,7 @@ function onMove(e){
     ink(wc, p.gx, p.gy, r, 0.30 + 0.25*G.sincere);          // Sincerity: honest record of your path
     const len = Math.hypot(dx,dy) || 1;
     const vmag = clampn(sp*3.4, 0, 1.0) * G.excite;          // Excitement: your speed flings lines
-    wc.addVelocity(p.gx, p.gy, dx/len*vmag, dy/len*vmag, r*1.3);
+    wc.grid.stir(p.gx, p.gy, dx/len*vmag, dy/len*vmag, r*1.3);
   }
   last = { gx:p.gx, gy:p.gy, t:now };
   lastMove = now; resolved = false;
@@ -77,7 +77,7 @@ function frame(){
   if (idle > 2600){                                                     // Ruggedness: stillness weathers it
     const t = idle - 2600, cyc = Math.floor(t/2000);
     if (cyc !== lc){ lc = cyc; if(!gravOn){ wc.gravityVector(0,1); gravOn=true; }
-      const by = rnd(0.2,0.8); for(let x=0.15;x<=0.85;x+=0.12) wc.rewet(x*GW, by*GH, GW*0.05);
+      const by = rnd(0.2,0.8); for(let x=0.15;x<=0.85;x+=0.12) wc.grid.rewet(x*GW, by*GH, GW*0.05);
       wc.gravityStrength(0.12); }
     if (t - cyc*2000 > 1200) wc.gravityStrength(0);
   }

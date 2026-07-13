@@ -59,14 +59,14 @@ if(Washes&&sim){
   let wc=null,G=null,busy=false;
   const log=(s,strong)=>{ term.innerHTML += "\n"+(strong?"<b>"+s+"</b>":s); term.scrollTop=term.scrollHeight; };
   function init(){
-    wc=Washes.compat1(Washes.create(sim,{gpu:false,pointer:false,paperColor:{r:1,g:1,b:1}}));  // v1-surface pin
+    wc=Washes.create(sim,{gpu:false,pointer:false,paperColor:{r:1,g:1,b:1}});  // native v2 (migrated off compat1)
     G=wc.state();
     safe(()=>wc.flow(0.12)); safe(()=>wc.evaporation(1.6)); safe(()=>wc.quality('auto'));
     // ink = all three pigments stacked → chromatic black that splits at wet edges
     function inkStroke(pts,r,st){
       for(const pig of ['blue','rose','yellow']){
         safe(()=>wc.penUp&&wc.penUp());
-        for(const [x,y] of pts) safe(()=>wc.strokeToNorm?wc.strokeToNorm(x,y,{pigment:pig,strength:st,nradius:r}):wc.paintNorm(x,y,r,pig,st));
+        for(const [x,y] of pts) safe(()=>wc.stroke(x,y,{pigment:pig,strength:st,nradius:r}));
       }
       safe(()=>wc.penUp&&wc.penUp());
     }
@@ -78,7 +78,7 @@ if(Washes&&sim){
       inkStroke(edge(B,C),loose?0.016:0.011,loose?0.5:0.85);
       inkStroke(edge(C,A),loose?0.016:0.011,loose?0.5:0.85);
     }
-    function preview(){ safe(()=>wc.clearPaint?wc.clearPaint():wc.reset()); safe(()=>wc.rewetNorm&&wc.rewetNorm()); triangle(true);
+    function preview(){ safe(()=>wc.clearPaint?wc.clearPaint():wc.reset()); safe(()=>wc.rewet()); triangle(true);
       badge.textContent='preview · wet'; }
     preview();
     function deploy(){
@@ -86,13 +86,13 @@ if(Washes&&sim){
       log('building…'); badge.textContent='building';
       setTimeout(()=>{ log('✓ compiled 1 mark in 412ms');
         safe(()=>wc.dry()); safe(()=>wc.clearPaint?wc.clearPaint():0);
-        triangle(false); safe(()=>wc.runUntilDry&&wc.runUntilDry(true));
+        triangle(false); safe(()=>wc.run('until-dry'));
         badge.textContent='production · drying';
         const off=safe(()=>wc.on&&wc.on('dry',()=>{ badge.textContent='production · crisp'; log('✓ deployed — ink set',true); off&&off(); busy=false; }));
         if(!off){ setTimeout(()=>{badge.textContent='production · crisp'; busy=false;},2600); }
       }, reduce?80:650);
     }
-    function rollback(){ if(busy)return; log('↺ rolling back — rewetting'); safe(()=>wc.runUntilDry&&wc.runUntilDry(false)); preview(); }
+    function rollback(){ if(busy)return; log('↺ rolling back — rewetting'); safe(()=>wc.run('auto')); preview(); }
     document.getElementById('deploy').addEventListener('click',deploy);
     document.getElementById('rollback').addEventListener('click',rollback);
     addEventListener('keydown',e=>{ if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='d'){ e.preventDefault(); deploy(); }});

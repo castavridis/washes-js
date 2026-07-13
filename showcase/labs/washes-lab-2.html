@@ -59,7 +59,7 @@
 <script type="module">
 // ---------------------------------------------------------------------------
 // Helpers (shared) ----------------------------------------------------------
-function newInst(host){const i=Washes.compat1(Washes.create(host,{gpu:false,pointer:false}));const s=i.state();return {i,GW:s.gridWidth,GH:s.gridHeight};}
+function newInst(host){const i=Washes.create(host,{gpu:false,pointer:false});const s=i.state();return {i,GW:s.gridWidth,GH:s.gridHeight};}
 function canvasRect(host){const c=host&&host.querySelector&&host.querySelector('canvas');const r=(c||host).getBoundingClientRect();return {x:r.left,y:r.top,w:r.width||560,h:r.height||560};}
 function wetPaper(i){try{const wp=i.paperWetnessPresets&&i.paperWetnessPresets();if(wp&&wp.length){const pick=wp.find(n=>/wet|flood|soak|damp/i.test(n))||wp[wp.length-1];i.paperWetness(pick);}}catch(e){}}
 function bye(i){try{i.destroy();}catch(e){}}
@@ -106,7 +106,7 @@ const SCENES = [
 { id:"undertow", grp:"Camera & body", needs:"camera", title:"Undertow — painted by your past self",
   note:"The camera watches your motion but nothing responds now. Every gesture is recorded and held for about eight seconds, then released into the water, so the wash is always being stirred by the you of a few seconds ago. You cannot correct it in time; you can only haunt it.",
   build(host){ const {i,GW,GH}=newInst(host);
-    for(let k=0;k<520;k++) i.paintAt(Math.random()*GW,Math.random()*GH,7,Math.random()*3|0,0.5); try{i.dry();}catch(e){}
+    for(let k=0;k<520;k++) i.grid.paint(Math.random()*GW,Math.random()*GH,7,Math.random()*3|0,0.5); try{i.dry();}catch(e){}
     const DELAY=240, buf=[]; for(let k=0;k<DELAY;k++) buf.push(null);
     const st={video:null,prev:null,octx:null,dead:false}; let auto=0;
     (async()=>{ const v=await getCamera(); if(st.dead){stopTracks(v);return;} if(!v){labStatus('No camera — the undertow runs on a delayed drift. Allow the webcam to feed it your past motion.');return;}
@@ -122,7 +122,7 @@ const SCENES = [
     function frame(t){ let sm=sample();
       if(!st.video){ auto++; if(auto%6===0){ sm={dir:['down','left','up','right'][(auto/30|0)%4], str:0.05, pts:[{x:GW*(0.5+0.4*Math.sin(t*0.0007)),y:GH*(0.5+0.4*Math.cos(t*0.0005)),m:0.25}]}; } else sm=null; }
       buf.push(sm); const past=buf.shift();
-      if(past){ for(const p of past.pts) i.paintAt(p.x,p.y,Math.max(3,GW*0.03),WATER,p.m); try{i.gravityDirection(past.dir);i.gravityStrength(past.str);}catch(e){} }
+      if(past){ for(const p of past.pts) i.grid.paint(p.x,p.y,Math.max(3,GW*0.03),WATER,p.m); try{i.gravityDirection(past.dir);i.gravityStrength(past.str);}catch(e){} }
       else { try{i.gravityStrength(0);}catch(e){} } }
     return { frame, cleanup(){ st.dead=true; stopTracks(st.video); try{i.gravityStrength(0);}catch(e){} bye(i); } };
   } },
@@ -130,7 +130,7 @@ const SCENES = [
 { id:"contrapposto", grp:"Camera & body", needs:"hand", title:"Contrapposto — only motion counts",
   note:"A still hand does nothing, no matter how you hold it. The wash answers only to how fast your hand moves, and it pours in the direction you are leaving — a wake, not a push. An open hand glides; a clenched fist drags violently. Position is meaningless; only change has force.",
   build(host){ const {i,GW,GH}=newInst(host); wetPaper(i);
-    for(let k=0;k<140;k++){ const a=Math.random()*6.2832, rr=Math.sqrt(Math.random())*GW*0.13; i.paintAt(GW*0.5+Math.cos(a)*rr,GH*0.5+Math.sin(a)*rr,5,k%3,0.6); }
+    for(let k=0;k<140;k++){ const a=Math.random()*6.2832, rr=Math.sqrt(Math.random())*GW*0.13; i.grid.paint(GW*0.5+Math.cos(a)*rr,GH*0.5+Math.sin(a)*rr,5,k%3,0.6); }
     const st={video:null,hand:null,dead:false,px:null,py:null};
     (async()=>{ const v=await getCamera(); if(st.dead){stopTracks(v);return;} if(!v){labStatus('No camera — it drifts on changing currents. Allow the webcam: only moving your hand has any effect.');return;}
       st.video=v; const hl=await makeHand(); if(st.dead){try{hl&&hl.close();}catch(e){}stopTracks(v);return;} if(!hl){labStatus('Hand tracking unavailable — drifting on its own.');return;}
@@ -157,7 +157,7 @@ const SCENES = [
     (async()=>{ const v=await getCamera(); if(st.dead){stopTracks(v);return;} if(!v){labStatus('No camera — the figure accretes on a slow pulse. Allow the webcam: it only draws while your eyes are closed.');return;}
       st.video=v; const fl=await makeFace(); if(st.dead){try{fl&&fl.close();}catch(e){}stopTracks(v);return;} if(!fl){labStatus('Face tracking unavailable — accreting on its own.');return;}
       st.face=fl; labStatus('Close your eyes to let it draw; open them and it stops. It never erases — what appears in the dark, stays.'); })();
-    function reveal(n){ for(let k=0;k<n && st.idx<pts.length;k++){ const p=pts[st.idx++]; i.paintAt(p.x,p.y,4,p.p,0.5); } }
+    function reveal(n){ for(let k=0;k<n && st.idx<pts.length;k++){ const p=pts[st.idx++]; i.grid.paint(p.x,p.y,4,p.p,0.5); } }
     function frame(t){
       if(st.face&&st.video&&st.video.readyState>=2){ let res; try{res=st.face.detectForVideo(st.video,now());}catch(e){res=null;}
         const bs=res&&res.faceBlendshapes&&res.faceBlendshapes[0]&&res.faceBlendshapes[0].categories;
@@ -180,7 +180,7 @@ const SCENES = [
       else { st.coh=0.5+0.5*Math.sin(t*0.0005); }
       try{i.fadePainting(st.coh<0.55);}catch(e){} try{i.paintLoad(0.12+st.coh*0.6);}catch(e){}
       if(t-last>80){ seq++; last=t; const ordered=seq%3, pig=(Math.random()<st.coh)?ordered:(Math.random()*3|0), jitter=(1-st.coh)*GW*0.22;
-        const x=GW*(0.5+0.33*Math.sin(seq*0.5))+(Math.random()-0.5)*jitter, y=GH*(0.5+0.33*Math.cos(seq*0.4))+(Math.random()-0.5)*jitter; i.paintAt(x,y,GW*0.05,pig,0.5); }
+        const x=GW*(0.5+0.33*Math.sin(seq*0.5))+(Math.random()-0.5)*jitter, y=GH*(0.5+0.33*Math.cos(seq*0.4))+(Math.random()-0.5)*jitter; i.grid.paint(x,y,GW*0.05,pig,0.5); }
     }
     return { frame, cleanup(){ st.dead=true; try{st.hand&&st.hand.close();}catch(e){} stopTracks(st.video); bye(i); } };
   } },
@@ -189,7 +189,7 @@ const SCENES = [
 { id:"penumbra", grp:"3D / three.js", needs:"three.js", title:"Penumbra — a cross-section of something larger",
   note:"You are only allowed to see a narrow horizontal slit. A three.js shadow rises and falls behind the sheet and drags the whole wash slowly up or down past that slit, so what you watch is a moving cross-section of a composition you never see whole. The painting is mostly off-stage, on purpose.",
   build(host){ const {i,GW,GH}=newInst(host); wetPaper(i);
-    for(let b=0;b<14;b++){ const yy=GH*(b+0.5)/14; for(let x=2;x<GW;x+=3) i.paintAt(x,yy,5,b%3,0.5); }
+    for(let b=0;b<14;b++){ const yy=GH*(b+0.5)/14; for(let x=2;x<GW;x+=3) i.grid.paint(x,yy,5,b%3,0.5); }
     const bar1=document.createElement('div'), bar2=document.createElement('div');
     bar1.style.position='absolute';bar1.style.left='0';bar1.style.right='0';bar1.style.top='0';bar1.style.height='42%';bar1.style.background='#0e0f12';bar1.style.zIndex='5';bar1.style.pointerEvents='none';
     bar2.style.position='absolute';bar2.style.left='0';bar2.style.right='0';bar2.style.bottom='0';bar2.style.height='42%';bar2.style.background='#0e0f12';bar2.style.zIndex='5';bar2.style.pointerEvents='none';
@@ -225,7 +225,7 @@ const SCENES = [
         st.rend=rend;st.scene=sc;st.cam=cam;st.mesh=mesh;st.geoms=geoms;st.octx=octx;
         labStatus('A hidden solid keeps changing shape; the wash floods around each one and the old outlines never wash away.'); }
       catch(e){ st.rend=null; labStatus('three.js init failed — analytic forms cycle instead.'); } })();
-    function maskGrid(g,N){ try{ const {x:MX,y:MY,w:DW,h:DH}=canvasRect(host); i.removeMask(); const cw=DW/N, ch=DH/N; for(let y=0;y<N;y++)for(let x=0;x<N;x++){ if(g[y*N+x]>0.4) i.maskRect(MX+x*cw,MY+y*ch,cw+1,ch+1,0); } }catch(e){} }
+    function maskGrid(g,N){ try{ const {w:DW,h:DH}=canvasRect(host); i.removeMask(); for(let y=0;y<N;y++)for(let x=0;x<N;x++){ if(g[y*N+x]>0.4) i.mask(x/N,y/N,1/N+1/DW,1/N+1/DH,0); } }catch(e){} }
     function frame(t){
       if(st.rend && t-morph>9000){ morph=t; st.gi=(st.gi+1)%st.geoms.length; try{st.mesh.geometry=st.geoms[st.gi];}catch(e){} }
       if(t-last<150) return; last=t; pig=(pig+1)%3; let g=null, N=st.N;
@@ -233,7 +233,7 @@ const SCENES = [
         try{ st.rend.render(st.scene,st.cam); st.octx.clearRect(0,0,N,N); st.octx.drawImage(st.rend.domElement,0,0,N,N); const d=st.octx.getImageData(0,0,N,N).data; g=new Float32Array(N*N); for(let p=0;p<N*N;p++) g[p]=(d[p*4]+d[p*4+1]+d[p*4+2])/765; }catch(e){ g=null; } }
       if(!g){ const phase=(t/9000|0)%3, cx=N/2+Math.cos(t*0.0006)*N*0.16, cy=N/2+Math.sin(t*0.0006)*N*0.16; g=new Float32Array(N*N);
         for(let y=0;y<N;y++)for(let x=0;x<N;x++){ const dx=x-cx,dy=y-cy; let inside; if(phase===0) inside=Math.hypot(dx,dy)<N*0.22; else if(phase===1) inside=(Math.abs(dx)+Math.abs(dy))<N*0.26; else inside=Math.max(Math.abs(dx),Math.abs(dy))<N*0.2; g[y*N+x]=inside?1:0; } }
-      maskGrid(g,N); for(let k=0;k<80;k++) i.paintAt(Math.random()*GW,Math.random()*GH,GW2*0.03,pig,0.16);
+      maskGrid(g,N); for(let k=0;k<80;k++) i.grid.paint(Math.random()*GW,Math.random()*GH,GW2*0.03,pig,0.16);
     }
     return { frame, cleanup(){ st.dead=true; try{i.removeMask();}catch(e){} try{st.rend&&st.rend.dispose&&st.rend.dispose();}catch(e){} bye(i); } };
   } },
@@ -242,7 +242,7 @@ const SCENES = [
 { id:"aftershock", grp:"Sensors & sound", needs:"tilt", title:"Aftershock — long calm, sudden slip",
   note:"Almost nothing happens. The piece sits still and quietly accumulates the energy of every tilt or drag without acting on it. Only when enough has built up does it let go all at once — a single violent avalanche of pigment in the direction it had been leaning — and then it resets to stillness and begins storing again.",
   build(host){ const {i,GW,GH}=newInst(host); wetPaper(i);
-    for(let gx=4;gx<GW;gx+=2) i.paintAt(gx,GH*0.14,4,gx%3,0.6);
+    for(let gx=4;gx<GW;gx+=2) i.grid.paint(gx,GH*0.14,4,gx%3,0.6);
     const st={dead:false,g:0,b:0,E:0,dir:'down',burst:0};
     function onPointer(e){ const r=host.getBoundingClientRect(); st.g=((e.clientX-r.left)/(r.width||560)-0.5)*90; st.b=((e.clientY-r.top)/(r.height||560)-0.5)*90; }
     const cv=host.querySelector('canvas'); if(cv) cv.addEventListener('pointermove',onPointer);
@@ -251,7 +251,7 @@ const SCENES = [
     function frame(t){ const tl=getTilt(); if(tl.on){ st.g=tl.g; st.b=tl.b; }
       const dg=Math.abs(st.g-pg)+Math.abs(st.b-pb); pg=st.g; pb=st.b;
       const ax=st.g/45, ay=st.b/45; if(Math.hypot(ax,ay)>0.05){ st.dir=Math.abs(ax)>Math.abs(ay)?(ax>0?'right':'left'):(ay>0?'down':'up'); }
-      if(st.burst>0){ st.burst--; try{i.gravityStrength(0.22);i.gravityDirection(st.dir);}catch(e){} if(st.burst%4===0){ for(let k=0;k<6;k++) i.paintAt(Math.random()*GW,GH*0.1+Math.random()*GH*0.2,GW*0.05,WATER,0.3);} return; }
+      if(st.burst>0){ st.burst--; try{i.gravityStrength(0.22);i.gravityDirection(st.dir);}catch(e){} if(st.burst%4===0){ for(let k=0;k<6;k++) i.grid.paint(Math.random()*GW,GH*0.1+Math.random()*GH*0.2,GW*0.05,WATER,0.3);} return; }
       st.E += dg*0.02 + 0.0008; if(st.E>1){ st.E=0; st.burst=45; } try{i.gravityStrength(0);}catch(e){} }
     return { frame, cleanup(){ st.dead=true; if(cv)cv.removeEventListener('pointermove',onPointer); try{i.gravityStrength(0);}catch(e){} bye(i); } };
   } },
@@ -259,15 +259,15 @@ const SCENES = [
 { id:"sympathetic", grp:"Sensors & sound", needs:"mic", title:"Sympathetic — the room tunes the colour",
   note:"Not loudness — pitch. The piece listens to the overall tone of the room and uses it to decide which single colour is allowed to move: low sounds free the blue, midrange the rose, bright sounds the yellow. The other two stay frozen, and silence locks all three. You conduct it less by performing than by changing the air.",
   build(host){ const {i,GW,GH}=newInst(host); wetPaper(i);
-    for(let band=0;band<3;band++){ const y0=GH*band/3; for(let k=0;k<200;k++) i.paintAt(Math.random()*GW, y0+Math.random()*GH/3, 6, band===0?2:band===1?0:1, 0.4); }
+    for(let band=0;band<3;band++){ const y0=GH*band/3; for(let k=0;k<200;k++) i.grid.paint(Math.random()*GW, y0+Math.random()*GH/3, 6, band===0?2:band===1?0:1, 0.4); }
     const st={mic:null,dead:false,active:-2};
-    function lock(idx){ if(idx===st.active)return; st.active=idx; try{ const {x:MX,y:MY,w:DW,h:DH}=canvasRect(host); i.removeMask(); for(let band=0;band<3;band++){ if(band!==idx) i.maskRect(MX, MY+DH*band/3, DW, DH/3+1, 0); } i.maskTint(true); }catch(e){} }
+    function lock(idx){ if(idx===st.active)return; st.active=idx; try{ const {h:DH}=canvasRect(host); i.removeMask(); for(let band=0;band<3;band++){ if(band!==idx) i.mask(0, band/3, 1, 1/3+1/DH, 0); } i.maskTint(true); }catch(e){} }
     (async()=>{ const m=await getMic(); if(st.dead){try{m&&m.ac.close();}catch(e){}return;} if(!m){labStatus('No microphone — the tuning drifts on its own. Allow the mic: pitch chooses which colour breathes.');return;}
       st.mic=m; labStatus('Low tones free the blue, mid tones the rose, bright tones the yellow; silence locks them all.'); })();
     function frame(t){ let idx=-1;
       if(st.mic){ st.mic.an.getByteFrequencyData(st.mic.buf); let s=0,ws=0; for(let k=0;k<st.mic.buf.length;k++){ s+=st.mic.buf[k]; ws+=k*st.mic.buf[k]; } if(s>4*st.mic.buf.length){ const c=(ws/s)/st.mic.buf.length; idx=c<0.18?0:c<0.42?1:2; } else idx=-1; }
       else { const ph=(t/2500|0)%4; idx=ph===3?-1:ph; }
-      lock(idx); if(idx>=0){ const y0=GH*idx/3; for(let k=0;k<3;k++) i.paintAt(Math.random()*GW, y0+Math.random()*GH/3, GW*0.04, WATER, 0.12); }
+      lock(idx); if(idx>=0){ const y0=GH*idx/3; for(let k=0;k<3;k++) i.grid.paint(Math.random()*GW, y0+Math.random()*GH/3, GW*0.04, WATER, 0.12); }
     }
     return { frame, cleanup(){ st.dead=true; try{ st.mic&&st.mic.ac.close(); st.mic&&st.mic.stream.getTracks().forEach(t=>t.stop()); }catch(e){} try{i.removeMask();}catch(e){} bye(i); } };
   } },
@@ -276,7 +276,7 @@ const SCENES = [
 { id:"sedimentation", grp:"Autonomous", needs:"none", title:"Sedimentation — it fills, then stops",
   note:"An invisible flock re-wets a dried wash as it drifts, but each agent is repelled by ground it has already soaked — so it is forced into the few remaining dry regions, filling the sheet by avoidance. As the empty space runs out the flock has nowhere left to go, slows, and finally settles. The piece completes itself.",
   build(host){ const {i,GW,GH}=newInst(host);
-    for(let k=0;k<620;k++) i.paintAt(Math.random()*GW,Math.random()*GH,6,Math.random()*3|0,0.5); try{i.dry();}catch(e){}
+    for(let k=0;k<620;k++) i.grid.paint(Math.random()*GW,Math.random()*GH,6,Math.random()*3|0,0.5); try{i.dry();}catch(e){}
     const M=40, vis=new Float32Array(M*M); const N=34, B=[]; for(let k=0;k<N;k++) B.push({x:Math.random()*GW,y:Math.random()*GH,vx:(Math.random()-0.5),vy:(Math.random()-0.5)});
     function sample(x,y){ const mx=Math.min(M-1,Math.max(0,x/GW*M|0)), my=Math.min(M-1,Math.max(0,y/GH*M|0)); return vis[my*M+mx]; }
     labStatus('An invisible flock blooms the dried wash but flees wherever it has already been, filling the gaps until it runs out of room and stops.');
@@ -285,7 +285,7 @@ const SCENES = [
         const sp=Math.hypot(a.vx,a.vy)||1, mx=0.9; if(sp>mx){a.vx=a.vx/sp*mx;a.vy=a.vy/sp*mx;}
         a.x+=a.vx; a.y+=a.vy; if(a.x<0)a.x+=GW; if(a.x>=GW)a.x-=GW; if(a.y<0)a.y+=GH; if(a.y>=GH)a.y-=GH;
         const mxi=Math.min(M-1,a.x/GW*M|0), myi=Math.min(M-1,a.y/GH*M|0); vis[myi*M+mxi]=Math.min(2,vis[myi*M+mxi]+0.03);
-        i.paintAt(a.x,a.y,3,WATER,0.16); } }
+        i.grid.paint(a.x,a.y,3,WATER,0.16); } }
     return { frame, cleanup(){ bye(i); } };
   } },
 
@@ -300,7 +300,7 @@ const SCENES = [
       for(let k=0;k<M;k++){ belief[k].x+=(Math.random()-0.5)*GW*0.02; belief[k].y+=(Math.random()-0.5)*GH*0.02;
         const n=belief[(k+1)%M], p=belief[(k+M-1)%M]; belief[k].x+=((n.x+p.x)/2-belief[k].x)*0.06; belief[k].y+=((n.y+p.y)/2-belief[k].y)*0.06;
         belief[k].x=Math.max(2,Math.min(GW-2,belief[k].x)); belief[k].y=Math.max(2,Math.min(GH-2,belief[k].y));
-        i.paintAt(belief[k].x,belief[k].y,3,gen%3,0.42); } } }
+        i.grid.paint(belief[k].x,belief[k].y,3,gen%3,0.42); } } }
     return { frame, cleanup(){ bye(i); } };
   } },
 

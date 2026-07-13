@@ -36,8 +36,8 @@ const wc = N.create(document.getElementById('cv'), { gpu:false, pointer:false })
 const S = wc.state(), GW = S.gridWidth, GH = S.gridHeight;
 
 function ink(x,y,r,a){
-  wc.paintAt(x,y,r,'yellow',a*1.3); wc.paintAt(x,y,r,'rose',a);
-  wc.paintAt(x,y,r,'blue',a);       wc.paintAt(x,y,r,'yellow',a*0.45);
+  wc.grid.paint(x,y,r,'yellow',a*1.3); wc.grid.paint(x,y,r,'rose',a);
+  wc.grid.paint(x,y,r,'blue',a);       wc.grid.paint(x,y,r,'yellow',a*0.45);
 }
 
 let n, theta, st, t0;
@@ -47,7 +47,7 @@ function setup(){
   wc.paintLoad(1.3).waterLoad(1.2);
   wc.fadePainting(0); wc.gravityStrength(0);
   const t = 0.010;
-  for (let i=1;i<DIV;i++){ const f=i/DIV; wc.maskNorm(f-t/2,0,t,1); wc.maskNorm(0,f-t/2,1,t); }
+  for (let i=1;i<DIV;i++){ const f=i/DIV; wc.mask(f-t/2,0,t,1); wc.mask(0,f-t/2,1,t); }
   for (let k=0;k<5;k++) ink(rnd(0.2,0.8)*GW, rnd(0.2,0.8)*GH, GW*0.05, 0.8);
   n=0; theta=0; st={ fade:false, weather:false, lastCyc:-1, dried:0, held:false }; t0=null;
 }
@@ -60,7 +60,7 @@ function frame(e){
     if (!st.fade){ wc.fadePainting(2600); wc.gravityStrength(0.12); st.fade=true; }
     theta += 0.014; wc.gravityVector(Math.cos(theta), Math.sin(theta));
     if (n%5===0) ink((0.5+rnd(-0.12,0.12))*GW, (0.5+rnd(-0.12,0.12))*GH, GW*0.04, 0.6);
-    if (n%64 < 2){ const a = theta + GOLD*n; wc.addVelocity(rnd(0.3,0.7)*GW, rnd(0.3,0.7)*GH, Math.cos(a)*0.95, Math.sin(a)*0.95, GW*0.045); }
+    if (n%64 < 2){ const a = theta + GOLD*n; wc.grid.stir(rnd(0.3,0.7)*GW, rnd(0.3,0.7)*GH, Math.cos(a)*0.95, Math.sin(a)*0.95, GW*0.045); }
     return;
   }
 
@@ -68,7 +68,7 @@ function frame(e){
     if (!st.weather){ wc.fadePainting(0); wc.gravityVector(0,1); st.weather=true; }
     const cyc = Math.floor((e-30000)/2400);
     if (cyc !== st.lastCyc){ st.lastCyc = cyc; const by = Math.min(0.85, 0.22 + cyc*0.09);
-      for (let x=0.12;x<=0.88;x+=0.08) wc.rewet(x*GW, by*GH, GW*(0.045+Math.random()*0.02));
+      for (let x=0.12;x<=0.88;x+=0.08) wc.grid.rewet(x*GW, by*GH, GW*(0.045+Math.random()*0.02));
       wc.gravityStrength(0.15); }
     if ((e-30000) - cyc*2400 > 1400) wc.gravityStrength(0);
     return;
@@ -77,8 +77,8 @@ function frame(e){
   if (e < 62000){                                   // SINCERITY 4 — honest erosion
     wc.gravityStrength(0);
     if (n%4===0){ const x=rnd(0.1,0.9), y=rnd(0.1,0.9), r=GW*rnd(0.02,0.05);
-      if (n%3===0) wc.paintAt(x*GW,y*GH,r,'paper',0.5);
-      else { wc.paintAt(x*GW,y*GH,r,'lift',0.5); wc.rewet(x*GW,y*GH,r); } }
+      if (n%3===0) wc.grid.paint(x*GW,y*GH,r,'paper',0.5);
+      else { wc.grid.paint(x*GW,y*GH,r,'lift',0.5); wc.grid.rewet(x*GW,y*GH,r); } }
     return;
   }
 
@@ -87,7 +87,7 @@ function frame(e){
     const idx = Math.floor((e-62000)/step);
     while (st.dried <= idx && st.dried < cells){
       const gx = st.dried % DIV, gy = (st.dried / DIV) | 0;
-      wc.dry((gx+0.5)/DIV*GW, (gy+0.5)/DIV*GH, GW*(0.46/DIV)); st.dried++;
+      wc.grid.dry((gx+0.5)/DIV*GW, (gy+0.5)/DIV*GH, GW*(0.46/DIV)); st.dried++;
     }
     return;
   }

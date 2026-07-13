@@ -123,20 +123,20 @@
     if (Washes && panel){
       const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
       let wc=null, G=null, ready=false, last=null;
-      const gx=nx=>nx*G.gridWidth, gy=ny=>ny*G.gridHeight;
+      const nr=n=>n*G.gridWidth/Math.min(G.gridWidth,G.gridHeight);
       const pigAt = nx => nx<0.36 ? 'rose' : nx>0.64 ? 'blue' : 'yellow';
 
       function seed(){
         safe(()=>wc.reset());
-        safe(()=>{ wc.paintNorm(0.24,0.42,0.16,'rose',0.6); wc.paintNorm(0.5,0.5,0.17,'yellow',0.6); wc.paintNorm(0.76,0.42,0.16,'blue',0.6); });
-        safe(()=>{ wc.addVelocity(gx(0.34),gy(0.46),0.5,0.1,G.gridWidth*0.06); wc.addVelocity(gx(0.66),gy(0.46),-0.5,0.1,G.gridWidth*0.06); });
+        safe(()=>{ wc.paint(0.24,0.42,0.16,'rose',0.6); wc.paint(0.5,0.5,0.17,'yellow',0.6); wc.paint(0.76,0.42,0.16,'blue',0.6); });
+        safe(()=>{ wc.stir(0.34,0.46,0.5,0.1,nr(0.06)); wc.stir(0.66,0.46,-0.5,0.1,nr(0.06)); });
       }
-      const stamp=(nx,ny)=>safe(()=>wc.paintNorm(nx,ny,0.06,pigAt(nx),0.55));
+      const stamp=(nx,ny)=>safe(()=>wc.paint(nx,ny,0.06,pigAt(nx),0.55));
       function strokeTo(nx,ny){
         if(!last){ stamp(nx,ny); last={nx,ny}; return; }
         const dx=nx-last.nx,dy=ny-last.ny,dist=Math.hypot(dx,dy),n=Math.max(1,Math.ceil(dist/0.012));
         for(let i=1;i<=n;i++){ const t=i/n; stamp(last.nx+dx*t,last.ny+dy*t); }
-        safe(()=>wc.addVelocity(gx(nx),gy(ny),dx*22,dy*22,G.gridWidth*0.035));
+        safe(()=>wc.stir(nx,ny,dx*22,dy*22,nr(0.035)));
         last={nx,ny};
       }
       let drawing=false, rinsing=false, armed=false, stillCount=0, lastHash=null, lastInteract=0;
@@ -146,11 +146,10 @@
       // before fresh pools drop in.
       function rinse(){
         if(rinsing) return; rinsing=true; drawing=false; armed=false; invite.classList.remove('on');
-        const W=G.gridWidth, H=G.gridHeight;
         safe(()=>wc.waterLoad&&wc.waterLoad(2.6));
-        for(let i=0;i<=6;i++) for(let j=0;j<=4;j++) safe(()=>wc.rewet(W*i/6, H*j/4, W*0.15));     // flood with clean water
+        for(let i=0;i<=6;i++) for(let j=0;j<=4;j++) safe(()=>wc.rewet(i/6, j/4, nr(0.15)));     // flood with clean water
         safe(()=>wc.brushMode('crayon'));                                                          // lift the stain back into the water
-        for(let i=0;i<=8;i++) for(let j=0;j<=5;j++) safe(()=>wc.paintNorm(i/8, j/5, 0.085, 0, 0.5));
+        for(let i=0;i<=8;i++) for(let j=0;j<=5;j++) safe(()=>wc.paint(i/8, j/5, 0.085, 0, 0.5));
         safe(()=>wc.brushMode('wet'));
         safe(()=>wc.edgeMode('open'));                                                             // let water leave the basin
         const t0=performance.now(), DUR=2200;
@@ -160,10 +159,10 @@
           for(let k=0;k<24;k++){
             const a=2*Math.PI*k/24 + now*0.002, r=0.14+0.34*((k%3)/2);
             const nx=0.5+Math.cos(a)*r, ny=0.5+Math.sin(a)*r, rx=nx-0.5, ry=ny-0.5;
-            safe(()=>wc.addVelocity(gx(nx),gy(ny), -ry*2.6*amp+(Math.random()-0.5)*0.3, rx*2.6*amp+(Math.random()-0.5)*0.3, W*0.07));
+            safe(()=>wc.stir(nx,ny, -ry*2.6*amp+(Math.random()-0.5)*0.3, rx*2.6*amp+(Math.random()-0.5)*0.3, nr(0.07)));
           }
           if(e>0.5){ const g=(e-0.5)/0.5;                                                          // tip and pour it out
-            safe(()=>{ wc.gravityVector&&wc.gravityVector(0,1); wc.gravityStrength&&wc.gravityStrength(g*1.7); });
+            safe(()=>{ wc.gravityVector(0,1); wc.gravityStrength(g*1.7); });
             safe(()=>wc.evaporation(2.5+g*4));
           }
           requestAnimationFrame(spin);
@@ -171,7 +170,7 @@
       }
       function finishRinse(){
         safe(()=>wc.reset());                                                                      // clean basin
-        safe(()=>{ wc.gravityStrength&&wc.gravityStrength(0); wc.gravityVector&&wc.gravityVector(0,0); wc.edgeMode('closed'); wc.evaporation(1.0); wc.waterLoad&&wc.waterLoad(1.6); });
+        safe(()=>{ wc.gravityStrength(0); wc.gravityVector(0,0); wc.edgeMode('closed'); wc.evaporation(1.0); wc.waterLoad(1.6); });
         seed();                                                                                    // fresh pools drop in
         rinsing=false;
       }
@@ -213,9 +212,9 @@
       // create only once the panel has real pixel size (the in-flow aspect-ratio host
       // can measure 0 on first paint, which would build a 0x0 canvas)
       function init(){
-        wc = Washes.compat1(Washes.create(panel, { gpu:false, pointer:false, paperColor:{ r:0.91, g:0.81, b:0.63 } }));  // v1-surface pin
+        wc = Washes.create(panel, { gpu:false, pointer:false, paperColor:{ r:0.91, g:0.81, b:0.63 } });  // native v2 (migrated off compat1)
         G = wc.state();
-        safe(()=>wc.flow(0.14)); safe(()=>wc.evaporation(1.0)); safe(()=>wc.waterLoad&&wc.waterLoad(1.6));
+        safe(()=>wc.flow(0.14)); safe(()=>wc.evaporation(1.0)); safe(()=>wc.waterLoad(1.6));
         // settle layout, force a re-measure, then seed so the pools are sized correctly
         requestAnimationFrame(()=>requestAnimationFrame(()=>{
           safe(()=>window.dispatchEvent(new Event('resize')));

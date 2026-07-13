@@ -60,15 +60,15 @@ tap  = ping a return</div>
     if (Washes && stage){
       const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
       // paper pulled into the page's cool-grey hue family so the chart blends with the frame
-      const wc = Washes.compat1(Washes.create(stage, { gpu:true, pointer:false, paperColor:{ r:0.70, g:0.75, b:0.80 } }));  // v1-surface pin
+      const wc = Washes.create(stage, { gpu:true, pointer:false, paperColor:{ r:0.70, g:0.75, b:0.80 } });  // native v2 (migrated off compat1)
       let G=wc.state();
-      const gx=nx=>nx*G.gridWidth, gy=ny=>ny*G.gridHeight, safe=fn=>{try{return fn();}catch(_){}};
+      const nr=n=>n*G.gridWidth/Math.min(G.gridWidth,G.gridHeight), safe=fn=>{try{return fn();}catch(_){}};
       addEventListener('resize', ()=>safe(()=>{G=wc.state();}), {passive:true});
 
       safe(()=>wc.flow(0.16)); safe(()=>wc.evaporation(3.0)); safe(()=>wc.fadePainting(true)); safe(()=>wc.edgeMode('open'));
       // denser, slightly more visible nebular seed so stirring has obvious material to move
-      for(let i=0;i<320;i++) wc.paintNorm(Math.random(),Math.random(),0.05+Math.random()*0.06,'blue',0.06+Math.random()*0.06);
-      if(!reduce) safe(()=>wc.setAnimation('drift',{speed:0.25,amplitude:0.4}));
+      for(let i=0;i<320;i++) wc.paint(Math.random(),Math.random(),0.05+Math.random()*0.06,'blue',0.06+Math.random()*0.06);
+      if(!reduce) safe(()=>wc.animation('drift',{speed:0.25,amplitude:0.4}));
 
       const ang3=(nx,ny)=>{ const a=((Math.atan2(ny-0.5,nx-0.5)*180/Math.PI)+450)%360; return a.toFixed(0).padStart(3,'0')+'·'+(Math.hypot(nx-0.5,ny-0.5)*2).toFixed(2); };
 
@@ -81,8 +81,8 @@ tap  = ping a return</div>
         rdg.textContent='bearing '+ang.toFixed(0).padStart(3,'0')+'°\nrange  '+rng.toFixed(2);
         const now=performance.now();
         if(px!==null){ const vx=nx-px, vy=ny-py;
-          safe(()=>wc.addVelocity(gx(nx),gy(ny),vx*40,vy*40,G.gridWidth*0.055));
-          if(Math.hypot(vx,vy)>0.003) safe(()=>wc.paintNorm(nx,ny,0.035,'blue',0.06));
+          safe(()=>wc.stir(nx,ny,vx*40,vy*40,nr(0.055)));
+          if(Math.hypot(vx,vy)>0.003) safe(()=>wc.paint(nx,ny,0.035,'blue',0.06));
           moved+=Math.hypot(vx,vy);
           if(moved>0.5 && !interacted){ interacted=true; hint.style.opacity='0'; }
         }
@@ -94,9 +94,9 @@ tap  = ping a return</div>
       let pings=0;
       function ping(cx,cy){
         const nx=cx/innerWidth, ny=cy/innerHeight;
-        safe(()=>wc.rewet(gx(nx),gy(ny),G.gridWidth*0.13));
-        for(let i=0;i<20;i++){ const a=2*Math.PI*i/20; safe(()=>wc.addVelocity(gx(nx),gy(ny),Math.cos(a)*0.85,Math.sin(a)*0.85,G.gridWidth*0.09)); }
-        safe(()=>wc.paintNorm(nx,ny,0.055,'yellow',0.4)); safe(()=>wc.paintNorm(nx,ny,0.11,'blue',0.12));
+        safe(()=>wc.rewet(nx,ny,nr(0.13)));
+        for(let i=0;i<20;i++){ const a=2*Math.PI*i/20; safe(()=>wc.stir(nx,ny,Math.cos(a)*0.85,Math.sin(a)*0.85,nr(0.09))); }
+        safe(()=>wc.paint(nx,ny,0.055,'yellow',0.4)); safe(()=>wc.paint(nx,ny,0.11,'blue',0.12));
         cur.classList.add('warm'); setTimeout(()=>cur.classList.remove('warm'),220);
         // visible expanding ring so the ping clearly does something
         const r=document.createElement('div'); r.className='ripple'; r.style.left=cx+'px'; r.style.top=cy+'px'; r.style.width=r.style.height='10px';
@@ -114,8 +114,8 @@ tap  = ping a return</div>
           if(interacted || t>Math.PI*1.05){ clearInterval(demo); return; }
           t+=0.05; const nx=0.22+0.56*(t/(Math.PI*1.05)), ny=0.5+Math.sin(t*2.2)*0.17;
           cur.style.left=(nx*innerWidth)+'px'; cur.style.top=(ny*innerHeight)+'px';
-          safe(()=>wc.addVelocity(gx(nx),gy(ny),Math.cos(t*2.2)*0.7,Math.sin(t*2.2)*0.5,G.gridWidth*0.05));
-          safe(()=>wc.paintNorm(nx,ny,0.04,'blue',0.12));
+          safe(()=>wc.stir(nx,ny,Math.cos(t*2.2)*0.7,Math.sin(t*2.2)*0.5,nr(0.05)));
+          safe(()=>wc.paint(nx,ny,0.04,'blue',0.12));
         },40);
         // rare warm contacts
         setTimeout(function spawn(){ contact(); setTimeout(spawn,12000+Math.random()*12000); },9000);
@@ -128,7 +128,7 @@ tap  = ping a return</div>
         else {nx=Math.random();ny=0.98;vx=(Math.random()-0.5)*0.3;vy=-0.4;}
         let life=0; const id=setInterval(()=>{ if(life++>120){clearInterval(id);return;}
           nx=Math.max(0,Math.min(1,nx+vx*0.006)); ny=Math.max(0,Math.min(1,ny+vy*0.006));
-          safe(()=>wc.paintNorm(nx,ny,0.04,'rose',0.24)); safe(()=>wc.addVelocity(gx(nx),gy(ny),vx*0.5,vy*0.5,G.gridWidth*0.04));
+          safe(()=>wc.paint(nx,ny,0.04,'rose',0.24)); safe(()=>wc.stir(nx,ny,vx*0.5,vy*0.5,nr(0.04)));
         },60);
         logEl.innerHTML='<span class="dim">contact — bearing '+(((Math.atan2(ny-0.5,nx-0.5)*180/Math.PI)+450)%360).toFixed(0)+'° · faint</span>';
       }

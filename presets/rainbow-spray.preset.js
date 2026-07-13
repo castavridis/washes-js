@@ -21,10 +21,10 @@ export const RAINBOW_SPRAY = {
 
   // THE KEY PART — paint with a random pigment index each dab.
   // radius/strength are the demo's defaults; tweak to taste.
-  // Call this instead of a plain paintNorm to get the rainbow spray.
+  // Call this instead of a plain paint() to get the rainbow spray.
   paint(wc, nx, ny, { radius = 0.05, strength = 0.6 } = {}) {
     const idx = (Math.random() * 3) | 0;     // ← random ink per dab = rainbow
-    wc.paintNorm(nx, ny, radius, idx, strength);
+    wc.paint(nx, ny, radius, idx, strength);  // v2 name; on a compat1 wrapper use paintNorm
   },
 };
 
@@ -42,6 +42,6 @@ export const RAINBOW_SPRAY = {
 //   wc.palette(RAINBOW_SPRAY.palette);
 //   // ...and use RAINBOW_SPRAY.paint(wc, nx, ny) wherever you'd paint.
 //
-// Note: a plain wc.paintNorm(nx, ny, r, 0, s) would paint a SINGLE color.
+// Note: a plain wc.paint(nx, ny, r, 0, s) would paint a SINGLE color.
 // The rainbow comes from rotating the pigment index, which RAINBOW_SPRAY.paint
 // does for you.

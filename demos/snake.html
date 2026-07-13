@@ -118,6 +118,9 @@ let activePalette = 'ink';
 // ── grid + game state ──
 const COLS = 22, ROWS = 22;
 let wc = null, G = null;
+// v2 radii are fractions of the smaller side; these washes were tuned in
+// gridWidth fractions, so convert by the (rescale-invariant) aspect ratio.
+const nr = n => n * G.gridWidth / Math.min(G.gridWidth, G.gridHeight);
 let game = null, running = false, paused = false, timer = null, stepMs = 150;
 let best = 0;
 // v2 — feature flags + state
@@ -160,13 +163,13 @@ const liftR = 0.5 / Math.max(COLS, ROWS) * 0.9;    // lift radius (stays within 
 function paintHead(p, fresh){
   if(!wc) return;
   // a wet dab of the body ink at the head; slightly stronger when fresh
-  safe(()=>wc.paintNorm(cx(p.x), cy(p.y), cellR, 0, fresh?0.85:0.6));
+  safe(()=>wc.paint(cx(p.x), cy(p.y), cellR, 0, fresh?0.85:0.6));
 }
 // v2 — lay a dab at an arbitrary normalized point (used by continuous mode to
 // stamp along the sub-cell path between grid steps)
 function paintAtNorm(nx, ny, strength){
   if(!wc) return;
-  safe(()=>wc.paintNorm(nx, ny, cellR, 0, strength==null?0.7:strength));
+  safe(()=>wc.paint(nx, ny, cellR, 0, strength==null?0.7:strength));
 }
 // v2 — fade the vacated trail: queue the cell the tail just left, then lift it
 // (and the last few vacated cells) a little each step so it dissolves while the
@@ -176,24 +179,24 @@ function fadeTailStep(vacated){
   if(vacated) fadeQ.push({ x:vacated.x, y:vacated.y, life:3 });
   for(let k=fadeQ.length-1;k>=0;k--){
     const f = fadeQ[k];
-    safe(()=>wc.paintNorm(cx(f.x), cy(f.y), liftR, 'lift', 0.8));
+    safe(()=>wc.paint(cx(f.x), cy(f.y), liftR, 'lift', 0.8));
     if(--f.life <= 0) fadeQ.splice(k,1);
   }
 }
 function paintFood(g){
   if(!wc || !g.food) return;
   // fruit: a bloom of the second ink with a little outward velocity
-  safe(()=>wc.paintNorm(cx(g.food.x), cy(g.food.y), cellR*1.25, 1, 0.8));
-  safe(()=>wc.addVelocity(cx(g.food.x)*G.gridWidth, cy(g.food.y)*G.gridHeight, 0, 0, G.gridWidth*0.02));
+  safe(()=>wc.paint(cx(g.food.x), cy(g.food.y), cellR*1.25, 1, 0.8));
+  safe(()=>wc.stir(cx(g.food.x), cy(g.food.y), 0, 0, nr(0.02)));
 }
 function eatBurst(p){
   if(!wc) return;
   // eating: a splash + radial velocity so the wash reacts, plus accent ink
-  const gx = cx(p.x)*G.gridWidth, gy = cy(p.y)*G.gridHeight;
+  const nx = cx(p.x), ny = cy(p.y);
   for(let a=0;a<8;a++){ const ang=a/8*Math.PI*2;
-    safe(()=>wc.addVelocity(gx, gy, Math.cos(ang)*1.3, Math.sin(ang)*1.3, G.gridWidth*0.05)); }
-  safe(()=>wc.paintNorm(cx(p.x), cy(p.y), cellR*1.4, 2, 0.5));
-  safe(()=> (wc.splash ? wc.splash([{x:gx,y:gy,velocity:30}],'fineSpritz') : null));
+    safe(()=>wc.stir(nx, ny, Math.cos(ang)*1.3, Math.sin(ang)*1.3, nr(0.05))); }
+  safe(()=>wc.paint(nx, ny, cellR*1.4, 2, 0.5));
+  safe(()=>wc.splash([{x:nx,y:ny,velocity:30}],'fineSpritz'));
 }
 
 function tick(){
@@ -319,7 +322,7 @@ function buildPalettePicker(){
 
 // ── init ──
 function init(){
-  wc = Washes.compat1(Washes.create(sim, { gpu:false, pointer:false, paperColor:{r:0.965,g:0.945,b:0.902} }));  // v1-surface pin
+  wc = Washes.create(sim, { gpu:false, pointer:false, paperColor:{r:0.965,g:0.945,b:0.902} });  // native v2 (migrated off compat1)
   G = wc.state();
   safe(()=> wc.palette && wc.palette(PALETTES[activePalette].set));
   safe(()=> wc.flow(0.12));

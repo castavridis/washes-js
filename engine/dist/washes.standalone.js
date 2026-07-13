@@ -14201,6 +14201,11 @@ function _ensureTextureNoise(mode) {
     // --- §1: the cell-space home. A fresh object (never the internal
     //     one — grid.paint must chain to v2, not leak `api`), carrying
     //     the display bridges that replace toGrid/toClient.
+    //     v2.1.0 — the verb family joins paint: the showcase's
+    //     cell-thinking pieces proved the demand (they position AND size
+    //     everything in grid units; forcing them through normalized
+    //     round-trips would be noise, and this namespace exists exactly
+    //     so cells keep a first-class home).
     Object.defineProperty(v2, "grid", {
       enumerable: true,
       value: {
@@ -14210,6 +14215,19 @@ function _ensureTextureNoise(mode) {
           api.paintAt(gx, gy, gridRadius, pigmentIdx, strength);
           return v2;
         },
+        stir(gx, gy, vx, vy, gridRadius) {
+          api.stir(gx, gy, vx, vy, gridRadius);
+          return v2;
+        },
+        rewet(gx, gy, gridRadius) {
+          api.rewet(gx, gy, gridRadius);
+          return v2;
+        },
+        dry(gx, gy, gridRadius) {
+          api.dry(gx, gy, gridRadius);
+          return v2;
+        },
+        sample(gx, gy) { return api.sample(gx, gy); },
         toNorm(gx, gy) { return { nx: gx / GW, ny: gy / GH }; },
         fromNorm(nx, ny) { return { gx: nx * GW, gy: ny * GH }; },
         size() { return { gridWidth: GW, gridHeight: GH }; },
@@ -14417,7 +14435,7 @@ function _ensureTextureNoise(mode) {
     // declared but never implemented — undefined at runtime through all
     // of v1; the api-surface test only reflects the instance, so statics
     // could lie.) Bump alongside package.json.
-    version: '2.0.0',
+    version: '2.1.0',
   };
   // v0.53 — Brand alias. `Washes` is the user-facing brand for the
   // library; `Watercolor` is preserved as the long-standing internal /

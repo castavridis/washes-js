@@ -65,10 +65,10 @@ const rnd = (a,b)=> a + Math.random()*(b-a);
 
 // neutral near-black: yellow-weighted subtractive stack, deposited densely
 function ink(wc, x, y, r, s){
-  wc.paintAt(x, y, r, 'yellow', s * 1.3);
-  wc.paintAt(x, y, r, 'rose',   s);
-  wc.paintAt(x, y, r, 'blue',   s);
-  wc.paintAt(x, y, r, 'yellow', s * 0.45);
+  wc.grid.paint(x, y, r, 'yellow', s * 1.3);
+  wc.grid.paint(x, y, r, 'rose',   s);
+  wc.grid.paint(x, y, r, 'blue',   s);
+  wc.grid.paint(x, y, r, 'yellow', s * 0.45);
 }
 function mount(id){ const wc = N.create(document.getElementById(id), { gpu:false, pointer:false }); wc.paperColor(PAPER); return wc; }
 
@@ -91,7 +91,7 @@ function animExcitement(){
     }
     if (e < burstEnd){
       const vx=Math.cos(burstAngle), vy=Math.sin(burstAngle);
-      wc.addVelocity(cx+vx*GW*0.16, cy+vy*GH*0.16, vx*0.95, vy*0.95, GW*0.04);
+      wc.grid.stir(cx+vx*GW*0.16, cy+vy*GH*0.16, vx*0.95, vy*0.95, GW*0.04);
     }
   };
 }
@@ -101,7 +101,7 @@ function animSophistication(){
   const wc = mount('cv-b');
   const s = wc.state(), GW=s.gridWidth, GH=s.gridHeight;
   const div=5, t=0.013;
-  for (let i=1;i<div;i++){ const f=i/div; wc.maskNorm(f-t/2,0,t,1); wc.maskNorm(0,f-t/2,1,t); }  // invisible lattice (barriers)
+  for (let i=1;i<div;i++){ const f=i/div; wc.mask(f-t/2,0,t,1); wc.mask(0,f-t/2,1,t); }  // invisible lattice (barriers)
   wc.paintLoad(1.05).waterLoad(1.5);
   const cells=[]; for (let gy=0;gy<div;gy++) for (let gx=0;gx<div;gx++) cells.push([(gx+0.5)/div,(gy+0.5)/div]);
   let n=0, dried=0;
@@ -111,12 +111,12 @@ function animSophistication(){
       if (n % 3 === 0){
         const x=Math.random(), y=Math.random();
         ink(wc, x*GW, y*GH, GW*0.05, 0.5);
-        wc.addVelocity(x*GW, y*GH, rnd(-0.85,0.85), rnd(-0.85,0.85), GW*0.05);
+        wc.grid.stir(x*GW, y*GH, rnd(-0.85,0.85), rnd(-0.85,0.85), GW*0.05);
       }
     } else {                                 // ORDER: dry cells in reading order — calm propagates
       const idx = Math.floor((e-4200)/240);
       while (dried <= idx && dried < cells.length){
-        const c = cells[dried]; wc.dry(c[0]*GW, c[1]*GH, GW*(0.46/div)); dried++;
+        const c = cells[dried]; wc.grid.dry(c[0]*GW, c[1]*GH, GW*(0.46/div)); dried++;
       }
     }
   };
@@ -135,7 +135,7 @@ function animRuggedness(){
     if (cycle !== lastCycle){
       lastCycle = cycle;
       const by = Math.min(0.86, 0.16 + cycle*0.07);          // the wet band creeps downward
-      for (let x=0.12;x<=0.88;x+=0.08) wc.rewet(x*GW, by*GH, GW*(0.05 + Math.random()*0.02));
+      for (let x=0.12;x<=0.88;x+=0.08) wc.grid.rewet(x*GW, by*GH, GW*(0.05 + Math.random()*0.02));
       wc.gravityStrength(0.15);              // rain pulls it down
     }
     if (e - cycle*2600 > 1500) wc.gravityStrength(0.0);      // settle + granulate (silence)

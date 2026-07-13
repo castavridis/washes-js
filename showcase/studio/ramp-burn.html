@@ -55,22 +55,22 @@ if(Washes&&sim){
   const bars=[ {x:0.10,h:0.62,waste:0.34},{x:0.30,h:0.78,waste:0.52},{x:0.50,h:0.50,waste:0.20},{x:0.70,h:0.68,waste:0.44},{x:0.90,h:0.84,waste:0.30} ];
   const $=v=>'$'+Math.round(v).toLocaleString();
   function init(){
-    wc=Washes.compat1(Washes.create(sim,{gpu:false,pointer:false,paperColor:{r:0.957,g:0.969,b:0.875}}));  // v1-surface pin
-    G=wc.state(); const gx=n=>n*G.gridWidth, gy=n=>n*G.gridHeight;
+    wc=Washes.create(sim,{gpu:false,pointer:false,paperColor:{r:0.957,g:0.969,b:0.875}});  // native v2 (migrated off compat1)
+    G=wc.state(); const nr=n=>n*G.gridWidth/Math.min(G.gridWidth,G.gridHeight);
     safe(()=>wc.flow(0.13)); safe(()=>wc.evaporation(0.25)); safe(()=>wc.quality('auto'));
     function paintBars(){
       safe(()=>wc.clearPaint?wc.clearPaint():wc.reset());
       for(const b of bars){
         const top=0.92-b.h, wetTop=top, wetBottom=top+b.h*b.waste;
         // kept spend: dense strokes, then dried crisp
-        for(let y=wetBottom;y<0.92;y+=0.022) for(const dx of[-0.04,0,0.04]) safe(()=>wc.paintNorm(b.x+dx,y,0.028,'blue',0.8));
-        for(let y=wetBottom;y<0.92;y+=0.022) safe(()=>wc.paintNorm(b.x,y,0.03,'yellow',0.35));
+        for(let y=wetBottom;y<0.92;y+=0.022) for(const dx of[-0.04,0,0.04]) safe(()=>wc.paint(b.x+dx,y,0.028,'blue',0.8));
+        for(let y=wetBottom;y<0.92;y+=0.022) safe(()=>wc.paint(b.x,y,0.03,'yellow',0.35));
       }
       safe(()=>wc.dry());                       // everything painted so far is KEPT — set it
       for(const b of bars){
         const top=0.92-b.h, wetBottom=top+b.h*b.waste;
-        for(let y=top;y<wetBottom;y+=0.02) for(const dx of[-0.04,0,0.04]) safe(()=>wc.paintNorm(b.x+dx,y,0.028,'rose',0.55));
-        safe(()=>wc.rewet(gx(b.x),gy((top+wetBottom)/2),G.gridWidth*0.06));   // the waste stays WET
+        for(let y=top;y<wetBottom;y+=0.02) for(const dx of[-0.04,0,0.04]) safe(()=>wc.paint(b.x+dx,y,0.028,'rose',0.55));
+        safe(()=>wc.rewet(b.x,(top+wetBottom)/2,nr(0.06)));   // the waste stays WET
       }
     }
     paintBars();
@@ -78,11 +78,11 @@ if(Washes&&sim){
       on=state; tgl.classList.toggle('on',on); tgl.setAttribute('aria-checked',String(on));
       if(on){
         safe(()=>wc.evaporation(7.5)); safe(()=>wc.gravityVector(0,-0.5)); safe(()=>wc.gravityStrength&&wc.gravityStrength(0.5));
-        safe(()=>wc.runUntilDry&&wc.runUntilDry(true));
-        for(const b of bars){ const top=0.92-b.h; safe(()=>wc.addVelocity(gx(b.x),gy(top+0.05),0,-0.8,G.gridWidth*0.05)); }
+        safe(()=>wc.run('until-dry'));
+        for(const b of bars){ const top=0.92-b.h; safe(()=>wc.stir(b.x,top+0.05,0,-0.8,nr(0.05))); }
         target=412_960;
       } else {
-        safe(()=>wc.evaporation(0.25)); safe(()=>wc.gravityVector(0,0)); safe(()=>wc.runUntilDry&&wc.runUntilDry(false));
+        safe(()=>wc.evaporation(0.25)); safe(()=>wc.gravityVector(0,0)); safe(()=>wc.run('auto'));
         target=0; saved=0; paintBars();
       }
     }

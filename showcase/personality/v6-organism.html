@@ -26,7 +26,7 @@
 const N = window.Washes;
 const PAPER = '#dad8d2';
 const rnd = (a,b)=> a + Math.random()*(b-a);
-function ink(wc,x,y,r,a){ wc.paintAt(x,y,r,'yellow',a*1.3); wc.paintAt(x,y,r,'rose',a); wc.paintAt(x,y,r,'blue',a); wc.paintAt(x,y,r,'yellow',a*0.45); }
+function ink(wc,x,y,r,a){ wc.grid.paint(x,y,r,'yellow',a*1.3); wc.grid.paint(x,y,r,'rose',a); wc.grid.paint(x,y,r,'blue',a); wc.grid.paint(x,y,r,'yellow',a*0.45); }
 
 const wc = N.create(document.getElementById('cv'), { gpu:false, pointer:false });
 const S = wc.state(), GW = S.gridWidth, GH = S.gridHeight;
@@ -37,7 +37,7 @@ const DIV = Math.round(3 + G.sophist*4);          // sophistication: the lattice
 
 let tips=[], phase='grow', pStart=0;
 
-function lattice(){ const t=0.006; for(let i=1;i<DIV;i++){ const f=i/DIV; wc.maskNorm(f-t/2,0,t,1); wc.maskNorm(0,f-t/2,1,t); } }
+function lattice(){ const t=0.006; for(let i=1;i<DIV;i++){ const f=i/DIV; wc.mask(f-t/2,0,t,1); wc.mask(0,f-t/2,1,t); } }
 function newGen(){
   wc.reset(); wc.paperColor(PAPER); wc.paintLoad(1.3).waterLoad(1.2); wc.fadePainting(0);
   try{ wc.brushMode('salt'); }catch(_){}                                   // ruggedness: grain
@@ -61,7 +61,7 @@ function grow(){
     tp.x += hx*step; tp.y += hy*step; tp.life--;
     const r = GW*(0.012 + G.rugged*0.012);
     ink(wc, tp.x, tp.y, r, 0.5);
-    wc.addVelocity(tp.x, tp.y, hx*vmag, hy*vmag, r*1.4);   // viscous fingering forward
+    wc.grid.stir(tp.x, tp.y, hx*vmag, hy*vmag, r*1.4);   // viscous fingering forward
     if(Math.random()<branchP && tips.length+newTips.length<44){
       const ba=(Math.random()<0.5?1:-1)*(0.6+Math.random()*0.55), bc=Math.cos(ba), bs=Math.sin(ba);
       newTips.push({ x:tp.x, y:tp.y, hx:hx*bc-hy*bs, hy:hx*bs+hy*bc, life:rnd(45,120) });

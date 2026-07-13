@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Washes v1.0.20 — live engine, after Curtis et al. 1997</title>
+<title>Washes v1.0.21 — live engine, after Curtis et al. 1997</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Crimson+Pro:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -1633,7 +1633,7 @@
       <button class="call-history-clear" id="call-history-clear" title="Clear all entries and reset timer">clear</button>
     </div>
     <div class="call-history-list" id="call-history-list">
-      <div class="call-history-empty">no calls yet — try <code>wc.splash([{ x: 500, y: 400 }])</code> in the console</div>
+      <div class="call-history-empty">no calls yet — try <code>wc.splash([{ x: 0.6, y: 0.5 }])</code> in the console</div>
     </div>
   </div>
 
@@ -2229,7 +2229,7 @@
     <div class="docs-grid">
       <aside class="docs-nav" aria-label="Documentation table of contents">
         <div class="docs-nav-title">Washes</div>
-        <div class="docs-nav-subtitle">v1.0.20</div>
+        <div class="docs-nav-subtitle">v1.0.21</div>
         <nav>
           <!-- v0.21 — accordion sections. Each .docs-nav-group has a
                button-styled header (.docs-nav-section) plus a list of
@@ -2411,6 +2411,7 @@
             </button>
             <div class="docs-nav-items">
               <a href="#changelog" class="docs-nav-item">All versions</a>
+              <a href="#cl-1-0-21" class="docs-nav-item">v1.0.21 — native v2</a>
               <a href="#cl-1-0-20" class="docs-nav-item">v1.0.20 — engine 2.0 ready</a>
               <a href="#cl-1-0-19" class="docs-nav-item">v1.0.19 — compat1 pin</a>
               <a href="#cl-1-0-18" class="docs-nav-item">v1.0.18 — live engine</a>
@@ -5938,6 +5939,33 @@ node washes-test-harness.js ./watercolor-lib.js all</pre>
           standalone <code>.html</code> file kept in <code>/mnt/user-data/outputs/</code>
           so you can always go back to a previous version's exact behavior.
         </p>
+
+        <!-- ===== v1.0.20 ===== -->
+        <h2 id="cl-1-0-21">v1.0.21 &mdash; native v2</h2>
+        <p>
+          The playground now speaks the engine's v2 API directly &mdash; the
+          <code>compat1()</code> pin (v1.0.19&ndash;v1.0.20) is retired, and
+          the console migration warnings are gone.
+        </p>
+        <h3>Changed</h3>
+        <ul class="docs-list">
+          <li><span class="cl-tag cl-feature">infra</span>
+            <strong>All wiring migrated to v2 names and units.</strong>
+            <code>paint</code>/<code>stroke</code>/<code>stir</code>/<code>sample</code>
+            take normalized coordinates; the fluid tools, deluge clicks and
+            probe all convert through one <code>locate()</code>;
+            <code>run('until-dry')</code>, <code>drying()</code>,
+            <code>animation()</code>/<code>visualization()</code>/<code>backgroundAnimation()</code>,
+            <code>exportImage()</code>. The Size slider, brush presets and
+            stroke taper keep their px-diameter UI through one
+            <code>brushPx()</code>/<code>setBrushPx()</code> bridge pair
+            (saved brush presets stay portable).</li>
+          <li><span class="cl-tag cl-feature">behavior</span>
+            <strong>Scale slider now preserves the painting.</strong>
+            v2's <code>scale(n)</code> resamples instead of wiping (v1
+            wiped); dragging the resolution slider no longer erases the
+            canvas.</li>
+        </ul>
 
         <!-- ===== v1.0.20 ===== -->
         <h2 id="cl-1-0-20">v1.0.20 &mdash; engine 2.0 ready</h2>
@@ -9881,9 +9909,13 @@ host.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;';
 // lib's IIFE assigns `window.Watercolor` from inside itself, and we
 // now read it through the same path. Works identically in classic
 // script mode (since `window.X === X` for globals there too).
-// v1.0.19 — wrapped in compat1(): pins the playground to the v1 surface so
-// the API 2.0 rename batch can't break it (a documented passthrough today).
-const wc = window.Watercolor.compat1(window.Watercolor.create(host, { canvasScale: 1, gouacheMode: 'auto' }));
+// v1.0.21 — native v2 (the compat1 pin served its purpose through the 2.0
+// flip and is retired). The Size slider, brush presets and stroke taper
+// were built in px diameters — v2 brushSize() speaks radius fractions of
+// the smaller display side, so one bridge pair keeps the px plumbing.
+const wc = window.Watercolor.create(host, { canvasScale: 1, gouacheMode: 'auto' });
+const brushPx = () => { const r = wc.displayRect(); return wc.brushSize() * 2 * Math.min(r.width, r.height); };
+const setBrushPx = (px) => { const r = wc.displayRect(); wc.brushSize(px / 2 / Math.min(r.width, r.height)); };
 // v1.0.17 — auto performance from the first frame: the governor owns grid
 // resolution (full/half/quarter under load, art-preserving). The Quality
 // dropdown reads this state at wiring time, so it shows "Auto" on load.
@@ -10091,7 +10123,7 @@ function updateCursorPreview() {
   // plumbing, not user-initiated, so they shouldn't appear in the
   // call-history panel.
   _internalCall(() => {
-    const size = wc.brushSize();
+    const size = brushPx();
     cursorEl.style.width  = size + 'px';
     cursorEl.style.height = size + 'px';
     const pig = wc.pigment();
@@ -10202,7 +10234,7 @@ function wireSlider(id, valueId, apiFn, fmt) {
   // Initial sync
   el.dispatchEvent(new Event('input'));
 }
-wireSlider('size',       'size-value',       v => wc.brushSize(v));
+wireSlider('size',       'size-value',       v => setBrushPx(v));
 // v0.60 — paint-load readout uses 3 decimals when below 0.1 (so the
 // new dry-brush bottom of the range is readable as "0.001×" rather
 // than "0.0×"), and 2 decimals otherwise. Avoids needing two sliders
@@ -10434,7 +10466,7 @@ const animationSelect = document.getElementById('animation-mode');
 if (animationSelect) {
   animationSelect.addEventListener('change', () => {
     const v = animationSelect.value || 'off';
-    wc.setAnimation(v);
+    wc.animation(v);
     // v0.56 — auto-hide removed; canvas area is stable in right-docked layout.
   });
 }
@@ -10442,7 +10474,7 @@ const vizSelect = document.getElementById('visualization-mode');
 if (vizSelect) {
   vizSelect.addEventListener('change', () => {
     const v = vizSelect.value || 'off';
-    wc.setVisualization(v);
+    wc.visualization(v);
     // v0.56 — auto-hide removed.
   });
 }
@@ -10450,7 +10482,7 @@ const timeOfDaySelect = document.getElementById('time-of-day');
 if (timeOfDaySelect) {
   timeOfDaySelect.addEventListener('change', () => {
     if (timeOfDaySelect.value) {
-      wc.setBackground(timeOfDaySelect.value);
+      wc.backgroundAnimation(timeOfDaySelect.value);
       // v0.56 — auto-hide removed.
     }
   });
@@ -10507,9 +10539,9 @@ wireBtn('reset',           () => wc.reset());
 // so Firefox accepts it. Revoke after a short delay to free memory.
 wireBtn('export-btn', () => {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-  Promise.resolve(wc.exportPNG({ asBlob: true })).then((blob) => {
+  Promise.resolve(wc.exportImage({ asBlob: true })).then((blob) => {
     if (!(blob instanceof Blob)) {
-      console.error('exportPNG returned non-Blob:', blob);
+      console.error('exportImage returned non-Blob:', blob);
       return;
     }
     const url = URL.createObjectURL(blob);
@@ -10589,7 +10621,7 @@ wireToggle('toggle-edge',     () => wc.edgeDarkening(),     v => wc.edgeDarkenin
   }
 }
 wireToggle('toggle-fade',     () => wc.fadePainting(),      v => wc.fadePainting(v));
-wireToggle('toggle-drying',   () => wc.pauseDrying(),       v => wc.pauseDrying(v));
+wireToggle('toggle-drying',   () => !wc.drying(),           v => wc.drying(!v));
 wireToggle('toggle-autodry',  () => wc.autoDryBackground(), v => wc.autoDryBackground(v));
 wireToggle('toggle-transparent', () => wc.transparent(),    v => {
   wc.transparent(v);
@@ -10715,7 +10747,7 @@ _mirrorPerfPanelToggle('toggle-perf-perf',   'toggle-perf');
     if (overlay.hidden) return;
     const entries = callHistory.entries;
     if (entries.length === 0) {
-      list.innerHTML = '<div class="call-history-empty">no calls yet — try <code>wc.splash([{ x: 500, y: 400 }])</code> in the console</div>';
+      list.innerHTML = '<div class="call-history-empty">no calls yet — try <code>wc.splash([{ x: 0.6, y: 0.5 }])</code> in the console</div>';
       return;
     }
     // Build DOM as a single innerHTML write — for 500-entry buffers
@@ -11304,12 +11336,12 @@ function nudgeBrushSize(direction, big) {
   if (!sizeSlider) return;
   const min = +sizeSlider.min;
   const max = +sizeSlider.max;
-  const cur = wc.brushSize();
+  const cur = Math.round(brushPx());
   const factor = big ? 0.25 : 0.10;
   const delta = Math.max(1, Math.round(cur * factor));
   const next = Math.max(min, Math.min(max, cur + direction * delta));
   if (next === cur) return;
-  wc.brushSize(next);
+  setBrushPx(next);
   sizeSlider.value = String(next);
   if (sizeValue) sizeValue.textContent = String(next);
   // v0.50 — also refresh the floating cursor preview ring so it
@@ -12027,12 +12059,19 @@ function delugeCoords(centerPx) {
     cxPx = Math.max(minX, Math.min(maxX, cxPx));
     cyPx = Math.max(minY, Math.min(maxY, cyPx));
   }
+  // v2 epicenters are normalized; the radius slider is display px, so
+  // convert it exactly the way v1's splash did (canvasScale × px→grid),
+  // then express as a fraction of the smaller grid side.
+  const csScale = wc.canvasScale();
+  const nRadius = delugeRadius
+    ? (+delugeRadius.value * csScale * pxToGrid) / Math.min(s.gridWidth, s.gridHeight)
+    : undefined;
   return [{
-    x: cxPx * pxToGrid,
-    y: cyPx * pxToGrid,
+    x: cxPx / rect.width,
+    y: cyPx / rect.height,
     velocity: delugeVel    ? +delugeVel.value    : undefined,
     pressure: delugePress  ? +delugePress.value  : undefined,
-    radius:   delugeRadius ? +delugeRadius.value : undefined,
+    radius:   nRadius,
     lift:     delugeLift   ? +delugeLift.value   : undefined,
   }];
 }
@@ -12285,7 +12324,7 @@ function getCurrentBrushPreset() {
   return {
     version: 1,
     pigment:   wc.pigment(),
-    brushSize: wc.brushSize(),
+    brushSize: brushPx(),   // px diameter — keeps saved presets portable across v1/v2
     paintLoad: wc.paintLoad(),
     waterLoad: wc.waterLoad(),
     pressure:  wc.pressure(),
@@ -12295,7 +12334,7 @@ function getCurrentBrushPreset() {
 function applyBrushPreset(bp) {
   if (!bp) return;
   if (bp.pigment   !== undefined) wc.pigment(bp.pigment);
-  if (bp.brushSize !== undefined) wc.brushSize(bp.brushSize);
+  if (bp.brushSize !== undefined) setBrushPx(bp.brushSize);
   if (bp.paintLoad !== undefined) wc.paintLoad(bp.paintLoad);
   if (bp.waterLoad !== undefined) wc.waterLoad(bp.waterLoad);
   if (bp.pressure  !== undefined) wc.pressure(bp.pressure);
@@ -12437,7 +12476,7 @@ function saveSectionState() {
   // handlers on the inner <canvas>, so when the overlay is pointer-events:none
   // the normal brush works untouched).
   const wc = window.Watercolor;
-  if (wc && typeof wc.addVelocity === 'function' && typeof wc.displayRect === 'function') {
+  if (wc && typeof wc.stir === 'function' && typeof wc.displayRect === 'function') {
     const host = document.getElementById('canvas-host');
     const ov = document.createElement('div');
     ov.id = 'v11-overlay';
@@ -12452,7 +12491,7 @@ function saveSectionState() {
       const r=wc.displayRect();               // v1.1 — live CSS rect of the canvas
       const nx=(e.clientX-r.x)/r.width, ny=(e.clientY-r.y)/r.height;
       const d=dims();
-      return { gx:nx*d.GW, gy:ny*d.GH };
+      return { nx, ny, gx:nx*d.GW, gy:ny*d.GH };
     }
     function paint(active){
       for (const k in btns){ if(!btns[k]) continue; const on=(k===active); btns[k].classList.toggle('active',on); btns[k].setAttribute('aria-pressed', on?'true':'false'); }
@@ -12472,17 +12511,17 @@ function saveSectionState() {
     // the same display->grid mapping locate() uses, so the fluid tools cover
     // the same area as the paint brush. Read live so dragging the slider
     // changes the next action's size.
-    function brushGridRadius(){
-      const r=wc.displayRect(), d=dims();
-      let px=28; try{ if(typeof wc.brushSize==='function') px=wc.brushSize(); }catch(_){}
-      const gridPerPx = d.GW / Math.max(1, r.width);
-      return Math.max(2, Math.round(px * 0.5 * gridPerPx));
+    function brushNormRadius(){
+      const d=dims();
+      // v2 brushSize() is already the radius fraction; keep the old
+      // 2-grid-cell floor so tiny brushes still act.
+      return Math.max(2/Math.min(d.GW,d.GH), wc.brushSize());
     }
-    function stampAt(gx, gy, R){
-      if (tool==='dry')        wc.dry(gx, gy, R);   // v1.1 — local dry
-      else if (tool==='rewet') wc.rewet(gx, gy, R); // v1.1 — local rewet
+    function stampAt(nx, ny, NR){
+      if (tool==='dry')        wc.dry(nx, ny, NR);   // local dry, normalized
+      else if (tool==='rewet') wc.rewet(nx, ny, NR); // local rewet, normalized
     }
-    function actAt(e){ const p=locate(e); stampAt(p.gx, p.gy, brushGridRadius()); }
+    function actAt(e){ const p=locate(e); stampAt(p.nx, p.ny, brushNormRadius()); }
     // v1.3 — interpolate dabs along the drag segment so Dry/Rewet read as a
     // continuous stroke instead of discrete circles when the pointer skips
     // between move events. Spacing is a fraction of the radius for tight,
@@ -12504,7 +12543,7 @@ function saveSectionState() {
       if(!drag||!tool) return; const p=locate(e);
       if(tool==='stir'){
         const vx=clamp((p.gx-last.gx)*0.09,-0.9,0.9), vy=clamp((p.gy-last.gy)*0.09,-0.9,0.9);
-        wc.addVelocity(p.gx, p.gy, vx, vy, brushGridRadius());   // v1.3 — radius tied to brush size
+        wc.stir(p.nx, p.ny, vx, vy, brushNormRadius());   // radius tied to brush size
       } else { strokeAct(last, p); }
       last=p; e.preventDefault();
     });
@@ -12517,9 +12556,9 @@ function saveSectionState() {
     let lastProbe = null;
     function strokeStep(e){
       const p = locate(e), d = dims();
-      wc.strokeTo(p.gx, p.gy, { pigment: wc.pigment(), strength: 0.6, radius: Math.max(2, Math.round(d.GW * 0.02)) });
+      wc.stroke(p.nx, p.ny, { pigment: wc.pigment(), strength: 0.6, nradius: Math.max(2, Math.round(d.GW * 0.02)) / Math.min(d.GW, d.GH) });
     }
-    function probeAt(e){ const p = locate(e); lastProbe = wc.sample(p.gx, p.gy); }
+    function probeAt(e){ const p = locate(e); lastProbe = wc.sample(p.nx, p.ny); }
     ov.addEventListener('pointerdown', e=>{
       if (tool === 'stroke'){ wc.penUp(); strokeStep(e); }
       else if (tool === 'probe'){ probeAt(e); }
@@ -12532,10 +12571,10 @@ function saveSectionState() {
     if (cpBtn) cpBtn.addEventListener('click', () => wc.clearPaint());   // keeps the mask, unlike reset()
     // v1.3 — Run until dry: keep stepping until the wash is completely dry, then idle.
     const udBtn = document.getElementById('toggle-untildry');
-    if (udBtn && typeof wc.runUntilDry === 'function'){
+    if (udBtn){
       udBtn.addEventListener('click', () => {
-        const on = !wc.runUntilDry();            // flip the engine's current state
-        wc.runUntilDry(on);
+        const on = wc.run() !== 'until-dry';     // flip the engine's current policy
+        wc.run(on ? 'until-dry' : 'auto');
         udBtn.classList.toggle('active', on);
         udBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
       });
@@ -12597,11 +12636,11 @@ function saveSectionState() {
     let taperOn = false, taperBase = null, taperCur = null, tpx = 0, tpy = 0, tpt = 0, painting = false;
     const TAPER_MINF = 0.15, TAPER_GAIN = 0.45;   // pointer speed (px/ms) -> width reduction (v1.0.9: stronger)
     const sizeForSpeed = (speed) => Math.max(4, taperBase * Math.max(TAPER_MINF, Math.min(1, 1 - speed * TAPER_GAIN)));
-    const endTaper = () => { if (painting && taperBase != null){ try { wc.brushSize(taperBase); } catch(_){} } painting = false; };
+    const endTaper = () => { if (painting && taperBase != null){ try { setBrushPx(taperBase); } catch(_){} } painting = false; };
     host.addEventListener('pointerdown', (e) => {
       if (!taperOn || tool) return;                  // only while painting (no fluid tool active)
       painting = true;
-      taperBase = (typeof wc.brushSize === 'function') ? wc.brushSize() : 28;
+      taperBase = brushPx();
       taperCur = taperBase; tpx = e.clientX; tpy = e.clientY; tpt = e.timeStamp || performance.now();
     });
     host.addEventListener('pointermove', (e) => {
@@ -12611,7 +12650,7 @@ function saveSectionState() {
       tpx = e.clientX; tpy = e.clientY; tpt = t;
       if (dt <= 0) return;
       taperCur += (sizeForSpeed(dist / dt) - taperCur) * 0.5;   // smooth toward target
-      try { wc.brushSize(Math.round(taperCur)); } catch(_){}
+      try { setBrushPx(Math.round(taperCur)); } catch(_){}
     });
     host.addEventListener('pointerup', endTaper);
     host.addEventListener('pointercancel', endTaper);

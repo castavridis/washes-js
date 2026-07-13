@@ -60,15 +60,15 @@ if(Washes&&sim){
   let wc=null,G=null,hires=0;
   const log=s=>{ ledger.innerHTML+="\n"+s; };
   function init(){
-    wc=Washes.compat1(Washes.create(sim,{gpu:false,pointer:false,paperColor:{r:0.984,g:0.969,b:0.925}}));  // v1-surface pin
-    G=wc.state(); const gx=n=>n*G.gridWidth, gy=n=>n*G.gridHeight;
+    wc=Washes.create(sim,{gpu:false,pointer:false,paperColor:{r:0.984,g:0.969,b:0.925}});  // native v2 (migrated off compat1)
+    G=wc.state(); const nr=n=>n*G.gridWidth/Math.min(G.gridWidth,G.gridHeight);
     safe(()=>wc.flow(0.15)); safe(()=>wc.evaporation(1.4)); safe(()=>wc.edgeMode('open')); safe(()=>wc.quality('auto'));
     // a faint standing river left->right with a gentle S
     const riverY=t=>0.5+Math.sin(t*Math.PI*1.4)*0.16;
     if(!reduce) setInterval(()=>{ for(let i=0;i<6;i++){ const t=Math.random();
-      safe(()=>wc.addVelocity(gx(t),gy(riverY(t)),0.7,Math.cos(t*4)*0.12,G.gridWidth*0.05)); } },120);
+      safe(()=>wc.stir(t,riverY(t),0.7,Math.cos(t*4)*0.12,nr(0.05))); } },120);
     // pale bed so the current is faintly visible at rest
-    for(let i=0;i<=30;i++){ const t=i/30; safe(()=>wc.paintNorm(t,riverY(t),0.05,'yellow',0.08)); }
+    for(let i=0;i<=30;i++){ const t=i/30; safe(()=>wc.paint(t,riverY(t),0.05,'yellow',0.08)); }
     function drop(name){
       hires++;
       const pig=['gold','rose','blue'][hires%3]==='gold'?'yellow':(hires%2?'rose':'blue');
@@ -76,14 +76,14 @@ if(Washes&&sim){
       log('+ '+name+' — record created');
       const id=setInterval(()=>{
         t+=0.012; if(t>=1){ clearInterval(id);
-          safe(()=>wc.rewet(gx(0.93),gy(riverY(0.96)),G.gridWidth*0.05));
+          safe(()=>wc.rewet(0.93,riverY(0.96),nr(0.05)));
           log('<b>✓ '+name+' fully provisioned</b>'); return; }
         const y=riverY(t);
-        safe(()=>wc.paintNorm(t,y,0.022,pig,0.55));
-        safe(()=>wc.addVelocity(gx(t),gy(y),1.1,0,G.gridWidth*0.04));
+        safe(()=>wc.paint(t,y,0.022,pig,0.55));
+        safe(()=>wc.stir(t,y,1.1,0,nr(0.04)));
         if(next<gates.length && t>=gates[next]){
-          safe(()=>wc.paintNorm(gates[next],y,0.05,'yellow',0.4));   // a gold bloom at the gate
-          safe(()=>wc.addVelocity(gx(gates[next]),gy(y),0,(Math.random()-0.5)*1.4,G.gridWidth*0.06));
+          safe(()=>wc.paint(gates[next],y,0.05,'yellow',0.4));   // a gold bloom at the gate
+          safe(()=>wc.stir(gates[next],y,0,(Math.random()-0.5)*1.4,nr(0.06)));
           log('  → '+['payroll set','laptop shipped','access granted'][next]);
           next++;
         }

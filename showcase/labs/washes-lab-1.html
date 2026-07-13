@@ -59,7 +59,7 @@
 <script type="module">
 // ---------------------------------------------------------------------------
 // Helpers (shared) ----------------------------------------------------------
-function newInst(host){const i=Washes.compat1(Washes.create(host,{gpu:false,pointer:false}));const s=i.state();return {i,GW:s.gridWidth,GH:s.gridHeight};}
+function newInst(host){const i=Washes.create(host,{gpu:false,pointer:false});const s=i.state();return {i,GW:s.gridWidth,GH:s.gridHeight};}
 function canvasRect(host){const c=host&&host.querySelector&&host.querySelector('canvas');const r=(c||host).getBoundingClientRect();return {x:r.left,y:r.top,w:r.width||560,h:r.height||560};}
 function wetPaper(i){try{const wp=i.paperWetnessPresets&&i.paperWetnessPresets();if(wp&&wp.length){const pick=wp.find(n=>/wet|flood|soak|damp/i.test(n))||wp[wp.length-1];i.paperWetness(pick);}}catch(e){}}
 function bye(i){try{i.destroy();}catch(e){}}
@@ -106,7 +106,7 @@ const SCENES = [
 { id:"tide", grp:"Camera & body", needs:"camera", title:"Tide — motion is invisible water",
   note:"The camera image is never drawn. Frame-to-frame motion is read as a field of invisible water that re-wets a dried wash, so the paint blooms only where you move. Standing still lets it settle; a wave of the hand sends a tide through it.",
   build(host){ const {i,GW,GH}=newInst(host);
-    for(let k=0;k<520;k++) i.paintAt(Math.random()*GW,Math.random()*GH,7,Math.random()*3|0,0.5); try{i.dry();}catch(e){}
+    for(let k=0;k<520;k++) i.grid.paint(Math.random()*GW,Math.random()*GH,7,Math.random()*3|0,0.5); try{i.dry();}catch(e){}
     const st={video:null,prev:null,octx:null,dead:false}; let auto=0;
     (async()=>{ const v=await getCamera(); if(st.dead){stopTracks(v);return;} if(!v){labStatus('No camera — the tide drifts on its own. Allow the webcam and your motion will stir it.');return;}
       st.video=v; const oc=document.createElement('canvas'); oc.width=48; oc.height=36; st.octx=oc.getContext('2d',{willReadFrequently:true});
@@ -116,11 +116,11 @@ const SCENES = [
         try{ st.octx.drawImage(st.video,0,0,W,H); }catch(e){ return; } let d; try{ d=st.octx.getImageData(0,0,W,H).data; }catch(e){ return; }
         const cur=new Float32Array(W*H); for(let p=0;p<W*H;p++) cur[p]=(d[p*4]+d[p*4+1]+d[p*4+2])/765;
         if(st.prev){ let cxs=0,cys=0,m=0;
-          for(let y=0;y<H;y++)for(let x=0;x<W;x++){ const idx=y*W+x, mv=Math.abs(cur[idx]-st.prev[idx]); if(mv>0.12){ const gx=(1-x/W)*GW, gy=y/H*GH; i.paintAt(gx,gy,Math.max(3,GW*0.03),WATER,Math.min(0.5,mv)); cxs+=x;cys+=y;m++; } }
+          for(let y=0;y<H;y++)for(let x=0;x<W;x++){ const idx=y*W+x, mv=Math.abs(cur[idx]-st.prev[idx]); if(mv>0.12){ const gx=(1-x/W)*GW, gy=y/H*GH; i.grid.paint(gx,gy,Math.max(3,GW*0.03),WATER,Math.min(0.5,mv)); cxs+=x;cys+=y;m++; } }
           if(m>4){ const ax=(1-(cxs/m)/W)-0.5, ay=(cys/m)/H-0.5; const dir=Math.abs(ax)>Math.abs(ay)?(ax>0?'right':'left'):(ay>0?'down':'up'); try{i.gravityDirection(dir);i.gravityStrength(Math.min(0.12,m*0.004));}catch(e){} }
           else { try{i.gravityStrength(0);}catch(e){} } }
         st.prev=cur;
-      } else { auto++; if(auto%6===0){ const x=GW*(0.5+0.4*Math.sin(t*0.0007)), y=GH*(0.5+0.4*Math.cos(t*0.0005)); i.paintAt(x,y,GW*0.04,WATER,0.25); } }
+      } else { auto++; if(auto%6===0){ const x=GW*(0.5+0.4*Math.sin(t*0.0007)), y=GH*(0.5+0.4*Math.cos(t*0.0005)); i.grid.paint(x,y,GW*0.04,WATER,0.25); } }
     }
     return { frame, cleanup(){ st.dead=true; stopTracks(st.video); try{i.gravityStrength(0);}catch(e){} bye(i); } };
   } },
@@ -128,7 +128,7 @@ const SCENES = [
 { id:"lodestone", grp:"Camera & body", needs:"hand", title:"Lodestone — your hand tilts the paper",
   note:"A wet pool of pigment sits on the sheet. Your hand's position tilts the paper so the pool runs that way, and opening or closing your hand pours harder or softer. You never touch the paint; you only change which way is down.",
   build(host){ const {i,GW,GH}=newInst(host); wetPaper(i);
-    for(let k=0;k<140;k++){ const a=Math.random()*6.2832, rr=Math.sqrt(Math.random())*GW*0.12; i.paintAt(GW*0.5+Math.cos(a)*rr,GH*0.4+Math.sin(a)*rr,5,k%3,0.6); }
+    for(let k=0;k<140;k++){ const a=Math.random()*6.2832, rr=Math.sqrt(Math.random())*GW*0.12; i.grid.paint(GW*0.5+Math.cos(a)*rr,GH*0.4+Math.sin(a)*rr,5,k%3,0.6); }
     const st={video:null,hand:null,dead:false};
     (async()=>{ const v=await getCamera(); if(st.dead){stopTracks(v);return;} if(!v){labStatus('No camera — the pour drifts on a slow orbit. Allow the webcam to tilt it with your hand.');return;}
       st.video=v; const hl=await makeHand(); if(st.dead){try{hl&&hl.close();}catch(e){}stopTracks(v);return;} if(!hl){labStatus('Hand tracking unavailable — drifting on its own.');return;}
@@ -147,9 +147,9 @@ const SCENES = [
 { id:"breath", grp:"Camera & body", needs:"face", title:"Breath — it moves when you look away",
   note:"While your eyes are open the wash is frozen and held still under your gaze. Close your eyes and it unlocks — bleeding and breathing in the moment you stop watching. Open your mouth for a deep bloom. The painting only lives when unobserved.",
   build(host){ const {i,GW,GH}=newInst(host); wetPaper(i);
-    for(let k=0;k<420;k++) i.paintAt(Math.random()*GW,Math.random()*GH,6,Math.random()*3|0,0.4);
+    for(let k=0;k<420;k++) i.grid.paint(Math.random()*GW,Math.random()*GH,6,Math.random()*3|0,0.4);
     const st={video:null,face:null,dead:false,frozen:null};
-    function freeze(on){ if(on===st.frozen)return; st.frozen=on; try{ if(on){ const {x:MX,y:MY,w:DW,h:DH}=canvasRect(host); i.maskRect(MX,MY,DW,DH,0); i.maskTint(true);} else {i.removeMask();i.maskTint(false);} }catch(e){} }
+    function freeze(on){ if(on===st.frozen)return; st.frozen=on; try{ if(on){ i.mask(0,0,1,1,0); i.maskTint(true);} else {i.removeMask();i.maskTint(false);} }catch(e){} }
     (async()=>{ const v=await getCamera(); if(st.dead){stopTracks(v);return;} if(!v){labStatus('No camera — it breathes on a slow cycle. Allow the webcam: it holds still while you watch and evolves when you close your eyes.');return;}
       st.video=v; const fl=await makeFace(); if(st.dead){try{fl&&fl.close();}catch(e){}stopTracks(v);return;} if(!fl){labStatus('Face tracking unavailable — breathing on its own.');return;}
       st.face=fl; labStatus('Open eyes hold the wash still; close your eyes and it bleeds. Open your mouth for a deep bloom.'); })();
@@ -157,8 +157,8 @@ const SCENES = [
       if(st.face&&st.video&&st.video.readyState>=2){ let res; try{res=st.face.detectForVideo(st.video,now());}catch(e){res=null;}
         const bs=res&&res.faceBlendshapes&&res.faceBlendshapes[0]&&res.faceBlendshapes[0].categories;
         if(bs){ const g=n=>{const c=bs.find(c=>c.categoryName===n);return c?c.score:0;}; freeze((g('eyeBlinkLeft')+g('eyeBlinkRight'))/2<0.5);
-          if(g('jawOpen')>0.4){ for(let k=0;k<8;k++) i.paintAt(Math.random()*GW,Math.random()*GH,GW*0.05,WATER,0.3); } } }
-      else { freeze(Math.sin(t*0.0004)>0); if(Math.sin(t*0.0004)<-0.985){ for(let k=0;k<6;k++) i.paintAt(Math.random()*GW,Math.random()*GH,GW*0.05,WATER,0.2); } }
+          if(g('jawOpen')>0.4){ for(let k=0;k<8;k++) i.grid.paint(Math.random()*GW,Math.random()*GH,GW*0.05,WATER,0.3); } } }
+      else { freeze(Math.sin(t*0.0004)>0); if(Math.sin(t*0.0004)<-0.985){ for(let k=0;k<6;k++) i.grid.paint(Math.random()*GW,Math.random()*GH,GW*0.05,WATER,0.2); } }
     }
     return { frame, cleanup(){ st.dead=true; try{st.face&&st.face.close();}catch(e){} stopTracks(st.video); try{i.removeMask();}catch(e){} bye(i); } };
   } },
@@ -175,7 +175,7 @@ const SCENES = [
         if(lm){ const d=Math.hypot(lm[4].x-lm[8].x,lm[4].y-lm[8].y); st.load=Math.min(1.0,Math.max(0.04,(d-0.02)*2.2)); } }
       else { st.load=0.04+0.5*(0.5+0.5*Math.sin(t*0.0006)); }
       try{i.paintLoad(st.load);}catch(e){}
-      if(t-last>90){ pig=(pig+1)%3; const x=GW*(0.5+0.4*Math.sin(t*0.0011)), y=GH*(0.5+0.4*Math.sin(t*0.0013+1)); i.paintAt(x,y,GW*0.06,pig,0.5); last=t; }
+      if(t-last>90){ pig=(pig+1)%3; const x=GW*(0.5+0.4*Math.sin(t*0.0011)), y=GH*(0.5+0.4*Math.sin(t*0.0013+1)); i.grid.paint(x,y,GW*0.06,pig,0.5); last=t; }
     }
     return { frame, cleanup(){ st.dead=true; try{st.hand&&st.hand.close();}catch(e){} stopTracks(st.video); bye(i); } };
   } },
@@ -184,7 +184,7 @@ const SCENES = [
 { id:"sundial", grp:"3D / three.js", needs:"three.js", title:"Sundial — a 3D sun crisps the wash",
   note:"A three.js point-light orbits an unseen sheet; its rendered brightness is read back each frame to find where the light currently falls. There, the wash is masked crisp and held; everywhere else it stays free to bleed. A slow sun that sets the paint where it touches.",
   build(host){ const {i,GW,GH}=newInst(host); wetPaper(i);
-    for(let k=0;k<460;k++) i.paintAt(Math.random()*GW,Math.random()*GH,6,Math.random()*3|0,0.45);
+    for(let k=0;k<460;k++) i.grid.paint(Math.random()*GW,Math.random()*GH,6,Math.random()*3|0,0.45);
     const st={rend:null,scene:null,cam:null,light:null,octx:null,dead:false};
     (async()=>{ const T=await loadThree(); if(st.dead)return; if(!T){labStatus('three.js unavailable — the light sweeps on a timer.');return;}
       try{ const sc=new T.Scene(); const cam=new T.PerspectiveCamera(50,1,0.1,100); cam.position.set(0,0,6);
@@ -196,7 +196,7 @@ const SCENES = [
         labStatus('A 3D sun orbits an unseen sheet — where its light falls the wash is held crisp; behind it the paper bleeds.'); }
       catch(e){ st.rend=null; labStatus('three.js init failed — the light sweeps on a timer.'); } })();
     let cur=-1;
-    function band(cx){ const x=Math.round(cx*40)/40; if(x===cur)return; cur=x; try{ const {x:MX,y:MY,w:DW,h:DH}=canvasRect(host); i.removeMask(); const bw=DW*0.26; i.maskRect(MX+DW*x-bw/2,MY,bw,DH,0); i.maskTint(true); }catch(e){} }
+    function band(cx){ const x=Math.round(cx*40)/40; if(x===cur)return; cur=x; try{ i.removeMask(); i.mask(x-0.13,0,0.26,1,0); i.maskTint(true); }catch(e){} }
     function frame(t){
       if(st.rend){ const ang=t*0.0006; st.light.position.set(Math.cos(ang)*6,Math.sin(ang*0.5)*2,3+Math.sin(ang)*2);
         try{ st.rend.render(st.scene,st.cam); st.octx.drawImage(st.rend.domElement,0,0,80,80); const d=st.octx.getImageData(0,0,80,80).data;
@@ -220,7 +220,7 @@ const SCENES = [
         labStatus('A hidden 3D knot turns; the wash floods around it, so the form shows only as the space the paint will not enter.'); }
       catch(e){ st.rend=null; labStatus('three.js init failed — using a turning analytic form.'); } })();
     function maskFromGrid(g,N){ try{ const {x:MX,y:MY,w:DW,h:DH}=canvasRect(host); i.removeMask(); const cw=DW/N, ch=DH/N;
-      for(let y=0;y<N;y++)for(let x=0;x<N;x++){ if(g[y*N+x]>0.4) i.maskRect(MX+x*cw,MY+y*ch,cw+1,ch+1,0); } }catch(e){} }
+      for(let y=0;y<N;y++)for(let x=0;x<N;x++){ if(g[y*N+x]>0.4) i.mask(x/N,y/N,1/N+1/DW,1/N+1/DH,0); } }catch(e){} }
     function frame(t){
       if(t-last<150){ return; } last=t; pig=(pig+1)%3; let g=null, N=st.N;
       if(st.rend){ st.mesh.rotation.x=t*0.0004; st.mesh.rotation.y=t*0.0006;
@@ -229,7 +229,7 @@ const SCENES = [
       if(!g){ N=st.N; g=new Float32Array(N*N); const cx=N/2+Math.cos(t*0.0006)*N*0.18, cy=N/2+Math.sin(t*0.0006)*N*0.18, rad=N*0.22;
         for(let y=0;y<N;y++)for(let x=0;x<N;x++) g[y*N+x]=(Math.hypot(x-cx,y-cy)<rad)?1:0; }
       maskFromGrid(g,N);
-      for(let k=0;k<80;k++) i.paintAt(Math.random()*GW,Math.random()*GH,GW2*0.03,pig,0.18);
+      for(let k=0;k<80;k++) i.grid.paint(Math.random()*GW,Math.random()*GH,GW2*0.03,pig,0.18);
     }
     return { frame, cleanup(){ st.dead=true; try{i.removeMask();}catch(e){} try{st.rend&&st.rend.dispose&&st.rend.dispose();}catch(e){} bye(i); } };
   } },
@@ -238,7 +238,7 @@ const SCENES = [
 { id:"seismograph", grp:"Sensors & sound", needs:"tilt", title:"Seismograph — a record of handling",
   note:"Tilt is gravity, and nothing fades. Every time the device is tipped, wet pigment runs downhill and dries into a permanent runnel, so the finished sheet is a physical record of how it was held over time. On desktop, drag to tilt.",
   build(host){ const {i,GW,GH}=newInst(host); wetPaper(i);
-    for(let gx=4;gx<GW;gx+=2) i.paintAt(gx,GH*0.12,4,gx%3,0.6);
+    for(let gx=4;gx<GW;gx+=2) i.grid.paint(gx,GH*0.12,4,gx%3,0.6);
     const st={dead:false,g:0,b:0};
     function onPointer(e){ const c=host.querySelector('canvas')||host, r=c.getBoundingClientRect(); st.g=((e.clientX-r.left)/(r.width||560)-0.5)*90; st.b=((e.clientY-r.top)/(r.height||560)-0.5)*90; }
     const cv=host.querySelector('canvas'); if(cv) cv.addEventListener('pointermove',onPointer);
@@ -253,16 +253,16 @@ const SCENES = [
 { id:"tacet", grp:"Sensors & sound", needs:"mic", title:"Tacet — silence is the active input",
   note:"Audio-reactive, reversed. Sound freezes the painting solid; only in silence does it unlock and breathe, water seeping through the pigment while no one speaks. Named for the musical instruction to be silent — here, silence is the only thing that moves it.",
   build(host){ const {i,GW,GH}=newInst(host); wetPaper(i);
-    for(let k=0;k<400;k++) i.paintAt(Math.random()*GW,Math.random()*GH,6,Math.random()*3|0,0.4);
+    for(let k=0;k<400;k++) i.grid.paint(Math.random()*GW,Math.random()*GH,6,Math.random()*3|0,0.4);
     const st={mic:null,dead:false,frozen:null};
-    function freeze(on){ if(on===st.frozen)return; st.frozen=on; try{ if(on){ const {x:MX,y:MY,w:DW,h:DH}=canvasRect(host); i.maskRect(MX,MY,DW,DH,0); i.maskTint(true);} else {i.removeMask();i.maskTint(false);} }catch(e){} }
+    function freeze(on){ if(on===st.frozen)return; st.frozen=on; try{ if(on){ i.mask(0,0,1,1,0); i.maskTint(true);} else {i.removeMask();i.maskTint(false);} }catch(e){} }
     (async()=>{ const m=await getMic(); if(st.dead){try{m&&m.ac.close();}catch(e){}return;} if(!m){labStatus('No microphone — it breathes on a timer. Allow the mic: noise freezes the wash, silence lets it bloom.');return;}
       st.mic=m; labStatus('Make noise to freeze the painting; in silence it breathes and bleeds. (Backwards on purpose.)'); })();
     function frame(t){ let loud;
       if(st.mic){ st.mic.an.getByteFrequencyData(st.mic.buf); let s=0; for(let k=0;k<st.mic.buf.length;k++) s+=st.mic.buf[k]; loud=s/st.mic.buf.length/255; }
       else { loud=0.5+0.5*Math.sin(t*0.0005); }
       freeze(loud>0.18);
-      if(!st.frozen){ for(let k=0;k<3;k++) i.paintAt(Math.random()*GW,Math.random()*GH,GW*0.04,WATER,0.12); }
+      if(!st.frozen){ for(let k=0;k<3;k++) i.grid.paint(Math.random()*GW,Math.random()*GH,GW*0.04,WATER,0.12); }
     }
     return { frame, cleanup(){ st.dead=true; try{ st.mic&&st.mic.ac.close(); st.mic&&st.mic.stream.getTracks().forEach(t=>t.stop()); }catch(e){} try{i.removeMask();}catch(e){} bye(i); } };
   } },
@@ -271,7 +271,7 @@ const SCENES = [
 { id:"murmuration", grp:"Autonomous", needs:"none", title:"Murmuration — flight paths that bloom",
   note:"A flock of invisible agents flocks across a dried wash, and the only mark they leave is water: wherever a bird passes it re-wets the paper, so the old pigment blooms back to life along trajectories you can feel but never see.",
   build(host){ const {i,GW,GH}=newInst(host);
-    for(let k=0;k<620;k++) i.paintAt(Math.random()*GW,Math.random()*GH,6,Math.random()*3|0,0.5); try{i.dry();}catch(e){}
+    for(let k=0;k<620;k++) i.grid.paint(Math.random()*GW,Math.random()*GH,6,Math.random()*3|0,0.5); try{i.dry();}catch(e){}
     const N=40, B=[]; for(let k=0;k<N;k++) B.push({x:Math.random()*GW,y:Math.random()*GH,vx:(Math.random()-0.5),vy:(Math.random()-0.5)});
     labStatus('An invisible flock drifts over the dried wash, re-wetting the paper as it goes — the pigment blooms along flight paths you never see.');
     function frame(t){
@@ -281,7 +281,7 @@ const SCENES = [
         a.vx+=(Math.random()-0.5)*0.05; a.vy+=(Math.random()-0.5)*0.05;
         const sp=Math.hypot(a.vx,a.vy)||1, mx=0.85; if(sp>mx){ a.vx=a.vx/sp*mx; a.vy=a.vy/sp*mx; }
         a.x+=a.vx; a.y+=a.vy; if(a.x<0)a.x+=GW; if(a.x>=GW)a.x-=GW; if(a.y<0)a.y+=GH; if(a.y>=GH)a.y-=GH;
-        i.paintAt(a.x,a.y,3,WATER,0.18); }
+        i.grid.paint(a.x,a.y,3,WATER,0.18); }
     }
     return { frame, cleanup(){ bye(i); } };
   } },
@@ -293,7 +293,7 @@ const SCENES = [
     for(let k=0;k<60;k++){ const a=k/60*6.2832; pts.push({x:cx+Math.cos(a)*R, y:cy+Math.sin(a)*R*0.8}); }
     let drift=0,last=-1e9;
     labStatus('A shape painted from memory: the fade keeps erasing it, and each recall returns slightly wrong, so the form slowly forgets itself.');
-    function frame(t){ if(t-last>1500){ drift++; const j=drift*0.6; for(const p of pts) i.paintAt(p.x+(Math.random()-0.5)*j, p.y+(Math.random()-0.5)*j, 3, drift%3, 0.4); last=t; } }
+    function frame(t){ if(t-last>1500){ drift++; const j=drift*0.6; for(const p of pts) i.grid.paint(p.x+(Math.random()-0.5)*j, p.y+(Math.random()-0.5)*j, 3, drift%3, 0.4); last=t; } }
     return { frame, cleanup(){ bye(i); } };
   } },
 

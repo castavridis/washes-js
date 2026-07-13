@@ -50,11 +50,11 @@
         <button class="pill" data-tool="dry">Dry</button>
         <button class="pill" data-tool="rewet">Rewet</button>
       </div>
-      <div class="mini">Stir = drag → <code class="api">addVelocity()</code>. Dry/Rewet = click → <code class="api">dry(gx,gy,r)</code> / <code class="api">rewet(gx,gy,r)</code>. Paint → <code class="api">paintNorm()</code>.</div>
+      <div class="mini">Stir = drag → <code class="api">stir()</code>. Dry/Rewet = click → <code class="api">dry(nx,ny,nr)</code> / <code class="api">rewet(nx,ny,nr)</code>. Paint → <code class="api">paint()</code>.</div>
     </div>
 
     <div class="grp">
-      <div class="lab">Pigment — <code class="api">paintNorm(.. , name)</code></div>
+      <div class="lab">Pigment — <code class="api">paint(.. , name)</code></div>
       <div class="row">
         <button class="pill" data-pig="rose">rose</button>
         <button class="pill" data-pig="yellow">yellow</button>
@@ -100,7 +100,7 @@
 
 <script type="module">
 const host = document.getElementById('stage');
-const wc = window.Washes.compat1(window.Washes.create(host, { gpu:false, pointer:false }));  // v1-surface pin
+const wc = window.Washes.create(host, { gpu:false, pointer:false });  // native v2 (migrated off compat1)
 const $ = id => document.getElementById(id);
 const statusEl = $('status');
 const status = m => { statusEl.textContent = m; };
@@ -120,17 +120,17 @@ function locate(e){
 function wash(){
   wc.paintLoad(0.4).waterLoad(1.15);          // v1.1 — chaining
   const blobs = [['blue',0.34,0.40],['rose',0.62,0.54],['yellow',0.48,0.72]];
-  for (const b of blobs) wc.paintNorm(b[1], b[2], 0.16, b[0], 0.7);   // v1.1 — normalized paint
+  for (const b of blobs) wc.paint(b[1], b[2], 0.16, b[0], 0.7);   // v1.1 — normalized paint
 }
 wc.paperColor('#fdf3ee');                      // v1.1 — hex paper
 wash();
 
 function actAt(e){
   const p = locate(e); const d = dims();
-  const R = Math.round(d.GW*0.07);
-  if (tool==='paint'){ wc.paintNorm(p.nx,p.ny,0.05,pig,0.6); }
-  else if (tool==='dry'){ wc.dry(p.gx,p.gy,R); status('dry('+p.gx.toFixed(0)+', '+p.gy.toFixed(0)+', '+R+')'); }
-  else if (tool==='rewet'){ wc.rewet(p.gx,p.gy,R); status('rewet('+p.gx.toFixed(0)+', '+p.gy.toFixed(0)+', '+R+')'); }
+  const NR = Math.round(d.GW*0.07)/Math.min(d.GW,d.GH);  // the old grid radius, as a v2 fraction
+  if (tool==='paint'){ wc.paint(p.nx,p.ny,0.05,pig,0.6); }
+  else if (tool==='dry'){ wc.dry(p.nx,p.ny,NR); status('dry('+p.nx.toFixed(2)+', '+p.ny.toFixed(2)+', '+NR.toFixed(3)+')'); }
+  else if (tool==='rewet'){ wc.rewet(p.nx,p.ny,NR); status('rewet('+p.nx.toFixed(2)+', '+p.ny.toFixed(2)+', '+NR.toFixed(3)+')'); }
 }
 
 host.addEventListener('pointerdown', e => {
@@ -145,8 +145,8 @@ host.addEventListener('pointermove', e => {
     const d = dims();
     const vx = clamp((p.gx-last.gx)*0.09, -0.9, 0.9);
     const vy = clamp((p.gy-last.gy)*0.09, -0.9, 0.9);
-    wc.addVelocity(p.gx, p.gy, vx, vy, Math.round(d.GW*0.06));   // v1.1 — velocity injection
-    status('addVelocity('+p.gx.toFixed(0)+', '+p.gy.toFixed(0)+', '+vx.toFixed(2)+', '+vy.toFixed(2)+')');
+    wc.stir(p.nx, p.ny, vx, vy, Math.round(d.GW*0.06)/Math.min(d.GW,d.GH));   // v2 — normalized stir
+    status('stir('+p.nx.toFixed(2)+', '+p.ny.toFixed(2)+', '+vx.toFixed(2)+', '+vy.toFixed(2)+')');
   } else { actAt(e); }
   last = p;
 });
@@ -183,8 +183,8 @@ $('gAngle').addEventListener('input', applyGravity);
 $('gStr').addEventListener('input', applyGravity);
 
 $('rainbow').addEventListener('click', ()=>{
-  for (let x=0.08; x<=0.92; x+=0.055) wc.paintNorm(x, 0.16, 0.05, 'rainbow', 0.6);  // rainbow guard
-  status("paintNorm(.., 'rainbow', ..) sweep");
+  for (let x=0.08; x<=0.92; x+=0.055) wc.paint(x, 0.16, 0.05, 'rainbow', 0.6);  // rainbow guard
+  status("paint(.., 'rainbow', ..) sweep");
 });
 $('chain').addEventListener('click', ()=>{
   const same = wc.paintLoad(0.45).waterLoad(1.1).fadePainting(0) === wc;

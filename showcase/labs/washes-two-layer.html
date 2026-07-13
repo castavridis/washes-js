@@ -135,15 +135,18 @@
   const hud  = document.getElementById("hud");
 
   // ── Background layer: animated washes, no input, perf instrumentation on. ──
-  const bg = Washes.compat1(Washes.create(bgEl, { gpu: false }));  // v1-surface pin
-  bg.setAnimation("partlyCloudy");
+  const bg = Washes.create(bgEl, { gpu: false });  // native v2 (migrated off compat1)
+  bg.animation("partlyCloudy");
   bg.perf(true);
 
   // ── Foreground layer: transparent + interactive (binds its own pointer events). ──
-  const fg = Washes.compat1(Washes.create(fgEl, { gpu: false }));  // v1-surface pin
+  const fg = Washes.create(fgEl, { gpu: false });  // native v2 (migrated off compat1)
+  // The UI slider speaks px diameters (v1's brushSize unit); v2 wants a
+  // radius fraction of the smaller display side.
+  const pxToFraction = (px) => { const r = fg.displayRect(); return px / 2 / Math.min(r.width, r.height); };
   fg.transparent(true);
   fg.pigment(0);
-  fg.brushSize(28);
+  fg.brushSize(pxToFraction(28));  // v2 brushSize = fraction of the smaller side
 
   // ── Adaptive throttle for the backdrop ──
   // Cheap signal (frame time), not GPU readback. Step the quality ladder down
@@ -178,13 +181,13 @@
     fg.brushMode(e.target.value);     // "wet" | crayon | dryBrush | salt | splatter
   });
   document.getElementById("brush").addEventListener("input", (e) => {
-    fg.brushSize(parseInt(e.target.value, 10));
+    fg.brushSize(pxToFraction(parseInt(e.target.value, 10)));
   });
   document.getElementById("clear").addEventListener("click", () => {
     fg.reset();
   });
   document.getElementById("anim").addEventListener("change", (e) => {
-    bg.setAnimation(e.target.value === "off" ? null : e.target.value);
+    bg.animation(e.target.value === "off" ? null : e.target.value);
   });
 </script>
 </body>

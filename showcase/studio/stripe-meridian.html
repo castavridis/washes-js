@@ -67,34 +67,34 @@ if(Washes&&sim){
   const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
   let wc=null,G=null;
   function init(){
-    wc=Washes.compat1(Washes.create(sim,{gpu:false,pointer:false,paperColor:{r:0.97,g:0.975,b:0.99}}));  // v1-surface pin
-    G=wc.state(); const gx=n=>n*G.gridWidth, gy=n=>n*G.gridHeight;
+    wc=Washes.create(sim,{gpu:false,pointer:false,paperColor:{r:0.97,g:0.975,b:0.99}});  // native v2 (migrated off compat1)
+    G=wc.state(); const nr=n=>n*G.gridWidth/Math.min(G.gridWidth,G.gridHeight);
     addEventListener('resize',()=>safe(()=>{G=wc.state();}),{passive:true});
     safe(()=>wc.flow(0.15)); safe(()=>wc.evaporation(0.8)); safe(()=>wc.edgeMode('open'));
     safe(()=>wc.quality('auto'));
     safe(()=>wc.on('perflevel',d=>{const m=document.getElementById('m-lvl'); if(m)m.textContent=d.level;}));
     // seed the meridian: three pigment ribbons along the band axis
-    const ribbon=(y,pig,st)=>{ for(let i=0;i<=28;i++){ const x=i/28; wc.paintNorm(x, y+Math.sin(i*0.7)*0.05, 0.05, pig, st); } };
+    const ribbon=(y,pig,st)=>{ for(let i=0;i<=28;i++){ const x=i/28; wc.paint(x, y+Math.sin(i*0.7)*0.05, 0.05, pig, st); } };
     function seed(){ safe(()=>wc.clearPaint?wc.clearPaint():wc.reset());
       ribbon(0.30,'blue',0.5); ribbon(0.52,'rose',0.42); ribbon(0.72,'yellow',0.38); }
     seed();
     // standing current along the band
     if(!reduce){ let t=0; setInterval(()=>{ t+=0.05;
       for(let i=0;i<8;i++){ const x=(i/8+t*0.02)%1, y=0.3+0.4*((i%3)/2);
-        safe(()=>wc.addVelocity(gx(x),gy(y), 0.65, Math.sin(t+i)*0.18, G.gridWidth*0.05)); }
+        safe(()=>wc.stir(x,y, 0.65, Math.sin(t+i)*0.18, nr(0.05))); }
     },90); }
     // stir on hover
     let px=null,py=null;
     band.addEventListener('pointermove',e=>{ const r=band.getBoundingClientRect();
       const nx=(e.clientX-r.left)/r.width, ny=(e.clientY-r.top)/r.height;
-      if(px!==null) safe(()=>wc.addVelocity(gx(nx),gy(ny),(nx-px)*42,(ny-py)*42,G.gridWidth*0.05));
+      if(px!==null) safe(()=>wc.stir(nx,ny,(nx-px)*42,(ny-py)*42,nr(0.05)));
       px=nx; py=ny; },{passive:true});
     // surge: a payment storm enters left, races right
     document.getElementById('surge').addEventListener('click',()=>{
       let k=0; const id=setInterval(()=>{ if(k++>26){clearInterval(id);return;}
         const x=k/26, y=0.4+Math.sin(k*0.9)*0.2;
-        safe(()=>wc.paintNorm(x,y,0.045,'blue',0.6));
-        safe(()=>wc.addVelocity(gx(x),gy(y),1.4,0,G.gridWidth*0.06)); },40);
+        safe(()=>wc.paint(x,y,0.045,'blue',0.6));
+        safe(()=>wc.stir(x,y,1.4,0,nr(0.06))); },40);
     });
     // settle: pour the day out, reseed clean
     document.getElementById('settle').addEventListener('click',()=>{

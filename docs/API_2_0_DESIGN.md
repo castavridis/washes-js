@@ -164,9 +164,17 @@ all four state planes).
      (removed from v2), the fictional Washes.version static (made
      real), fictional AnimationOptions/VisualizationOptions members
      (fixed).
-   - **tranche 3** — 2.0.x: migrate pages off compat1 natively
-     (playground first), browser QA.
-5. sim-behavior fixes (browser QA) → 2.1
+   - (done) **tranche 3** — in 2.1.0: all 27 pages native v2 (compat1
+     now unused in-repo; ships until 3.0 for external embedders).
+     wc.grid grew the verb family (stir/rewet/dry/sample) — the ten
+     personality/ studies proved the demand. Found en route: those ten
+     pages alias Washes to `N`, escaped the tranche-1 sweep, and were
+     briefly broken in production (sweep by member call, not factory
+     spelling); the gallery's mask pieces had a scroll-offset bug that
+     the normalized rewrite fixes; two pages had never-working 'spray'
+     splash calls. Playground docs sections still teach v1 — their
+     editorial refresh is separate work.
+5. sim-behavior fixes (browser QA) → 2.2 (2.1.0 was taken by tranche 3's grid verbs)
 
 ## Decisions needed (your taste) — ALL DECIDED 2026-07-13
 

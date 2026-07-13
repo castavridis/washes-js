@@ -174,9 +174,23 @@ packaging, and GPU paths. Line references are into `engine/src/washes.js` /
 > sidecar feature-detects stroke/strokeToNorm; nradius default 0.03.
 > Migration table: engine/CHANGELOG.md § 2.0.0.
 >
-> **Open work, in priority order:** ① API 2.0 **tranche 3** (2.0.x):
-> migrate pages off compat1 natively (playground first — its console
-> shows the compat migration warnings as a to-do list); ② first
+> **P2 slice 6 (branch `engine-review-v2-t3` → engine 2.1.0): the pages
+> go native.** All 27 live pages migrated off compat1 to v2 (playground →
+> demo v1.0.21; px-diameter UI kept via brushPx/setBrushPx bridges;
+> gridWidth-fraction radii via the aspect-ratio helper nr(k)). wc.grid
+> grew the verb family (stir/rewet/dry/sample — exact v1 grid impls).
+> Found en route: the ten personality/ pages alias Washes to `N`, escaped
+> the tranche-1 sweep, and were BROKEN in production between the 2.0
+> merge and this slice (lesson: sweep by member call, not factory
+> spelling); the gallery mask pieces' scroll-offset bug (canvas-relative
+> px fed to client-coordinate maskRect) is fixed by the normalized
+> rewrite; shopify's celebration splash named a preset that never existed
+> and now fires a real fineSpritz (flag for QA); the playground scale
+> slider now preserves the painting (v2 default). compat1 is now unused
+> in-repo but ships until 3.0. Playground DOCS sections still teach v1 —
+> separate editorial pass.
+>
+> **Open work, in priority order:** ① first
 > real-browser QA pass on Pages — the 27
 > live-engine pages, the hero, the CI Playwright job's first run, GPU
 > render validation (unblocks GPU-by-default + the falloff² parity fix);

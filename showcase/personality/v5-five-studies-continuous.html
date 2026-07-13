@@ -45,7 +45,7 @@ const N = window.Washes;
 const PAPER = '#d9d7d2';
 const GOLD = 2.399963229728653;
 const rnd = (a,b)=> a + Math.random()*(b-a);
-function ink(wc,x,y,r,a){ wc.paintAt(x,y,r,'yellow',a*1.3); wc.paintAt(x,y,r,'rose',a); wc.paintAt(x,y,r,'blue',a); wc.paintAt(x,y,r,'yellow',a*0.45); }
+function ink(wc,x,y,r,a){ wc.grid.paint(x,y,r,'yellow',a*1.3); wc.grid.paint(x,y,r,'rose',a); wc.grid.paint(x,y,r,'blue',a); wc.grid.paint(x,y,r,'yellow',a*0.45); }
 function mount(id){ const wc=N.create(document.getElementById(id),{gpu:false,pointer:false}); wc.paperColor(PAPER); return wc; }
 
 // 1 · EXCITEMENT — tension to rupture, the axis rotating each cycle (forever)
@@ -58,8 +58,8 @@ function studyExcitement(){
     const cyc=Math.floor(e/5200), w=e-cyc*5200;
     if(cyc!==lastCyc){ lastCyc=cyc; ang+=GOLD; bridge(ang); }      // new axis → eye led around
     if(w<3000){ const dx=Math.cos(ang),dy=Math.sin(ang);
-      wc.addVelocity(cx-dx*GW*0.2, cy-dy*GH*0.2, -dx*0.85,-dy*0.85, GW*0.06);
-      wc.addVelocity(cx+dx*GW*0.2, cy+dy*GH*0.2,  dx*0.85, dy*0.85, GW*0.06); }
+      wc.grid.stir(cx-dx*GW*0.2, cy-dy*GH*0.2, -dx*0.85,-dy*0.85, GW*0.06);
+      wc.grid.stir(cx+dx*GW*0.2, cy+dy*GH*0.2,  dx*0.85, dy*0.85, GW*0.06); }
     // w>=3000: the rupture hangs — silence before it reforms
   };
 }
@@ -96,11 +96,11 @@ function studySincerity(){
 function studySophistication(){
   const wc=mount('s4'); const s=wc.state(),GW=s.gridWidth,GH=s.gridHeight;
   const div=5, t=0.008, m=0.022, cw=1/div;
-  for(let i=1;i<div;i++){ const f=i/div; wc.maskNorm(f-t/2,0,t,1); wc.maskNorm(0,f-t/2,1,t); }   // underlying grid
+  for(let i=1;i<div;i++){ const f=i/div; wc.mask(f-t/2,0,t,1); wc.mask(0,f-t/2,1,t); }   // underlying grid
   wc.paintLoad(0.9).waterLoad(1.4);
-  const maskCell=(cx,cy)=> wc.maskNorm(cx*cw+m, cy*cw+m, cw-2*m, cw-2*m);
-  const unmaskCell=(cx,cy)=> wc.unmaskNorm(cx*cw+m, cy*cw+m, cw-2*m, cw-2*m);
-  const clearCell=(cx,cy)=> wc.paintAt((cx+0.5)*cw*GW, (cy+0.5)*cw*GH, GW*cw*0.5, 'paper', 0.7);
+  const maskCell=(cx,cy)=> wc.mask(cx*cw+m, cy*cw+m, cw-2*m, cw-2*m);
+  const unmaskCell=(cx,cy)=> wc.unmask(cx*cw+m, cy*cw+m, cw-2*m, cw-2*m);
+  const clearCell=(cx,cy)=> wc.grid.paint((cx+0.5)*cw*GW, (cy+0.5)*cw*GH, GW*cw*0.5, 'paper', 0.7);
   let vx=2, vy=2, lastCyc=-1; maskCell(vx,vy);
   return (e)=>{
     if(Math.random()<0.5){ const a=Math.random()*6.28318, rr=Math.random()*GW*0.5;
@@ -125,7 +125,7 @@ function studyRuggedness(){
     if(n%4===0){ const cx=rnd(0.12,0.88), cy=rnd(0.12,0.88); ink(wc,cx*GW,cy*GH,GW*rnd(0.04,0.08),rnd(0.55,0.9)); }
     const cyc=Math.floor(e/3000), w=e-cyc*3000;
     if(cyc!==lastCyc){ lastCyc=cyc; const by=rnd(0.2,0.8);
-      for(let x=0.15;x<=0.85;x+=0.12) wc.rewet(x*GW, by*GH, GW*0.05); wc.gravityStrength(0.13); }
+      for(let x=0.15;x<=0.85;x+=0.12) wc.grid.rewet(x*GW, by*GH, GW*0.05); wc.gravityStrength(0.13); }
     if(w>1600) wc.gravityStrength(0);
   };
 }
