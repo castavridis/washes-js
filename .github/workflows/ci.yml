@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main, engine-review-p0]
+  pull_request:
+
+jobs:
+  engine-tests:
+    name: engine tests (headless CPU)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: engine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: regression harness (asserting, seeded, incl. equivalence goldens)
+        run: node tests/washes-test-harness.cjs src/washes.js all
+      - name: texture parity (CPU deposit math)
+        run: node tests/texture-parity.test.mjs
+      - name: API surface (d.ts ↔ runtime reflection)
+        run: node tests/api-surface.test.mjs
+      - name: standalone build (classic-script parse + global attach)
+        run: node scripts/build-standalone.cjs
+      - name: types (tsc --strict on declarations + smoke)
+        run: |
+          npm install --no-save typescript@5
+          npx tsc --noEmit --strict tests/types-smoke.ts
+
+  gpu-browser:
+    name: browser smoke (WebGL, advisory)
+    runs-on: ubuntu-latest
+    # Advisory until the GPU render path is validated (see engine
+    # CHANGELOG 1.0.1 "known parity item" and ENGINE_REVIEW P0#4);
+    # flip to required once it has been green for a while.
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: engine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node scripts/build-standalone.cjs
+      - run: npm install --no-save @playwright/test@1
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test

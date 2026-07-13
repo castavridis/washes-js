@@ -5,6 +5,23 @@ map, hot-loop performance, API surface) plus direct inspection of the tests,
 packaging, and GPU paths. Line references are into `engine/src/washes.js` /
 `washes.d.ts` at v1.12.1.*
 
+> **Status (2026-07-12, branch `engine-review-p0` → engine 1.13.0):**
+> **P0 executed.** ✅ #1 shrinkActiveRect wired (criterion refined: wet-aware,
+> boundary-pressure-blind — see CHANGELOG 1.13.0; headless local-paint
+> benchmark 44.7s → 3.2s, ≈14×, because `create()` starts the rect full-grid
+> so the optimization had been effectively disabled for every real session).
+> ✅ #2 evaporate settled-skip, movePigment copy restriction, edge-darkening
+> rect blurs — all bit-exact against new equivalence goldens; the render
+> full-canvas drawImage item is deferred (browser-QA only, see P0#2 text).
+> ✅ #3 harness asserts (seeded, 231 checks, golden equivalence suite).
+> ✅ #4 CI workflow + Playwright browser smoke authored (advisory job;
+> GPU-parity spec is `fixme` until the auto-fallback work — not runnable in
+> the offline dev container). ✅ #5 api-surface reflection test; d.ts now
+> 136 = 136 with an empty allowlist. Found en route: the frozen
+> boundary-ring pressure leak and the `paintAt` optional-pigment throw
+> (both documented in CHANGELOG 1.13.0 → Known, queued for P2).
+> **P1/P2/P3 remain open.**
+
 ---
 
 ## What's already strong (keep these properties)

@@ -2,6 +2,83 @@
 
 All notable changes to **washes** are documented here. Dates are ISO 8601.
 
+## [1.13.0] — 2026-07-12
+
+The engine-review P0 release: performance work verified behavior-preserving
+by a new golden-equivalence suite (all four changes reproduce the previous
+engine's fields **bit-exactly** on seeded scenarios), plus mechanical
+enforcement that the type declarations match the runtime.
+
+### Performance
+- **Active-region shrink is finally wired.** `shrinkActiveRect` was fully
+  written and documented ("runs every ACTIVE_SHRINK_INTERVAL frames in the
+  main loop") but had no call site — and `create()` starts the rect
+  full-grid for the first composite, so in practice **every session ran
+  every rect-bounded pass over the whole grid forever**. It now runs from
+  `simStep` every ~30 frames: the rect tightens to live content and empties
+  after a full dry-down (re-arming simStep's early-return). Headless
+  benchmark (648×540 grid, six local stamps + 2000 steps, best of 3):
+  **44.7 s → 3.2 s (≈14×)**. Real-canvas gains scale with how much of the
+  sheet is idle.
+  - The shrink criterion was refined while wiring: cells with `wet > 1e-6`
+    are kept (every pass gates its work on wetness; the original
+    g/pressure-only test froze still-wet clear-water halos mid-flight), and
+    pressure is only consulted on **interior** cells (splash modes write
+    pressure to the outermost ring, which no pass ever evolves — one deluge
+    would have pinned the rect at full-grid forever; see Known below).
+- **`evaporate` skips settled cells.** The dry-settle branch rewrote ~10
+  values per cell per step (×2/frame) for cells that settled long ago —
+  wet 0, no suspended pigment, velocity zeroed at settle, fade spring at
+  rest. Every such write is a provable no-op; both the fast and masked
+  paths now skip them.
+- **`movePigment` buffer copies are rect-restricted.** Nine full-grid
+  array passes per sim step (pre-copies, clamped copyback, diffusion
+  snapshot — ~54 MB/frame of traffic at 746k cells) now cover the active
+  rect padded by one cell, which is exactly where the advection passes
+  read and write.
+- **Edge darkening is rect-restricted.** Was a full-grid binarize plus two
+  full-grid separable box blurs per call (~10 full-grid passes/frame);
+  now a padded-window binarize and a new `boxBlurRect` produce identical
+  values everywhere they are read.
+
+### Fixed
+- **`washes.d.ts` matches the runtime again — mechanically.** Nine
+  GPU/WebGL isolation toggles were undeclared, `webgl` was declared twice,
+  and the header still said "authored against v0.98". All fixed, and the
+  new `tests/api-surface.test.mjs` reflects over a live instance and fails
+  CI on any future drift in either direction (runtime 136 = declared 136,
+  empty allowlist).
+
+### Testing
+- **The harness asserts.** It was a diagnostic instrument (printed
+  measured vs expected for a human); every pattern now checks its
+  documented expectations and exits non-zero on failure. `Math.random` is
+  seeded (mulberry32) so runs are bit-reproducible.
+- **Equivalence goldens.** Five scripted scenarios (full-rect splash +
+  dry-down, two-corner strokes, masked splash, open-edge drain,
+  fade-enabled steps) checkpoint per-field statistics against
+  `tests/equivalence-goldens.json` at 1e-9 relative tolerance. This suite
+  caught a real semantic issue in the first shrink criterion before it
+  shipped.
+- **`active-rect` pattern** documents the tracking lifecycle (full on the
+  virgin damp sheet → empty when dried → local rect for local paint →
+  empty again).
+- **CI workflow** (GitHub Actions): harness, texture parity, API surface,
+  standalone build, and `tsc --strict` on Node 20; plus an advisory
+  Playwright job for real-browser WebGL smoke.
+
+### Known (pre-existing, documented while here)
+- **Boundary-ring pressure never decays.** Splash modes write pressure to
+  the full grid, but every pressure-evolving pass iterates the interior
+  only, so the outermost ring keeps its splash pressure forever (probe:
+  exactly the 2372-cell perimeter pinned at ~15 after one deluge). It is
+  dead state — nothing reads it once neighbors dry — and the shrink
+  criterion sidesteps it; an actual cleanup is queued for the API 2.0
+  batch.
+- **`paintAt` throws when `pigment` is omitted** despite the parameter
+  being typed optional (the deposit path indexes `g[pigmentIdx]`
+  unguarded). Queued for the same batch.
+
 ## [1.12.1] — 2026-06-10
 
 ### Fixed
