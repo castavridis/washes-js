@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./dc-support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #0b0c0f; }
+    @keyframes washPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
+  </style>
+  <script type="module" src="./washes-lab.scene.js"></script>
+</helmet>
+<div ref="{{ rootRef }}" data-screen-label="Washes Lab" style="position: fixed; inset: 0; overflow: hidden; background: var(--bg); --bg: #0b0c0f; --ink: #ecebe5; --dim: rgba(236, 235, 229, 0.48); --line: rgba(236, 235, 229, 0.16); --chip: rgba(236, 235, 229, 0.06);">
+
+  <div style="position: absolute; inset: 0;">
+    <x-import component-from-global-scope="washes-scene" hint-size="100%,100%" style="position: absolute; inset: 0;"></x-import>
+  </div>
+
+  <div style="position: absolute; inset: 0; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between;">
+
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; padding: 26px 30px 0 30px;">
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <div style="font-family: 'Instrument Serif', serif; font-style: italic; font-size: 48px; line-height: 1; color: var(--ink); letter-spacing: -0.01em;">Washes</div>
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim);">watercolor sim &times; react-three-fiber &mdash; live texture on wet paper</div>
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.1em; color: var(--dim);">each side of the paper is its own canvas &middot; drag elsewhere to orbit, scroll to zoom &middot; wet faces fold the sheet their own way</div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; pointer-events: auto;">
+        <sc-for list="{{ themes }}" as="t" hint-placeholder-count="3">
+          <button onClick="{{ t.pick }}" style="{{ t.style }}" style-hover="border-color: var(--ink);">{{ t.label }}</button>
+        </sc-for>
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--dim); letter-spacing: 0.08em; margin-left: 6px;">v{{ version }}</div>
+      </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr auto 1fr; align-items: end; gap: 24px; padding: 0 30px 26px 30px;">
+
+      <div style="display: flex; flex-direction: column; gap: 8px; min-width: 0; max-width: 340px;">
+        <div style="display: flex; align-items: center; gap: 9px;">
+          <div style="width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; background: var(--ink); animation: washPulse 2.2s ease-in-out infinite;"></div>
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; line-height: 1.6; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim);">{{ modeLabel }}</div>
+        </div>
+        <div style="font-family: 'Instrument Serif', serif; font-style: italic; font-size: 20px; line-height: 1.35; color: var(--ink); text-wrap: pretty;">{{ caption }}</div>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 12px; padding: 11px 16px; border: 1px solid var(--line); border-radius: 999px; background: var(--chip); backdrop-filter: blur(14px); pointer-events: auto;">
+        <sc-for list="{{ swatches }}" as="s" hint-placeholder-count="3">
+          <button onClick="{{ s.pick }}" title="{{ s.name }}" style="{{ s.style }}"></button>
+        </sc-for>
+        <div style="width: 1px; height: 22px; background: var(--line);"></div>
+        <sc-for list="{{ tools }}" as="tl" hint-placeholder-count="2">
+          <button onClick="{{ tl.pick }}" style="{{ tl.style }}">{{ tl.label }}</button>
+        </sc-for>
+      </div>
+
+      <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 10px;">
+        <div style="display: flex; gap: 8px; pointer-events: auto;">
+          <sc-for list="{{ actions }}" as="a" hint-placeholder-count="5">
+            <button onClick="{{ a.run }}" style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink); background: var(--chip); border: 1px solid var(--line); border-radius: 999px; padding: 8px 13px; cursor: pointer; backdrop-filter: blur(10px);" style-hover="border-color: var(--ink);">{{ a.label }}</button>
+          </sc-for>
+          <button onClick="{{ onGpu }}" title="experimental webgl2 fluid sim — auto-reverts to cpu if the render fails" style="{{ gpuStyle }}" style-hover="border-color: var(--ink);">GPU</button>
+        </div>
+        <div style="display: flex; align-items: center; gap: 16px; pointer-events: auto;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); white-space: nowrap;">bend {{ bendDeg }}&deg;</div>
+            <input type="range" min="0" max="360" step="5" value="{{ bendDeg }}" onChange="{{ onBend }}" style="width: 96px; margin: 0; accent-color: var(--ink); cursor: pointer;">
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); white-space: nowrap;">paper {{ opacityPct }}%</div>
+            <input type="range" min="50" max="100" step="1" value="{{ opacityPct }}" onChange="{{ onOpacity }}" style="width: 96px; margin: 0; accent-color: var(--ink); cursor: pointer;">
+          </div>
+        </div>
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim);">ink {{ coverage }}% &middot; wet {{ wet }}% &middot; res {{ perf }} &middot; sim {{ simName }}</div>
+      </div>
+
+    </div>
+  </div>
+
+  <sc-if value="{{ loading }}" hint-placeholder-val="{{ true }}">
+    <div style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: var(--bg); z-index: 10;">
+      <div style="font-family: 'Instrument Serif', serif; font-style: italic; font-size: 40px; color: var(--ink);">Washes</div>
+      <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim); animation: washPulse 1.6s ease-in-out infinite;">stretching the paper &mdash; loading three.js + washes</div>
+    </div>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;maxBend&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:240,&quot;min&quot;:0,&quot;max&quot;:360,&quot;step&quot;:5,&quot;tsType&quot;:&quot;number&quot;},&quot;paperOpacity&quot;:{&quot;editor&quot;:&quot;float&quot;,&quot;default&quot;:0.95,&quot;min&quot;:0.5,&quot;max&quot;:1,&quot;step&quot;:0.01,&quot;tsType&quot;:&quot;number&quot;}}">
+class Component extends DCLogic {
+  rootRef = React.createRef();
+
+  state = {
+    ready: false,
+    mode: 'auto',
+    caption: 'warming up the sheet',
+    coverage: 0,
+    wet: 0,
+    perf: 'full',
+    theme: 'lab',
+    brush: 2,
+    swatchColors: [],
+    swatchNames: [],
+    version: '',
+    bend: null,     // user override from the on-screen slider (else prop)
+    opacity: null,  // user override from the on-screen slider (else prop)
+  };
+
+  componentDidMount() {
+    const tryAttach = () => {
+      const el = document.querySelector('washes-scene');
+      if (el) { this._el = el; this._attach(el); return; }
+      this._poll = setTimeout(tryAttach, 250);
+    };
+    tryAttach();
+  }
+
+  componentDidUpdate(prevProps) {
+    if (!prevProps) return;
+    if (prevProps.maxBend !== this.props.maxBend) { this.setState({ bend: null }); this._push(); }
+    if (prevProps.paperOpacity !== this.props.paperOpacity) { this.setState({ opacity: null }); this._push(); }
+  }
+
+  componentWillUnmount() {
+    clearTimeout(this._poll);
+    if (this._el && this._onStatus) this._el.removeEventListener('wash-status', this._onStatus);
+  }
+
+  _bendDeg() {
+    if (this.state.bend !== null) return this.state.bend;
+    const d = Number(this.props.maxBend);
+    return isFinite(d) ? Math.max(0, Math.min(360, d)) : 115;
+  }
+
+  _opacityPct() {
+    if (this.state.opacity !== null) return this.state.opacity;
+    const o = Number(this.props.paperOpacity);
+    return isFinite(o) ? Math.round(Math.max(0.5, Math.min(1, o)) * 100) : 88;
+  }
+
+  _push() {
+    const el = this._el;
+    if (!el) return;
+    if (el.setMaxBend) el.setMaxBend(this._bendDeg());
+    if (el.setOpacity) el.setOpacity(this._opacityPct() / 100);
+  }
+
+  _attach(el) {
+    this._onStatus = (e) => {
+      const d = e.detail || {};
+      if (!this._propsPushed) { this._propsPushed = true; this._push(); }
+      this.setState({
+        ready: true,
+        mode: d.mode || 'auto',
+        caption: d.caption || '',
+        coverage: Math.round((d.coverage || 0) * 100),
+        wet: Math.round(d.wetness || 0),
+        perf: d.perf || '',
+        brush: d.brush,
+        swatchColors: d.swatches || [],
+        swatchNames: d.names || [],
+        gpu: !!d.gpu,
+        version: d.version || '',
+      });
+    };
+    el.addEventListener('wash-status', this._onStatus);
+  }
+
+  _chrome(name) {
+    const CHROME = {
+      lab:     { bg: '#0b0c0f', ink: '#ecebe5', dim: 'rgba(236,235,229,0.48)', line: 'rgba(236,235,229,0.16)', chip: 'rgba(236,235,229,0.06)' },
+      gallery: { bg: '#e7e5e0', ink: '#1a1914', dim: 'rgba(26,25,20,0.52)',   line: 'rgba(26,25,20,0.18)',   chip: 'rgba(255,255,255,0.45)' },
+      atelier: { bg: '#d8cdb6', ink: '#2b2117', dim: 'rgba(43,33,23,0.55)',   line: 'rgba(43,33,23,0.22)',   chip: 'rgba(255,252,242,0.4)' },
+    };
+    return CHROME[name] || CHROME.lab;
+  }
+
+  pickTheme(name) {
+    const v = this._chrome(name);
+    const r = this.rootRef.current;
+    if (r) {
+      r.style.setProperty('--bg', v.bg);
+      r.style.setProperty('--ink', v.ink);
+      r.style.setProperty('--dim', v.dim);
+      r.style.setProperty('--line', v.line);
+      r.style.setProperty('--chip', v.chip);
+    }
+    if (this._el) this._el.setTheme(name);
+    this.setState({ theme: name });
+  }
+
+  pickBrush(b) {
+    if (this._el) this._el.setBrush(b);
+    this.setState({ brush: b });
+  }
+
+  renderVals() {
+    const s = this.state;
+
+    const btnBase = "font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; border-radius: 999px; padding: 8px 13px; cursor: pointer; backdrop-filter: blur(10px); ";
+
+    const themes = ['lab', 'gallery', 'atelier'].map((name) => ({
+      label: name.toUpperCase(),
+      pick: () => this.pickTheme(name),
+      style: btnBase + (s.theme === name
+        ? 'background: var(--ink); color: var(--bg); border: 1px solid var(--ink);'
+        : 'background: var(--chip); color: var(--ink); border: 1px solid var(--line);'),
+    }));
+
+    const colors = s.swatchColors.length ? s.swatchColors : ['#d8447c', '#eec23d', '#3a87c0'];
+    const names = s.swatchNames.length ? s.swatchNames : ['quinacridone rose', 'hansa yellow', 'cerulean blue'];
+    const swatches = colors.map((c, i) => ({
+      name: names[i] || 'pigment ' + i,
+      pick: () => this.pickBrush(i),
+      style: 'width: 24px; height: 24px; border-radius: 50%; border: none; cursor: pointer; padding: 0; background: ' + c + '; outline: 2px solid ' + (s.brush === i ? 'var(--ink)' : 'transparent') + '; outline-offset: 3px;',
+    }));
+
+    const tools = [
+      { label: 'WATER', key: 'water' },
+      { label: 'LIFT', key: 'lift' },
+    ].map((t) => ({
+      label: t.label,
+      pick: () => this.pickBrush(t.key),
+      style: btnBase + (s.brush === t.key
+        ? 'background: var(--ink); color: var(--bg); border: 1px solid var(--ink);'
+        : 'background: transparent; color: var(--ink); border: 1px solid var(--line);'),
+    }));
+
+    const actions = ['splash', 'pour', 'rinse', 'dry', 'clear'].map((n) => ({
+      label: n.toUpperCase(),
+      run: () => { if (this._el) this._el.action(n); },
+    }));
+
+    const modeLabel = s.mode === 'user'
+      ? 'your brush — rest 6 s to hand back'
+      : 'painting itself — touch the sheet to take over';
+
+    const onBend = (e) => {
+      const v = Number(e.target.value);
+      this.setState({ bend: v });
+      if (this._el && this._el.setMaxBend) this._el.setMaxBend(v);
+    };
+    const onOpacity = (e) => {
+      const v = Number(e.target.value);
+      this.setState({ opacity: v });
+      if (this._el && this._el.setOpacity) this._el.setOpacity(v / 100);
+    };
+    const onGpu = () => {
+      if (this._el && this._el.setGpu) this._el.setGpu(!s.gpu);
+    };
+    const gpuStyle = btnBase + (s.gpu
+      ? 'background: var(--ink); color: var(--bg); border: 1px solid var(--ink);'
+      : 'background: var(--chip); color: var(--ink); border: 1px solid var(--line);');
+
+    return {
+      rootRef: this.rootRef,
+      loading: !s.ready,
+      themes,
+      swatches,
+      tools,
+      actions,
+      modeLabel,
+      caption: s.caption,
+      coverage: s.coverage,
+      wet: s.wet,
+      perf: s.perf,
+      version: s.version,
+      bendDeg: this._bendDeg(),
+      opacityPct: this._opacityPct(),
+      onBend,
+      onOpacity,
+      onGpu,
+      gpuStyle,
+      simName: s.gpu ? 'gpu' : 'cpu',
+    };
+  }
+}
+</script>
+</body>
+</html>

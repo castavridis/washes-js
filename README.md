@@ -6,26 +6,26 @@ Curtis et al.'s 1997 SIGGRAPH paper *Computer-Generated Watercolor*.
 
 **Live site:** <https://castavridis.github.io/washes-js/> — the landing page
 links to everything below. The flagship demo is the
-[playground](demos/playground.html) (demo v1.0.18 — loads the live engine build).
+[playground](demos/playground.html) (demo v1.0.22 — loads the live engine build).
 
 ## Layout
 
 | Path | What it is |
 |---|---|
 | `index.html` | Landing page (GitHub Pages entry) — a live, paintable engine hero plus navigation |
-| `demos/` | `playground.html` (the full instrument, with built-in docs + changelog) · `snake.html` ("Serpentine") · `mask-reveal.html` ("Develop") |
+| `demos/` | `playground.html` (the full instrument, with built-in docs + changelog) · `snake.html` ("Serpentine") · `mask-reveal.html` ("Develop") · `washes-lab.html` (the sim as live texture on a 3D sheet, react-three-fiber) · `washes-physics.html` (rigid bodies painting wet paper, matter.js) |
 | `engine/` | The `washes` npm-shaped package, v2.1.1 — `src/` (core, GPU sim, timeline sidecar, typings, shader), `tests/`, `dist/washes.standalone.js` for classic script tags |
 | `presets/` | Saved brush/palette modules (`rainbow-spray`, `reveal-blue`) |
 | `showcase/` | Finished pieces: `pages/` (GRAIN, Surfacing, VANTAGE) · `studio/` (six brand studies) · `personality/` (ten temperament studies) · `labs/` (physics + experiments) |
 | `reference/papers/` | Seven interactive explainers of the papers the engine is built on |
 | `docs/` | Roadmap (annotated with shipped status), backdrop-compositing scope, bundle-QA record (`FIXES.md`), CPU→GPU migration scaffold |
-| `archive/` | Dated snapshots: original bundles + conversation transcripts (`26-5-21`), the source ZIPs (`26-7-12`), and `versions/` — runnable snapshots of watercolor v0.1 → v1.0 and washes v0.61 → v0.98 |
+| `archive/` | Dated snapshots: original bundles + conversation transcripts (`26-5-21`), the source ZIPs (`26-7-12`), the 3D-demos ZIP (`26-7-13`), and `versions/` — runnable snapshots of watercolor v0.1 → v1.0 and washes v0.61 → v0.98 |
 
 ## Two changelogs, by design
 
 - **`engine/CHANGELOG.md`** tracks the engine package (0.98.0 → 2.1.1).
 - **The playground's in-app changelog** (docs panel) tracks the demo itself
-  (v0.1 → v1.0.18). Since v1.0.18 the playground — and every demo and
+  (v0.1 → v1.0.22). Since v1.0.18 the playground — and every demo and
   showcase page — loads the live engine build
   (`engine/dist/washes.standalone.js`), so engine releases reach the pages
   without re-embedding; demo releases now cover the pages' own behavior.
