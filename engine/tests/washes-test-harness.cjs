@@ -585,6 +585,95 @@ function runEquivalence(libPath) {
 }
 
 // ===========================================================================
+// PATTERN — Backend seam faithfulness (engine-review, MIGRATION Phase 0)
+// ===========================================================================
+// The frame loop steps the sim through _simBackend (the CPU adapter over
+// simStep/paintAt/_packGpuState). This pattern proves the seam is a faithful
+// pass-through, the same way the gpu-migration scaffold proved its adapter:
+// twin seeded instances driven via the backend vs directly must produce
+// field-identical state; a stamp routed through stampBrush must equal the
+// same paintAt call; and download → upload → download must round-trip
+// bit-exactly. Also carries the paintAt default-pigment regression check.
+// ---------------------------------------------------------------------------
+
+const BACKEND_INJECT = `${EQUIV_INJECT}
+    _debug_backendStep(n) {
+      const p = _buildGpuSimParams();
+      for (let i = 0; i < n; i++) _simBackend.step(p);
+    },
+    _debug_backendStamp(cx, cy, r, pig, str) {
+      _simBackend.stampBrush([{ cx, cy, radius: r, strength: str,
+        brushType: 0, pigmentIdx: pig, wetAmount: 0, pressureAmount: 0 }]);
+    },
+    _debug_backendRoundtrip() {
+      const mk = () => ({
+        fluid: new Float32Array(N * 4), pigment: new Float32Array(N * 4),
+        deposit: new Float32Array(N * 4), paper: new Float32Array(N * 4),
+      });
+      const a = mk();
+      _simBackend.downloadState(a);
+      _simBackend.uploadState(a);
+      const b = mk();
+      _simBackend.downloadState(b);
+      let dmax = 0;
+      for (const k of ['fluid', 'pigment', 'deposit', 'paper'])
+        for (let i = 0; i < a[k].length; i++) {
+          const dd = Math.abs(a[k][i] - b[k][i]);
+          if (dd > dmax) dmax = dd;
+        }
+      return dmax;
+    },`;
+
+function runBackend(libPath) {
+  const Washes = loadLibWithHelpers(libPath, BACKEND_INJECT);
+  console.log('\n=== Backend seam faithfulness ===');
+
+  // 1) stepping through the seam == stepping directly
+  Math.random = mulberry32(SEED + 11);
+  const direct = Washes.create(makeEl('div'));
+  direct.splash([{ x: 324, y: 270, velocity: 25 }], 'deluge');
+  direct._debug_simStep(50);
+  Math.random = mulberry32(SEED + 11);
+  const seamed = Washes.create(makeEl('div'));
+  seamed.splash([{ x: 324, y: 270, velocity: 25 }], 'deluge');
+  seamed._debug_backendStep(50);
+  const a = JSON.stringify(direct._debug_fieldStats());
+  const b = JSON.stringify(seamed._debug_fieldStats());
+  check(a === b, 'backend: 50 steps through the seam are field-identical to direct simStep');
+  console.log(`  step pass-through: ${a === b ? 'IDENTICAL' : 'DIVERGED'}`);
+
+  // 2) a stamp through stampBrush == the same paintAt call
+  Math.random = mulberry32(SEED + 13);
+  const viaPaint = Washes.create(makeEl('div'));
+  viaPaint.paintAt(200, 180, 10, 1, 0.8);
+  viaPaint._debug_simStep(10);
+  Math.random = mulberry32(SEED + 13);
+  const viaStamp = Washes.create(makeEl('div'));
+  viaStamp._debug_backendStamp(200, 180, 10, 1, 0.8);
+  viaStamp._debug_backendStep(10);
+  const c = JSON.stringify(viaPaint._debug_fieldStats());
+  const dd = JSON.stringify(viaStamp._debug_fieldStats());
+  check(c === dd, 'backend: stampBrush(brushType 0) equals the same paintAt');
+  console.log(`  stamp pass-through: ${c === dd ? 'IDENTICAL' : 'DIVERGED'}`);
+
+  // 3) state round-trips bit-exactly
+  const rt = viaPaint._debug_backendRoundtrip();
+  check(rt === 0, `backend: download→upload→download round-trips exactly (max dev ${rt})`);
+  console.log(`  state round-trip: max dev ${rt}`);
+
+  // 4) paintAt default-pigment regression (was: threw on g[undefined])
+  Math.random = mulberry32(SEED + 17);
+  const wc = Washes.create(makeEl('div'));
+  let threw = false;
+  try { wc.paintAt(150, 150, 8); } catch (_) { threw = true; }
+  check(!threw, 'paintAt: omitted pigment no longer throws');
+  check(wc.coverage(0.001) > 0, 'paintAt: omitted pigment deposits the current brush ink');
+  let badName = false;
+  try { wc.paintAt(150, 150, 8, 'no-such-ink'); } catch (_) { badName = true; }
+  check(badName, 'paintAt: unknown pigment name still fails loud');
+}
+
+// ===========================================================================
 // PATTERN — Render goldens (engine-review P1)
 // ===========================================================================
 // The equivalence pattern freezes the SIM fields; this one freezes the
@@ -759,10 +848,11 @@ const patterns = {
   'mass-balance': runMassBalance,
   equivalence: runEquivalence,
   render: runRender,
+  backend: runBackend,
   'active-rect': runActiveRect,
 };
 
-const ALL = ['anisotropy', 'trace', 'hotspots', 'cfl', 'mass-balance', 'equivalence', 'render', 'active-rect'];
+const ALL = ['anisotropy', 'trace', 'hotspots', 'cfl', 'mass-balance', 'equivalence', 'render', 'backend', 'active-rect'];
 
 function runPattern(name) {
   installMockDOM();

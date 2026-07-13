@@ -562,6 +562,10 @@ export interface WashesInstance {
   /**
    * Programmatic paint stamp at grid coordinates (not display coordinates).
    * Use `toGrid(displayX, displayY)` to convert if you have display coords.
+   *
+   * v1.16 — the optional parameters are genuinely optional now: `pigment`
+   * defaults to the current brush ink (names resolve as in paintNorm) and
+   * `strength` defaults to 0.5.
    */
   paintAt(gx: number, gy: number, gridRadius: number, pigment?: PigmentOption, strength?: number): WashesInstance;
 
