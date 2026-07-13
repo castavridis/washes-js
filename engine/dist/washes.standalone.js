@@ -2070,8 +2070,6 @@ function initGpuSim(gl, GW, GH) {
     // values while writing this-step values into wet[].
     let wet_tmp = new Float32Array(N);
 
-    // >>> PART sim-core BEGIN — assembled from src/parts/sim-core.part.js;
-    // edit THAT file, then run `npm run assemble` (CI enforces --check).
     // ============================================================
     // IDLE-SKIP STATE — declared early so paintAt / resetSim / rewet can
     // reference markCanvasActive at init without hitting a TDZ on the
@@ -2092,6 +2090,89 @@ function initGpuSim(gl, GW, GH) {
       // visible. The loop reads + clears it.
       if (_paused) _pauseDirty = true;
     }
+
+    // Runtime-mutable sim tunables. Declared HERE (host-owned) because
+    // the API reassigns them; the sim core re-reads them via env.live()
+    // at every exported call. Relocated from the core at graduation.
+    let evaporationRate = 0.9988;
+    let dryingPaused = false;
+    let edgeDarkeningEnabled = true;
+    let _advectionMode = "semilag";
+    let WET_DIFFUSION = Math.min(0.2, 0.1 * inv_s2);
+    let PIGMENT_DIFFUSION = Math.min(0.2, 0.045 * inv_s2);
+    let EDGE_KERNEL = Math.max(1, Math.round(4 * inv_s));
+    let EDGE_KERNEL_LARGE = Math.max(1, Math.round(20 * inv_s));
+    let wetBinary = new Float32Array(N);
+    let wetBlurLarge = new Float32Array(N);
+    let VEL_CLAMP = Math.min(1.5, 1.0 * inv_s);
+
+    // >>> PART sim-core BEGIN — assembled from src/washes-sim-core.js;
+    // edit THAT file, then run `npm run assemble` (CI enforces --check).
+    // Graduated to a real ES module — see the file header for the
+    // ownership contract (host owns state; core snapshots via env).
+  const createSimCore = (function () {
+// washes-sim-core.js — the simulation core, as a real module.
+//
+// GRADUATED from src/parts/sim-core.part.js (ENGINE_REVIEW P1#6): the pass
+// functions, active-region tracking, and simStep now live behind
+// createSimCore(env). Ownership is deliberately split:
+//
+//   - washes.js keeps OWNING all state: field arrays, grid dims, tunables.
+//     It reallocates and reassigns them freely (rebuildScale, palette, API
+//     setters) exactly as before.
+//   - this module snapshots those bindings via env.bindings() —
+//     refreshBindings() re-reads them and MUST be called after any rebuild —
+//     and re-reads the runtime-mutable set via env.live() at every exported
+//     call, so API changes (evaporation, masks, gravity, palette, edge
+//     modes) are visible with at most one-call granularity, matching the
+//     closure semantics it replaced.
+//
+// Inlined into washes.js by scripts/assemble.cjs (esm transform) so the
+// single-file build stays self-contained; also importable directly:
+//   import { createSimCore } from "washes/sim-core";
+function createSimCore(env) {
+  // ---- rebuild-refreshed bindings (owned by the host) ----
+  let GW, GH, N, inv_s, inv_s2, s_scale,
+    wet, wet_tmp, u, v, u_new, v_new, pressure, paperH, mask,
+    g, d, g_tmp, wetBlur, wetBlurTmp, wetBinary, wetBlurLarge,
+    WET_DIFFUSION, PIGMENT_DIFFUSION, EDGE_KERNEL, EDGE_KERNEL_LARGE,
+    MASK_THRESHOLD;
+  function refreshBindings() {
+    const b = env.bindings();
+    GW = b.GW; GH = b.GH; N = b.N; inv_s = b.inv_s; inv_s2 = b.inv_s2;
+    s_scale = b.s_scale;
+    wet = b.wet; wet_tmp = b.wet_tmp; u = b.u; v = b.v;
+    u_new = b.u_new; v_new = b.v_new; pressure = b.pressure;
+    paperH = b.paperH; mask = b.mask; g = b.g; d = b.d; g_tmp = b.g_tmp;
+    wetBlur = b.wetBlur; wetBlurTmp = b.wetBlurTmp;
+    wetBinary = b.wetBinary; wetBlurLarge = b.wetBlurLarge;
+    WET_DIFFUSION = b.WET_DIFFUSION; PIGMENT_DIFFUSION = b.PIGMENT_DIFFUSION;
+    EDGE_KERNEL = b.EDGE_KERNEL; EDGE_KERNEL_LARGE = b.EDGE_KERNEL_LARGE;
+    MASK_THRESHOLD = b.MASK_THRESHOLD;
+  }
+  // ---- per-call live state (runtime-mutable via the host API) ----
+  let evaporationRate, dryingPaused, edgeDarkeningEnabled, _advectionMode,
+    maskActive, maskRectMinX, maskRectMinY, maskRectMaxX, maskRectMaxY,
+    _edgeOpenLeft, _edgeOpenRight, _edgeOpenTop, _edgeOpenBottom,
+    _gravityDir, _gravityStrength, _gravityBiasX, _gravityBiasY,
+    _edgeMode, fadeEnabled, dVel, VEL_CLAMP, PIGMENTS;
+  function _refreshLive() {
+    const s = env.live();
+    evaporationRate = s.evaporationRate; dryingPaused = s.dryingPaused;
+    edgeDarkeningEnabled = s.edgeDarkeningEnabled;
+    _advectionMode = s.advectionMode;
+    maskActive = s.maskActive;
+    maskRectMinX = s.maskRectMinX; maskRectMinY = s.maskRectMinY;
+    maskRectMaxX = s.maskRectMaxX; maskRectMaxY = s.maskRectMaxY;
+    _edgeOpenLeft = s.edgeOpenLeft; _edgeOpenRight = s.edgeOpenRight;
+    _edgeOpenTop = s.edgeOpenTop; _edgeOpenBottom = s.edgeOpenBottom;
+    _gravityDir = s.gravityDir; _gravityStrength = s.gravityStrength;
+    _gravityBiasX = s.gravityBiasX; _gravityBiasY = s.gravityBiasY;
+    _edgeMode = s.edgeMode;
+    fadeEnabled = s.fadeEnabled; dVel = s.dVel;
+    VEL_CLAMP = s.VEL_CLAMP; PIGMENTS = s.PIGMENTS;
+  }
+  const markCanvasActive = env.markCanvasActive;
 
     // ============================================================
     // ACTIVE REGION TRACKING (v1.0)
@@ -2370,8 +2451,6 @@ function initGpuSim(gl, GW, GH) {
     // SCALE-derived: 1/s scaling keeps display-pixel kernel extent constant.
     // Running-sum box blur is O(N) regardless of kernel size, so these can
     // scale freely without performance impact.
-    let EDGE_KERNEL = Math.max(1, Math.round(4 * inv_s));
-    let EDGE_KERNEL_LARGE = Math.max(1, Math.round(20 * inv_s));
     const EDGE_ETA = 0.045;
     // EDGE_WET_ACTIVE / EDGE_WET_OFF define a smooth ramp on edge darkening
     // intensity as cells dry. Above EDGE_WET_ACTIVE, full strength. Below
@@ -2392,8 +2471,6 @@ function initGpuSim(gl, GW, GH) {
     // previously bypassed that cap — letting endpoint cells accumulate
     // unbounded pigment, which then read as near-black after KM compositing.
     const MAX_PIGMENT = 1.0;
-    let wetBinary = new Float32Array(N);
-    let wetBlurLarge = new Float32Array(N);
 
     // v1.13 — sub-rect box blur. Same separable running-sum math as
     // boxBlur, but produces dst valid only on [x0..x1]×[y0..y1], reading
@@ -2524,7 +2601,6 @@ function initGpuSim(gl, GW, GH) {
     // Capped at 1.5 — the upwind advection in movePigment has a CFL bound
     // VEL_CLAMP * (DT * 0.7) * 2 < 1, so VEL_CLAMP must stay below ~1.7.
     // Cap engages at SCALE < ~1.33 (e.g. at SCALE=1, ideal is 2.0).
-    let VEL_CLAMP = Math.min(1.5, 1.0 * inv_s);
 
     function updateVelocity() {
       if (activeRectIsEmpty()) {
@@ -2675,7 +2751,6 @@ function initGpuSim(gl, GW, GH) {
     // SCALE-derived: 1/s² scaling preserves display-pixel diffusion rate.
     // Capped at 0.20 (below 0.25 stability bound for explicit 4-neighbor
     // Laplacian) — the cap engages at very small SCALE values.
-    let PIGMENT_DIFFUSION = Math.min(0.2, 0.045 * inv_s2);
 
     // v0.57 — Advection mode controls how the donor-cell pigment advection
     // handles cells where the velocity field is so strong that the
@@ -2725,7 +2800,6 @@ function initGpuSim(gl, GW, GH) {
     //        entirely via backward-trace + bilinear interpolation. The
     //        previous "jitter at 0.5" workaround traded cross for visible
     //        radial striations; semilag has neither.
-    let _advectionMode = "semilag";
 
     // Extracted donor-cell advection pass. Reads from g[], writes to
     // g_tmp[] (which the caller must initialize via .set(g[k]) per
@@ -3313,7 +3387,6 @@ function initGpuSim(gl, GW, GH) {
     // Slider value `mult` (1×..50×) maps to: rate = pow(0.9988, mult).
     // At mult=1 we get the original 0.9988; at mult=10 we get ~0.988
     // (half-life ~58 steps); at mult=50 we get ~0.94 (half-life ~11 steps).
-    let evaporationRate = 0.9988;
 
     function evaporate() {
       // v0.19 — mask-rect optimization. Branch ONCE on whether any mask
@@ -3427,8 +3500,6 @@ function initGpuSim(gl, GW, GH) {
     //     canvas holds its current wetness indefinitely (whatever that
     //     happens to be — fully wet, partially dry, or anywhere between).
     // ============================================================
-    let edgeDarkeningEnabled = true;
-    let dryingPaused = false;
 
     // ============================================================
     // WET DIFFUSION (added v0.8) — water spreads to adjacent cells
@@ -3453,7 +3524,6 @@ function initGpuSim(gl, GW, GH) {
     // gives 0.10, the v0.8 baseline tuned so a 0.45 wet brush stamp
     // transfers ~0.045 to neighbors per step — just clearing the wet >= 0.04
     // threshold needed for the rest of the sim to flow pigment into them.
-    let WET_DIFFUSION = Math.min(0.2, 0.1 * inv_s2);
 
     function diffuseWet() {
       if (activeRectIsEmpty()) return;
@@ -3529,7 +3599,37 @@ function initGpuSim(gl, GW, GH) {
       }
     }
 
+
+  refreshBindings();
+  _refreshLive();
+  const _rectOut = { minX: 0, maxX: -1, minY: 0, maxY: -1 };
+  return {
+    refreshBindings,
+    rectBounds() {
+      _rectOut.minX = activeMinX; _rectOut.maxX = activeMaxX;
+      _rectOut.minY = activeMinY; _rectOut.maxY = activeMaxY;
+      return _rectOut;
+    },
+    lastAdvectionSubsteps: () => _lastAdvectionSubsteps,
+    simStep(params) { _refreshLive(); return simStep(params); },
+    movePigment() { _refreshLive(); return movePigment(); },
+    transferPigment() { _refreshLive(); return transferPigment(); },
+    diffuseWet() { _refreshLive(); return diffuseWet(); },
+    evaporate() { _refreshLive(); return evaporate(); },
+    updateVelocity() { _refreshLive(); return updateVelocity(); },
+    applyEdgeDarkening() { _refreshLive(); return applyEdgeDarkening(); },
+    drainBoundaries(adt) { _refreshLive(); return drainBoundaries(adt); },
+    generatePaper, smoothNoise,
+    expandActiveRect, setActiveRectFull, setActiveRectEmpty,
+    activeRectIsEmpty, shrinkActiveRect,
+    MAX_PIGMENT, DT, VISCOSITY, DRAG, PAPER_TILT,
+    EDGE_ETA, EDGE_WET_ACTIVE, EDGE_WET_OFF, ACTIVE_THRESHOLD,
+  };
+}
+  return createSimCore;
+  })();
     // <<< PART sim-core END
+
     // >>> PART sim-backend BEGIN — assembled from src/parts/sim-backend.part.js;
     // edit THAT file, then run `npm run assemble` (CI enforces --check).
     // ============================================================
@@ -3853,10 +3953,11 @@ function initGpuSim(gl, GW, GH) {
       } else if (activeRectIsEmpty()) {
         return;
       } else {
-        yStart = Math.max(0, activeMinY);
-        yEnd = Math.min(GH - 1, activeMaxY);
-        xStart = Math.max(0, activeMinX);
-        xEnd = Math.min(GW - 1, activeMaxX);
+        const _rb = rectBounds();
+        yStart = Math.max(0, _rb.minY);
+        yEnd = Math.min(GH - 1, _rb.maxY);
+        xStart = Math.max(0, _rb.minX);
+        xEnd = Math.min(GW - 1, _rb.maxX);
         isFull =
           yStart === 0 && yEnd === GH - 1 && xStart === 0 && xEnd === GW - 1;
       }
@@ -4800,6 +4901,9 @@ function initGpuSim(gl, GW, GH) {
       g = [new Float32Array(N), new Float32Array(N), new Float32Array(N)];
       d = [new Float32Array(N), new Float32Array(N), new Float32Array(N)];
       g_tmp = [new Float32Array(N), new Float32Array(N), new Float32Array(N)];
+      // v1.18 — arrays and dims were just rebound; the sim core snapshots
+      // them, so refresh before anything below touches the new grid.
+      _simCore.refreshBindings();
       mask = new Float32Array(N);
       maskActive = false;
       clearMaskRect();
@@ -10610,6 +10714,40 @@ function _ensureTextureNoise(mode) {
     // Apply the default paper-wetness preset matching the v0.26.2 default.
     applyEvapPreset("wetOnWet");
 
+
+    // ---- sim-core instantiation (see src/washes-sim-core.js) ----
+    // State stays owned here; the destructured aliases keep every existing
+    // call site (and the harness's debug injections) working unchanged.
+    const _simCore = createSimCore({
+      bindings: () => ({
+        GW, GH, N, inv_s, inv_s2, s_scale,
+        wet, wet_tmp, u, v, u_new, v_new, pressure, paperH, mask,
+        g, d, g_tmp, wetBlur, wetBlurTmp, wetBinary, wetBlurLarge,
+        WET_DIFFUSION, PIGMENT_DIFFUSION, EDGE_KERNEL, EDGE_KERNEL_LARGE,
+        MASK_THRESHOLD,
+      }),
+      live: () => ({
+        evaporationRate, dryingPaused, edgeDarkeningEnabled,
+        advectionMode: _advectionMode,
+        maskActive, maskRectMinX, maskRectMinY, maskRectMaxX, maskRectMaxY,
+        edgeOpenLeft: _edgeOpenLeft, edgeOpenRight: _edgeOpenRight,
+        edgeOpenTop: _edgeOpenTop, edgeOpenBottom: _edgeOpenBottom,
+        gravityDir: _gravityDir, gravityStrength: _gravityStrength,
+        gravityBiasX: _gravityBiasX, gravityBiasY: _gravityBiasY,
+        edgeMode: _edgeMode, fadeEnabled, dVel, VEL_CLAMP, PIGMENTS,
+      }),
+      markCanvasActive: () => markCanvasActive(),
+    });
+    const {
+      simStep, movePigment, transferPigment, diffuseWet, evaporate,
+      updateVelocity, applyEdgeDarkening, drainBoundaries,
+      generatePaper, smoothNoise,
+      expandActiveRect, setActiveRectFull, setActiveRectEmpty,
+      activeRectIsEmpty, shrinkActiveRect, rectBounds,
+      MAX_PIGMENT, DT, VISCOSITY, DRAG, PAPER_TILT,
+      EDGE_ETA, EDGE_WET_ACTIVE, EDGE_WET_OFF, ACTIVE_THRESHOLD,
+    } = _simCore;
+
     // ============================================================
     // PER-INSTANCE INIT (replaces module-level init in original)
     // ============================================================
@@ -10976,9 +11114,9 @@ function _ensureTextureNoise(mode) {
     // one (= number of cells simStep visits per step); the live-cells
     // metric is the human-relevant one (= cells that actually have paint).
     function perfActiveCells() {
-      if (typeof activeMinX === "undefined" || activeMinX > activeMaxX)
-        return 0;
-      return (activeMaxX - activeMinX + 1) * (activeMaxY - activeMinY + 1);
+      const _rb = rectBounds();
+      if (_rb.minX > _rb.maxX) return 0;
+      return (_rb.maxX - _rb.minX + 1) * (_rb.maxY - _rb.minY + 1);
     }
 
     // v0.48 — Count cells inside the active rect that actually have
@@ -10996,10 +11134,11 @@ function _ensureTextureNoise(mode) {
         g1 = g[1],
         g2 = g[2];
       const thr = ACTIVE_THRESHOLD;
+      const _rb = rectBounds();
       let count = 0;
-      for (let y = activeMinY; y <= activeMaxY; y++) {
+      for (let y = _rb.minY; y <= _rb.maxY; y++) {
         const yo = y * GW;
-        for (let x = activeMinX; x <= activeMaxX; x++) {
+        for (let x = _rb.minX; x <= _rb.maxX; x++) {
           const i = yo + x;
           if (g0[i] > thr || g1[i] > thr || g2[i] > thr || pressure[i] > thr) {
             count++;

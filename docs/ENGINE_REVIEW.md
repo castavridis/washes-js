@@ -66,6 +66,18 @@ packaging, and GPU paths. Line references are into `engine/src/washes.js` /
 > has an editable home a tenth the size of the monolith. Next: graduate
 > `sim-core` to a real module behind the SimBackend seam, then the worker
 > backend (#8).
+>
+> **P1 slice 5 (branch `engine-review-p1-slice5` → engine 1.18.0): the
+> first semantic extraction.** The sim core is a real ES module —
+> `washes/sim-core` exports `createSimCore(env)` with an explicit
+> host-owns-state / core-snapshots-bindings contract, inlined into
+> washes.js by the assembler's `esm-inline` transform (single file
+> preserved) and importable directly with typings. Proof both ways: the
+> full battery is bit-exact through the inlined form, and
+> `tests/sim-core-standalone.test.mjs` runs the physics with no host,
+> DOM, or canvas at all — which also caught two closure leaks the inlined
+> form masks. Remaining in P1: worker backend (#8, now: implement
+> SimBackend over a worker-hosted core) and further part graduations.
 
 ---
 

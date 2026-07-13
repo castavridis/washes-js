@@ -109,8 +109,9 @@ const INJECT_GRID = `
     _debug_grid() { return { GW, GH, N }; },`;
 const INJECT_RECT = `
     _debug_rect() {
-      return { minX: activeMinX, maxX: activeMaxX, minY: activeMinY, maxY: activeMaxY,
-               empty: activeMaxX < activeMinX || activeMaxY < activeMinY };
+      const rb = rectBounds();
+      return { minX: rb.minX, maxX: rb.maxX, minY: rb.minY, maxY: rb.maxY,
+               empty: rb.maxX < rb.minX || rb.maxY < rb.minY };
     },`;
 
 // ===========================================================================

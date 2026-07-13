@@ -1,23 +1,65 @@
-    // ============================================================
-    // IDLE-SKIP STATE — declared early so paintAt / resetSim / rewet can
-    // reference markCanvasActive at init without hitting a TDZ on the
-    // let bindings below. The actual idle-decision logic lives next to
-    // the loop further down; this block is just storage + the wake helper.
-    // ============================================================
-    let framesSincePaint = 9999; // start "settled" — first paint wakes
-    let framesSinceIdleCheck = 0;
-    let framesSinceBars = 999; // start large so first frame updates bars
-    let simIsIdle = false; // start active so initial state renders
-    let lastTotalWet = 0;
-    let lastTotalSuspended = 0;
-    function markCanvasActive() {
-      framesSincePaint = 0;
-      simIsIdle = false;
-      // v0.90 — during pause, this flag triggers a one-shot render in the
-      // next frame so deposits made via paintAt/splash/traceSVG/etc. are
-      // visible. The loop reads + clears it.
-      if (_paused) _pauseDirty = true;
-    }
+// washes-sim-core.js — the simulation core, as a real module.
+//
+// GRADUATED from src/parts/sim-core.part.js (ENGINE_REVIEW P1#6): the pass
+// functions, active-region tracking, and simStep now live behind
+// createSimCore(env). Ownership is deliberately split:
+//
+//   - washes.js keeps OWNING all state: field arrays, grid dims, tunables.
+//     It reallocates and reassigns them freely (rebuildScale, palette, API
+//     setters) exactly as before.
+//   - this module snapshots those bindings via env.bindings() —
+//     refreshBindings() re-reads them and MUST be called after any rebuild —
+//     and re-reads the runtime-mutable set via env.live() at every exported
+//     call, so API changes (evaporation, masks, gravity, palette, edge
+//     modes) are visible with at most one-call granularity, matching the
+//     closure semantics it replaced.
+//
+// Inlined into washes.js by scripts/assemble.cjs (esm transform) so the
+// single-file build stays self-contained; also importable directly:
+//   import { createSimCore } from "washes/sim-core";
+export function createSimCore(env) {
+  // ---- rebuild-refreshed bindings (owned by the host) ----
+  let GW, GH, N, inv_s, inv_s2, s_scale,
+    wet, wet_tmp, u, v, u_new, v_new, pressure, paperH, mask,
+    g, d, g_tmp, wetBlur, wetBlurTmp, wetBinary, wetBlurLarge,
+    WET_DIFFUSION, PIGMENT_DIFFUSION, EDGE_KERNEL, EDGE_KERNEL_LARGE,
+    MASK_THRESHOLD;
+  function refreshBindings() {
+    const b = env.bindings();
+    GW = b.GW; GH = b.GH; N = b.N; inv_s = b.inv_s; inv_s2 = b.inv_s2;
+    s_scale = b.s_scale;
+    wet = b.wet; wet_tmp = b.wet_tmp; u = b.u; v = b.v;
+    u_new = b.u_new; v_new = b.v_new; pressure = b.pressure;
+    paperH = b.paperH; mask = b.mask; g = b.g; d = b.d; g_tmp = b.g_tmp;
+    wetBlur = b.wetBlur; wetBlurTmp = b.wetBlurTmp;
+    wetBinary = b.wetBinary; wetBlurLarge = b.wetBlurLarge;
+    WET_DIFFUSION = b.WET_DIFFUSION; PIGMENT_DIFFUSION = b.PIGMENT_DIFFUSION;
+    EDGE_KERNEL = b.EDGE_KERNEL; EDGE_KERNEL_LARGE = b.EDGE_KERNEL_LARGE;
+    MASK_THRESHOLD = b.MASK_THRESHOLD;
+  }
+  // ---- per-call live state (runtime-mutable via the host API) ----
+  let evaporationRate, dryingPaused, edgeDarkeningEnabled, _advectionMode,
+    maskActive, maskRectMinX, maskRectMinY, maskRectMaxX, maskRectMaxY,
+    _edgeOpenLeft, _edgeOpenRight, _edgeOpenTop, _edgeOpenBottom,
+    _gravityDir, _gravityStrength, _gravityBiasX, _gravityBiasY,
+    _edgeMode, fadeEnabled, dVel, VEL_CLAMP, PIGMENTS;
+  function _refreshLive() {
+    const s = env.live();
+    evaporationRate = s.evaporationRate; dryingPaused = s.dryingPaused;
+    edgeDarkeningEnabled = s.edgeDarkeningEnabled;
+    _advectionMode = s.advectionMode;
+    maskActive = s.maskActive;
+    maskRectMinX = s.maskRectMinX; maskRectMinY = s.maskRectMinY;
+    maskRectMaxX = s.maskRectMaxX; maskRectMaxY = s.maskRectMaxY;
+    _edgeOpenLeft = s.edgeOpenLeft; _edgeOpenRight = s.edgeOpenRight;
+    _edgeOpenTop = s.edgeOpenTop; _edgeOpenBottom = s.edgeOpenBottom;
+    _gravityDir = s.gravityDir; _gravityStrength = s.gravityStrength;
+    _gravityBiasX = s.gravityBiasX; _gravityBiasY = s.gravityBiasY;
+    _edgeMode = s.edgeMode;
+    fadeEnabled = s.fadeEnabled; dVel = s.dVel;
+    VEL_CLAMP = s.VEL_CLAMP; PIGMENTS = s.PIGMENTS;
+  }
+  const markCanvasActive = env.markCanvasActive;
 
     // ============================================================
     // ACTIVE REGION TRACKING (v1.0)
@@ -296,8 +338,6 @@
     // SCALE-derived: 1/s scaling keeps display-pixel kernel extent constant.
     // Running-sum box blur is O(N) regardless of kernel size, so these can
     // scale freely without performance impact.
-    let EDGE_KERNEL = Math.max(1, Math.round(4 * inv_s));
-    let EDGE_KERNEL_LARGE = Math.max(1, Math.round(20 * inv_s));
     const EDGE_ETA = 0.045;
     // EDGE_WET_ACTIVE / EDGE_WET_OFF define a smooth ramp on edge darkening
     // intensity as cells dry. Above EDGE_WET_ACTIVE, full strength. Below
@@ -318,8 +358,6 @@
     // previously bypassed that cap — letting endpoint cells accumulate
     // unbounded pigment, which then read as near-black after KM compositing.
     const MAX_PIGMENT = 1.0;
-    let wetBinary = new Float32Array(N);
-    let wetBlurLarge = new Float32Array(N);
 
     // v1.13 — sub-rect box blur. Same separable running-sum math as
     // boxBlur, but produces dst valid only on [x0..x1]×[y0..y1], reading
@@ -450,7 +488,6 @@
     // Capped at 1.5 — the upwind advection in movePigment has a CFL bound
     // VEL_CLAMP * (DT * 0.7) * 2 < 1, so VEL_CLAMP must stay below ~1.7.
     // Cap engages at SCALE < ~1.33 (e.g. at SCALE=1, ideal is 2.0).
-    let VEL_CLAMP = Math.min(1.5, 1.0 * inv_s);
 
     function updateVelocity() {
       if (activeRectIsEmpty()) {
@@ -601,7 +638,6 @@
     // SCALE-derived: 1/s² scaling preserves display-pixel diffusion rate.
     // Capped at 0.20 (below 0.25 stability bound for explicit 4-neighbor
     // Laplacian) — the cap engages at very small SCALE values.
-    let PIGMENT_DIFFUSION = Math.min(0.2, 0.045 * inv_s2);
 
     // v0.57 — Advection mode controls how the donor-cell pigment advection
     // handles cells where the velocity field is so strong that the
@@ -651,7 +687,6 @@
     //        entirely via backward-trace + bilinear interpolation. The
     //        previous "jitter at 0.5" workaround traded cross for visible
     //        radial striations; semilag has neither.
-    let _advectionMode = "semilag";
 
     // Extracted donor-cell advection pass. Reads from g[], writes to
     // g_tmp[] (which the caller must initialize via .set(g[k]) per
@@ -1239,7 +1274,6 @@
     // Slider value `mult` (1×..50×) maps to: rate = pow(0.9988, mult).
     // At mult=1 we get the original 0.9988; at mult=10 we get ~0.988
     // (half-life ~58 steps); at mult=50 we get ~0.94 (half-life ~11 steps).
-    let evaporationRate = 0.9988;
 
     function evaporate() {
       // v0.19 — mask-rect optimization. Branch ONCE on whether any mask
@@ -1353,8 +1387,6 @@
     //     canvas holds its current wetness indefinitely (whatever that
     //     happens to be — fully wet, partially dry, or anywhere between).
     // ============================================================
-    let edgeDarkeningEnabled = true;
-    let dryingPaused = false;
 
     // ============================================================
     // WET DIFFUSION (added v0.8) — water spreads to adjacent cells
@@ -1379,7 +1411,6 @@
     // gives 0.10, the v0.8 baseline tuned so a 0.45 wet brush stamp
     // transfers ~0.045 to neighbors per step — just clearing the wet >= 0.04
     // threshold needed for the rest of the sim to flow pigment into them.
-    let WET_DIFFUSION = Math.min(0.2, 0.1 * inv_s2);
 
     function diffuseWet() {
       if (activeRectIsEmpty()) return;
@@ -1455,3 +1486,30 @@
       }
     }
 
+
+  refreshBindings();
+  _refreshLive();
+  const _rectOut = { minX: 0, maxX: -1, minY: 0, maxY: -1 };
+  return {
+    refreshBindings,
+    rectBounds() {
+      _rectOut.minX = activeMinX; _rectOut.maxX = activeMaxX;
+      _rectOut.minY = activeMinY; _rectOut.maxY = activeMaxY;
+      return _rectOut;
+    },
+    lastAdvectionSubsteps: () => _lastAdvectionSubsteps,
+    simStep(params) { _refreshLive(); return simStep(params); },
+    movePigment() { _refreshLive(); return movePigment(); },
+    transferPigment() { _refreshLive(); return transferPigment(); },
+    diffuseWet() { _refreshLive(); return diffuseWet(); },
+    evaporate() { _refreshLive(); return evaporate(); },
+    updateVelocity() { _refreshLive(); return updateVelocity(); },
+    applyEdgeDarkening() { _refreshLive(); return applyEdgeDarkening(); },
+    drainBoundaries(adt) { _refreshLive(); return drainBoundaries(adt); },
+    generatePaper, smoothNoise,
+    expandActiveRect, setActiveRectFull, setActiveRectEmpty,
+    activeRectIsEmpty, shrinkActiveRect,
+    MAX_PIGMENT, DT, VISCOSITY, DRAG, PAPER_TILT,
+    EDGE_ETA, EDGE_WET_ACTIVE, EDGE_WET_OFF, ACTIVE_THRESHOLD,
+  };
+}

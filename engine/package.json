@@ -1,6 +1,6 @@
 {
   "name": "washes",
-  "version": "1.17.0",
+  "version": "1.18.0",
   "description": "An interactive watercolor simulation for the browser, built on Curtis et al.'s 1997 SIGGRAPH paper. Three-layer fluid + pigment + paper model with Kubelka-Munk compositing, with an optional WebGL2 GPU backend.",
   "type": "module",
   "main": "./src/index.js",
@@ -21,6 +21,11 @@
       "types": "./src/washes-timeline.d.ts",
       "import": "./src/washes-timeline.js",
       "default": "./src/washes-timeline.js"
+    },
+    "./sim-core": {
+      "types": "./src/washes-sim-core.d.ts",
+      "import": "./src/washes-sim-core.js",
+      "default": "./src/washes-sim-core.js"
     }
   },
   "files": [
@@ -32,6 +37,8 @@
     "src/washes-gpu-sim.d.ts",
     "src/washes-timeline.js",
     "src/washes-timeline.d.ts",
+    "src/washes-sim-core.js",
+    "src/washes-sim-core.d.ts",
     "src/shaders/brush_stamp.frag",
     "dist/washes.standalone.js",
     "README.md",
@@ -39,12 +46,30 @@
     "LICENSE",
     "CITATION.cff"
   ],
-  "keywords": ["watercolor","simulation","fluid","canvas","webgl","gpu","kubelka-munk","generative","creative-coding","visualization","svg","animation"],
+  "keywords": [
+    "watercolor",
+    "simulation",
+    "fluid",
+    "canvas",
+    "webgl",
+    "gpu",
+    "kubelka-munk",
+    "generative",
+    "creative-coding",
+    "visualization",
+    "svg",
+    "animation"
+  ],
   "author": "Stephanie",
   "license": "MIT",
-  "repository": { "type": "git", "url": "https://github.com/castavridis/washes-js" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/castavridis/washes-js"
+  },
   "homepage": "https://github.com/castavridis/washes-js#readme",
-  "bugs": { "url": "https://github.com/castavridis/washes-js/issues" },
+  "bugs": {
+    "url": "https://github.com/castavridis/washes-js/issues"
+  },
   "scripts": {
     "test": "node tests/washes-test-harness.cjs src/washes.js all",
     "test:texture-parity": "node tests/texture-parity.test.mjs",
@@ -55,8 +80,15 @@
     "assemble": "node scripts/assemble.cjs",
     "test:browser": "playwright test",
     "build": "node scripts/build-standalone.cjs",
-    "prepublishOnly": "node scripts/sync-gpu.cjs --check && node scripts/build-standalone.cjs && npm test && npm run test:texture-parity && npm run test:api && npm run test:gpu-sync && npm run test:headless"
+    "prepublishOnly": "node scripts/sync-gpu.cjs --check && node scripts/build-standalone.cjs && npm test && npm run test:texture-parity && npm run test:api && npm run test:gpu-sync && npm run test:headless",
+    "test:sim-core": "node tests/sim-core-standalone.test.mjs"
   },
-  "sideEffects": ["./src/washes.js","./src/washes-gpu-sim.js","./src/index.js"],
-  "engines": { "node": ">=18" }
+  "sideEffects": [
+    "./src/washes.js",
+    "./src/washes-gpu-sim.js",
+    "./src/index.js"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
 }

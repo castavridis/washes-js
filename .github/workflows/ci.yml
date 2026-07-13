@@ -31,6 +31,8 @@ jobs:
         run: node scripts/assemble.cjs --check
       - name: bare-Node headless (no DOM shim)
         run: node tests/headless-bare.test.mjs
+      - name: sim-core standalone (direct module import, no host)
+        run: node tests/sim-core-standalone.test.mjs
       - name: npm pack sanity (tarball assembles with declared files)
         run: npm pack --dry-run
       - name: standalone build (classic-script parse + global attach)

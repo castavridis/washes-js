@@ -2,6 +2,33 @@
 
 All notable changes to **washes** are documented here. Dates are ISO 8601.
 
+## [1.18.0] — 2026-07-12
+
+P1 slice 5: the first SEMANTIC extraction — the simulation core is a real
+ES module.
+
+### Changed
+- **`sim-core` graduated from closure fragment to `washes/sim-core`.**
+  `src/washes-sim-core.js` exports `createSimCore(env)`: the pass
+  functions, active-region tracking, and `simStep`, behind an explicit
+  ownership contract — the host keeps owning all state (field arrays,
+  dims, tunables; it reallocates and reassigns them exactly as before),
+  while the core snapshots bindings (`refreshBindings()` after rebuilds)
+  and re-reads the runtime-mutable set at every exported call. Eleven
+  host-mutated declarations were relocated to the host; rect state moved
+  into the core (read via `rectBounds()`); everything else is untouched
+  closure text. The module is inlined into `washes.js` by the assembler's
+  new `esm-inline` transform, so the single-file build stays
+  self-contained — and is also importable directly, with typings
+  (`washes-sim-core.d.ts`).
+- **Proof of both properties:** the full battery is green with every
+  golden bit-exact through the inlined form (the graduation changed no
+  behavior), and the new `tests/sim-core-standalone.test.mjs` imports the
+  module with NO host, DOM, or canvas and runs the physics on a synthetic
+  32×24 grid — wet diffuses, dries, deposits settle, the rect empties.
+  The standalone import also caught two closure leaks the inlined form
+  masks (`s_scale`, `_edgeMode`), now part of the env contract.
+
 ## [1.17.0] — 2026-07-12
 
 P1 slice 4: the extraction begins for real — 2,142 lines of `washes.js`

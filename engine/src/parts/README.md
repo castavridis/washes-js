@@ -18,7 +18,7 @@ Editing between the sentinels in `washes.js` directly will be overwritten.
 | Part | What's in it |
 |---|---|
 | `pigment-data.part.js` | The Curtis et al. (1997) Figure 5 pigment sets (K/S coefficients, density/staining/granulation), ink pigment sets, tool sentinel indices, and adjacent brush-state defaults |
-| `sim-core.part.js` | The physics: idle-skip + active-region tracking, paper generation, box blurs, edge darkening (§4.3.3), velocity update (§4.3.1), pigment advection (donor-cell / semilag), boundary drainage, pigment transfer (§4.5), evaporation, `simStep` |
+| `../washes-sim-core.js` | **GRADUATED (v1.18)** — the physics as a real ES module (`createSimCore(env)`, npm entry `washes/sim-core`): active-region tracking, paper generation, box blurs, edge darkening (§4.3.3), velocity update (§4.3.1), pigment advection, boundary drainage, pigment transfer (§4.5), evaporation, `simStep`. Assembled into `washes.js` via the `esm-inline` transform; see the module header for the host/core ownership contract |
 | `sim-backend.part.js` | The SimBackend seam (MIGRATION.md Phase 0): the CPU adapter and the state codec inverse |
 
 ## The rules
