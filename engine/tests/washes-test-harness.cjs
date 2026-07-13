@@ -585,6 +585,110 @@ function runEquivalence(libPath) {
 }
 
 // ===========================================================================
+// PATTERN — Render goldens (engine-review P1)
+// ===========================================================================
+// The equivalence pattern freezes the SIM fields; this one freezes the
+// RENDERED BYTES. The DOM shim's createImageData returns a real
+// Uint8ClampedArray, so the full Kubelka-Munk composite runs headless and
+// its output can be hashed. Guards the render path (kmReflect, paper
+// texture, granulation, transparency) against unintended visual change.
+// Same golden discipline as equivalence: --golden=write records
+// tests/render-goldens.json; regenerate ONLY for an intended visual change,
+// with the measured byte-level impact stated in the commit message.
+// ---------------------------------------------------------------------------
+
+const RENDER_GOLDEN_PATH = path.join(__dirname, 'render-goldens.json');
+
+const RENDER_INJECT = `${INJECT_SIMSTEP}${INJECT_GRID}
+    _debug_paintGrid(amt) {
+      for (let i = 0; i < N; i++) d[0][i] = amt;
+      setActiveRectFull();
+    },
+    _debug_renderHash() {
+      render();
+      const px = imgData.data;
+      let h = 0x811c9dc5;
+      for (let i = 0; i < px.length; i++) h = Math.imul(h ^ px[i], 16777619) >>> 0;
+      let nonZero = 0;
+      for (let i = 0; i < px.length; i += 4)
+        if (px[i] !== 0 || px[i + 1] !== 0 || px[i + 2] !== 0 || px[i + 3] !== 0) nonZero++;
+      return { hash: h >>> 0, bytes: px.length, nonZero };
+    },`;
+
+function buildRenderScenarios(Washes) {
+  return [
+    {
+      // rect starts full at create — this is a whole-sheet paper render
+      name: 'virgin-paper',
+      run() { return Washes.create(makeEl('div')); },
+    },
+    {
+      name: 'splash-30-steps',
+      run() {
+        const wc = Washes.create(makeEl('div'));
+        wc.splash([{ x: 324, y: 270, velocity: 25 }], 'deluge');
+        wc._debug_simStep(30);
+        return wc;
+      },
+    },
+    {
+      name: 'custom-palette-paint',
+      run() {
+        const wc = Washes.create(makeEl('div'));
+        wc.palette([{ color: '#635bff' }, { color: '#0a2540', granulation: 0.4 }, { color: '#00d4ff' }]);
+        for (let s = 0; s < 5; s++) wc.paintAt(300 + s * 6, 250 + s * 4, 12, s % 3, 0.8);
+        wc._debug_simStep(40);
+        return wc;
+      },
+    },
+    {
+      name: 'transparent-mode',
+      run() {
+        const wc = Washes.create(makeEl('div'));
+        wc.transparent(true);
+        wc.paintAt(320, 260, 14, 0, 0.9);
+        wc._debug_simStep(25);
+        return wc;
+      },
+    },
+  ];
+}
+
+function runRender(libPath) {
+  const mode = flags.golden || (fs.existsSync(RENDER_GOLDEN_PATH) ? 'check' : 'none');
+  if (mode === 'none') {
+    console.error('\n=== Render goldens ===');
+    console.error('  No goldens found. Run with --golden=write on a known-good engine first.');
+    FAILURES++;
+    return;
+  }
+  const Washes = loadLibWithHelpers(libPath, RENDER_INJECT);
+  const results = {};
+  buildRenderScenarios(Washes).forEach((sc, idx) => {
+    Math.random = mulberry32(SEED + 104729 * (idx + 1));
+    results[sc.name] = sc.run()._debug_renderHash();
+  });
+
+  if (mode === 'write') {
+    fs.writeFileSync(RENDER_GOLDEN_PATH, JSON.stringify({ seed: SEED, results }, null, 1));
+    console.log(`\n=== Render goldens ===\n  goldens written to ${path.basename(RENDER_GOLDEN_PATH)} (seed ${SEED})`);
+    return;
+  }
+
+  const golden = JSON.parse(fs.readFileSync(RENDER_GOLDEN_PATH, 'utf8'));
+  console.log('\n=== Render vs goldens (byte hashes) ===');
+  if (!check(golden.seed === SEED,
+    `render: golden seed ${golden.seed} matches run seed ${SEED}`)) return;
+  for (const [name, got] of Object.entries(results)) {
+    const g = golden.results[name];
+    if (!check(!!g, `render ${name}: scenario present in goldens`)) continue;
+    const ok = got.hash === g.hash && got.bytes === g.bytes && got.nonZero === g.nonZero;
+    console.log(`  ${name.padEnd(22)} hash ${got.hash === g.hash ? 'MATCH' : `MISMATCH (got ${got.hash}, golden ${g.hash})`}  nonZero ${got.nonZero}`);
+    check(ok, `render ${name}: composited bytes match goldens`);
+  }
+}
+
+// ===========================================================================
 // PATTERN 7 — Active-rect behavior
 // ===========================================================================
 // Documents/verifies the active-region tracking contract: the rect grows to
@@ -654,10 +758,11 @@ const patterns = {
   cfl: runCFL,
   'mass-balance': runMassBalance,
   equivalence: runEquivalence,
+  render: runRender,
   'active-rect': runActiveRect,
 };
 
-const ALL = ['anisotropy', 'trace', 'hotspots', 'cfl', 'mass-balance', 'equivalence', 'active-rect'];
+const ALL = ['anisotropy', 'trace', 'hotspots', 'cfl', 'mass-balance', 'equivalence', 'render', 'active-rect'];
 
 function runPattern(name) {
   installMockDOM();

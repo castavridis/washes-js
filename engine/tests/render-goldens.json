@@ -1,0 +1,25 @@
+{
+ "seed": 3735928559,
+ "results": {
+  "virgin-paper": {
+   "hash": 1736962755,
+   "bytes": 1399680,
+   "nonZero": 349920
+  },
+  "splash-30-steps": {
+   "hash": 2356004356,
+   "bytes": 1399680,
+   "nonZero": 349920
+  },
+  "custom-palette-paint": {
+   "hash": 2370145532,
+   "bytes": 1399680,
+   "nonZero": 349920
+  },
+  "transparent-mode": {
+   "hash": 158139963,
+   "bytes": 1399680,
+   "nonZero": 349920
+  }
+ }
+}
