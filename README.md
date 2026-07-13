@@ -6,7 +6,7 @@ Curtis et al.'s 1997 SIGGRAPH paper *Computer-Generated Watercolor*.
 
 **Live site:** <https://castavridis.github.io/washes-js/> — the landing page
 links to everything below. The flagship demo is the
-[playground](demos/playground.html) (demo v1.0.17, embedding engine 1.12.1).
+[playground](demos/playground.html) (demo v1.0.18 — loads the live engine build).
 
 ## Layout
 
@@ -25,8 +25,10 @@ links to everything below. The flagship demo is the
 
 - **`engine/CHANGELOG.md`** tracks the engine package (0.98.0 → 1.22.0).
 - **The playground's in-app changelog** (docs panel) tracks the demo itself
-  (v0.1 → v1.0.17). A demo release that embeds a new engine says so — e.g.
-  "v1.0.16 — engine 1.12.1: pigments, masks, transparent, timeline".
+  (v0.1 → v1.0.18). Since v1.0.18 the playground — and every demo and
+  showcase page — loads the live engine build
+  (`engine/dist/washes.standalone.js`), so engine releases reach the pages
+  without re-embedding; demo releases now cover the pages' own behavior.
 
 ## Using the engine
 
