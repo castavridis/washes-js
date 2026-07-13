@@ -146,9 +146,24 @@ packaging, and GPU paths. Line references are into `engine/src/washes.js` /
 > `PerfLevel` type still declared v1.5's names). DOM events untouched —
 > mirror renames land with the 2.0 batch.
 >
-> **Open work, in priority order:** ① the API 2.0 rename/convention batch
-> + compat shim → **2.0.0** (all decisions in hand; the design doc is the
-> spec); ② first real-browser QA pass on Pages — the 27
+> **P2 slice 4 (branch `engine-review-v2-t1` → engine 1.25.0): API 2.0
+> tranche 1, the additive beachhead.** `run()` policies, `drying()`,
+> `wc.grid.{paint,toNorm,fromNorm,size}` (merged into the pre-existing
+> width/height getters), `splashNorm` (epicenters gained an internal
+> pre-resolved `radiusGrid`; px path untouched), `exportImage`, and
+> `Washes.compat1()` as a documented passthrough with the v1 surface
+> frozen in `tests/v1-surface.snapshot.json` (143 members) and held by
+> `tests/compat-surface.test.mjs`. All 18 executable page call sites now
+> create through `compat1(...)` (playground → demo v1.0.19), so tranche
+> 2's renames can't break Pages. Also fixed: SplashEpicenter/
+> SplashOptions d.ts fictions (grid coords not px; six phantom options,
+> five undeclared real ones).
+>
+> **Open work, in priority order:** ① API 2.0 **tranche 2 — the flip →
+> 2.0.0** (spec: design doc §§1–4 + sequencing item 4; compat1 becomes
+> the real v1 adapter; goldens bit-exact throughout); then tranche 3
+> (2.0.x): migrate pages off compat1 natively; ② first real-browser QA
+> pass on Pages — the 27
 > live-engine pages, the hero, the CI Playwright job's first run, GPU
 > render validation (unblocks GPU-by-default + the falloff² parity fix);
 > ③ worker frame-loop integration in the browser (render-latency model);

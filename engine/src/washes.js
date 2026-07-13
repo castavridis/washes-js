@@ -5406,6 +5406,11 @@ function createSimCore(env) {
           x: pt.x,
           y: pt.y,
           radius: pt.radius ?? null,
+          // v1.25 — pre-resolved grid-space radius, set by splashNorm's
+          // fraction-of-smaller-side conversion. Wins over radius (px)
+          // when present; null everywhere else keeps the px path
+          // bit-exact.
+          radiusGrid: pt.radiusGrid ?? null,
           velocity: pt.velocity ?? null,
           pressure: pt.pressure ?? null,
           lift: pt.lift ?? null,
@@ -5482,13 +5487,16 @@ function createSimCore(env) {
         for (const ec of epicenters) {
           const radPx_e =
             (ec.radius != null ? ec.radius : preset.radiusPx) * _canvasScale;
-          const ringRadiusGrid = radPx_e * pxToGrid_e * rayOffsetFraction;
+          const ringRadiusGrid =
+            (ec.radiusGrid != null ? ec.radiusGrid : radPx_e * pxToGrid_e) *
+            rayOffsetFraction;
           for (let r = 0; r < rayCount; r++) {
             const ang = (2 * Math.PI * r) / rayCount;
             expanded.push({
               x: ec.x + ringRadiusGrid * Math.cos(ang),
               y: ec.y + ringRadiusGrid * Math.sin(ang),
               radius: ec.radius,
+              radiusGrid: ec.radiusGrid ?? null,
               velocity: ec.velocity,
               pressure: ec.pressure,
               lift: ec.lift,
@@ -5533,7 +5541,8 @@ function createSimCore(env) {
           (ec.velocity != null ? ec.velocity : preset.velocity) * strengthMult;
         const presMag =
           (ec.pressure != null ? ec.pressure : preset.pressure) * strengthMult;
-        const radiusGrid = radiusPx * pxToGrid;
+        const radiusGrid =
+          ec.radiusGrid != null ? ec.radiusGrid : radiusPx * pxToGrid;
         const r2 = radiusGrid * radiusGrid;
         const minX = Math.max(0, Math.floor(ecx - radiusGrid));
         const maxX = Math.min(GW - 1, Math.ceil(ecx + radiusGrid));
@@ -11705,6 +11714,28 @@ function _ensureTextureNoise(mode) {
         splash(arg1, arg2, opts);
         return api;
       },
+      // v1.25 — normalized twin (API 2.0 §1: splash "gains the normalized
+      // form it always lacked"; this name becomes plain splash() in 2.0).
+      // Epicenter {x, y} are 0..1 fractions of the canvas; per-point
+      // radius is a fraction of the smaller side (the convention every
+      // other *Norm radius uses), converted here to a pre-resolved grid
+      // radius. velocity/pressure/lift overrides pass through in preset
+      // units. Preset-only and object calling forms mirror splash().
+      splashNorm(arg1, arg2, opts) {
+        const mapPt = (pt) => ({
+          x: pt.x * GW,
+          y: pt.y * GH,
+          radiusGrid: pt.radius != null ? pt.radius * Math.min(GW, GH) : null,
+          velocity: pt.velocity ?? null,
+          pressure: pt.pressure ?? null,
+          lift: pt.lift ?? null,
+        });
+        if (Array.isArray(arg1)) splash(arg1.map(mapPt), arg2, opts);
+        else if (arg1 && typeof arg1 === "object" && Array.isArray(arg1.coords))
+          splash({ coords: arg1.coords.map(mapPt), preset: arg1.preset }, arg2, opts);
+        else splash(arg1, arg2, opts); // preset-only / no-arg: nothing spatial to convert
+        return api;
+      },
       splashPresets() {
         return splashPresets();
       },
@@ -13211,12 +13242,32 @@ function _ensureTextureNoise(mode) {
       },
 
       // Coordinate helpers
+      // v1.25 — grid grows into the explicit cell-space home (API 2.0 §1):
+      // when 2.0 makes normalized THE space of the primary names,
+      // generative pieces that genuinely think in cells keep a first-class
+      // surface here instead of losing it to the compat shim. grid.paint
+      // carries paintAt's exact semantics (pigment-name resolution,
+      // rainbow sentinel); toNorm/fromNorm are the bridges; size() reads
+      // the live dims (they change on rescale — don't cache). The width/
+      // height getters predate 1.25 and stay.
       grid: {
         get width() {
           return GW;
         },
         get height() {
           return GH;
+        },
+        paint(gx, gy, gridRadius, pigmentIdx, strength) {
+          return api.paintAt(gx, gy, gridRadius, pigmentIdx, strength);
+        },
+        toNorm(gx, gy) {
+          return { nx: gx / GW, ny: gy / GH };
+        },
+        fromNorm(nx, ny) {
+          return { gx: nx * GW, gy: ny * GH };
+        },
+        size() {
+          return { gridWidth: GW, gridHeight: GH };
         },
       },
       toGrid(displayX, displayY) {
@@ -13235,6 +13286,16 @@ function _ensureTextureNoise(mode) {
       pauseDrying(v) {
         if (v !== undefined) dryingPaused = !!v;
         return dryingPaused;
+      },
+      // v1.25 — API 2.0 §2: "the pauseDrying knob, renamed to say what it
+      // does". drying(false) pauses drying; drying(true) resumes it; the
+      // zero-arg getter reads whether drying is running. Chains (the v2
+      // setter convention). pauseDrying stays until the 2.0 compat shim
+      // absorbs it.
+      drying(v) {
+        if (v === undefined) return !dryingPaused;
+        dryingPaused = !v;
+        return api;
       },
       // v3 — Keep the simulation stepping even when no fresh paint is
       // being added. Default false (sim idles after a quiet period to
@@ -13269,6 +13330,38 @@ function _ensureTextureNoise(mode) {
           if (_runUntilDry) { simIsIdle = false; markCanvasActive(); }
         }
         return _runUntilDry;
+      },
+      // v1.25 — API 2.0 §2: ONE run-state policy instead of the
+      // keepSimulating/runUntilDry pair (pause() stays the one true
+      // freeze; quality('auto') stays a quality concern).
+      //   run('auto')      — idle when settled (the default)
+      //   run('until-dry') — step until bone dry, then idle
+      //   run('always')    — never idle
+      //   run()            — read the current policy
+      // Writes the same flags the v1 controls use, so the two surfaces
+      // can't disagree; the v1 pair moves into the compat shim in 2.0.
+      run(policy) {
+        if (policy === undefined)
+          return _keepSimulating ? "always" : _runUntilDry ? "until-dry" : "auto";
+        if (policy === "auto") {
+          _keepSimulating = false;
+          _runUntilDry = false;
+        } else if (policy === "until-dry") {
+          _keepSimulating = false;
+          _runUntilDry = true;
+          simIsIdle = false;
+          markCanvasActive();
+        } else if (policy === "always") {
+          _runUntilDry = false;
+          _keepSimulating = true;
+          markCanvasActive();
+        } else {
+          throw new Error(
+            'run(policy): expected "auto", "until-dry", or "always"; got ' +
+              JSON.stringify(policy),
+          );
+        }
+        return api;
       },
       autoDryBackground(v) {
         if (v !== undefined) autoDryBackgroundOn = !!v;
@@ -13408,6 +13501,11 @@ function _ensureTextureNoise(mode) {
 
       // v2 — PNG export. Returns a data URL the caller can use directly
       // (e.g. assign to an <a> href + download, or open in a new window).
+      // v1.25 — API 2.0 §4: the honest name (it encodes JPEG too via
+      // mimeType). exportPNG becomes the compat-shim spelling in 2.0.
+      exportImage(opts) {
+        return api.exportPNG(opts);
+      },
       exportPNG(opts) {
         opts = opts || {};
         // Force a full re-render. The active-rect optimization only
@@ -13967,19 +14065,29 @@ function _ensureTextureNoise(mode) {
         "rewet", "rewetNorm", "dry", "dryNorm", "lift", "liftNorm",
         "flood", "blot", "blotNorm", "pour", "endPour",
         "pigment", "brushMode", "brushSize", "paperColor",
-        "maskNorm", "removeMask", "reset", "clearPaint", "splash",
-        "on", "onFrame", "state", "sample", "sampleNorm", "coverage"],
+        "maskNorm", "removeMask", "reset", "clearPaint", "splash", "splashNorm",
+        "grid", "on", "once", "onFrame", "state", "sample", "sampleNorm", "coverage"],
       tuning: ["autoPerf", "perfLevel", "flow", "evaporation", "waterLoad", "paintLoad", "gravityVector",
         "gravityStrength", "gravityDirection", "edgeMode", "edgeDarkening",
-        "fadePainting", "fadeHalfLife", "pauseDrying", "keepSimulating",
-        "runUntilDry", "setAnimation", "setBackground", "setVisualization",
+        "fadePainting", "fadeHalfLife", "pauseDrying", "drying", "keepSimulating",
+        "runUntilDry", "run", "setAnimation", "setBackground", "setVisualization",
         "applyPreset", "getPreset", "saveState", "loadState",
         "scale", "canvasScale", "quality",
         "usePointerPressure", "continuousFlow", "transparent", "gouacheMode"],
       debug: ["diagnose", "remeasure", "perf", "perfMetrics", "webgl",
         "webglAvailable", "webglDebugTint", "wetnessHeatmap", "gpuSim",
         "gpuSimContext", "advectionMode", "advectionLastSubsteps",
-        "velocityClamp", "exportPNG", "destroy"],
+        "velocityClamp", "exportPNG", "exportImage", "destroy"],
+    },
+    // v1.25 — API 2.0 compat scaffolding. In 2.0 this wraps a v2 instance
+    // in the full v1 surface (old names, old units, value-returning
+    // setters), warning once per distinct call site, and lives until 3.0.
+    // Today the instance IS the v1 surface, so this is a documented
+    // passthrough — pages wrap now, and the 2.0 flip can't break them.
+    compat1(instance) {
+      if (!instance || typeof instance !== "object")
+        throw new Error("compat1(instance): expected a Washes instance");
+      return instance;
     },
     // v1.2 (item 7) — discoverable brush-mode names without an instance.
     brushModes: ['wet', 'crayon', 'dry', 'dryBrush', 'salt', 'splatter'],

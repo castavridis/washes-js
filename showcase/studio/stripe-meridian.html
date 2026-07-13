@@ -67,7 +67,7 @@ if(Washes&&sim){
   const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
   let wc=null,G=null;
   function init(){
-    wc=Washes.create(sim,{gpu:false,pointer:false,paperColor:{r:0.97,g:0.975,b:0.99}});
+    wc=Washes.compat1(Washes.create(sim,{gpu:false,pointer:false,paperColor:{r:0.97,g:0.975,b:0.99}}));  // v1-surface pin
     G=wc.state(); const gx=n=>n*G.gridWidth, gy=n=>n*G.gridHeight;
     addEventListener('resize',()=>safe(()=>{G=wc.state();}),{passive:true});
     safe(()=>wc.flow(0.15)); safe(()=>wc.evaporation(0.8)); safe(()=>wc.edgeMode('open'));

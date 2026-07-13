@@ -24,7 +24,7 @@ marked shipped.*
    WebGL2, zero-size hosts, worker unavailability → warn once and fall
    back.
 
-## 1. Coordinates: normalized becomes THE space
+## 1. Coordinates: normalized becomes THE space — wc.grid + splashNorm SHIPPED (1.25, additive)
 
 v1 has five unit systems; brush size alone uses three across siblings.
 
@@ -44,7 +44,7 @@ v1 has five unit systems; brush size alone uses three across siblings.
 - `splash` gains the normalized form it always lacked; the timeline
   sidecar's `nradius` default aligns with the engine's (0.03).
 
-## 2. Run state: one policy + pause
+## 2. Run state: one policy + pause — run()/drying() SHIPPED (1.25, additive)
 
 v1: `pause/resume`, `pauseDrying`, `keepSimulating`, `runUntilDry`,
 auto-idle, the governor — five overlapping controls.
@@ -150,7 +150,21 @@ all four state planes).
 3. (done) event map + `once` — additive (new names first, old kept), in
    1.24 (DOM CustomEvents untouched; they become declared lowercase
    mirrors in the 2.0 batch)
-4. the rename/convention batch + compat shim → **2.0.0**
+4. the rename/convention batch + compat shim → **2.0.0**, in tranches:
+   - (done) **tranche 1** — additive beachhead, in 1.25: `run()`,
+     `drying()`, `wc.grid.*`, `splashNorm`, `exportImage`; `compat1()`
+     passthrough + frozen v1-surface snapshot + reflection test; all 18
+     page call sites wrapped in `compat1()` so Pages can't break at any
+     merge point.
+   - **tranche 2** — the flip, → 2.0.0: normalized-as-default renames,
+     `brushSize(fraction)`, chain-everywhere setters, get/set
+     unification, `'dry'` alias drop, `brushModes` static-only,
+     `exportPNG`/`pauseDrying`/`keepSimulating`/`runUntilDry`/grid-space
+     originals retire into the now-real compat1 adapter, DOM mirror
+     renames, typed tiers table, migration table in the CHANGELOG.
+     Goldens bit-exact throughout; pages already hold the adapter.
+   - **tranche 3** — 2.0.x: migrate pages off compat1 natively
+     (playground first), browser QA.
 5. sim-behavior fixes (browser QA) → 2.1
 
 ## Decisions needed (your taste) — ALL DECIDED 2026-07-13

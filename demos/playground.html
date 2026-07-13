@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Washes v1.0.18 — live engine, after Curtis et al. 1997</title>
+<title>Washes v1.0.19 — live engine, after Curtis et al. 1997</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Crimson+Pro:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -2229,7 +2229,7 @@
     <div class="docs-grid">
       <aside class="docs-nav" aria-label="Documentation table of contents">
         <div class="docs-nav-title">Washes</div>
-        <div class="docs-nav-subtitle">v1.0.18</div>
+        <div class="docs-nav-subtitle">v1.0.19</div>
         <nav>
           <!-- v0.21 — accordion sections. Each .docs-nav-group has a
                button-styled header (.docs-nav-section) plus a list of
@@ -2411,6 +2411,7 @@
             </button>
             <div class="docs-nav-items">
               <a href="#changelog" class="docs-nav-item">All versions</a>
+              <a href="#cl-1-0-19" class="docs-nav-item">v1.0.19 — compat1 pin</a>
               <a href="#cl-1-0-18" class="docs-nav-item">v1.0.18 — live engine</a>
               <a href="#cl-1-0-17" class="docs-nav-item">v1.0.17 — auto performance by default</a>
               <a href="#cl-1-0-16" class="docs-nav-item">v1.0.16 — pigments, masks, transparent, timeline</a>
@@ -5936,6 +5937,27 @@ node washes-test-harness.js ./watercolor-lib.js all</pre>
           standalone <code>.html</code> file kept in <code>/mnt/user-data/outputs/</code>
           so you can always go back to a previous version's exact behavior.
         </p>
+
+        <!-- ===== v1.0.19 ===== -->
+        <h2 id="cl-1-0-19">v1.0.19 &mdash; compat1 pin</h2>
+        <p>
+          The engine's API 2.0 arc has begun (all five design decisions are
+          made; see <code>docs/API_2_0_DESIGN.md</code>). This page now pins
+          itself to the v1 surface so the coming rename batch cannot break it.
+        </p>
+        <h3>Changed</h3>
+        <ul class="docs-list">
+          <li><span class="cl-tag cl-feature">infra</span>
+            <strong>Instance wrapped in <code>Washes.compat1()</code>.</strong>
+            A documented passthrough today; when engine 2.0 renames the
+            primary surface (normalized-as-default, chain-everywhere setters,
+            <code>exportImage</code>), the wrapper becomes the v1 adapter and
+            this page keeps working unchanged. At the time of this entry the
+            live engine is <strong>1.25.0</strong>, which also adds the
+            additive v2 names: <code>run()</code>, <code>drying()</code>,
+            <code>wc.grid.*</code>, <code>splashNorm</code>,
+            <code>exportImage</code>.</li>
+        </ul>
 
         <!-- ===== v1.0.18 ===== -->
         <h2 id="cl-1-0-18">v1.0.18 &mdash; live engine</h2>
@@ -9839,7 +9861,9 @@ host.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;';
 // lib's IIFE assigns `window.Watercolor` from inside itself, and we
 // now read it through the same path. Works identically in classic
 // script mode (since `window.X === X` for globals there too).
-const wc = window.Watercolor.create(host, { canvasScale: 1, gouacheMode: 'auto' });
+// v1.0.19 — wrapped in compat1(): pins the playground to the v1 surface so
+// the API 2.0 rename batch can't break it (a documented passthrough today).
+const wc = window.Watercolor.compat1(window.Watercolor.create(host, { canvasScale: 1, gouacheMode: 'auto' }));
 // v1.0.17 — auto performance from the first frame: the governor owns grid
 // resolution (full/half/quarter under load, art-preserving). The Quality
 // dropdown reads this state at wiring time, so it shows "Auto" on load.

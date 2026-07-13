@@ -60,7 +60,7 @@ if(Washes&&sim){
   let wc=null,G=null,hires=0;
   const log=s=>{ ledger.innerHTML+="\n"+s; };
   function init(){
-    wc=Washes.create(sim,{gpu:false,pointer:false,paperColor:{r:0.984,g:0.969,b:0.925}});
+    wc=Washes.compat1(Washes.create(sim,{gpu:false,pointer:false,paperColor:{r:0.984,g:0.969,b:0.925}}));  // v1-surface pin
     G=wc.state(); const gx=n=>n*G.gridWidth, gy=n=>n*G.gridHeight;
     safe(()=>wc.flow(0.15)); safe(()=>wc.evaporation(1.4)); safe(()=>wc.edgeMode('open')); safe(()=>wc.quality('auto'));
     // a faint standing river left->right with a gentle S

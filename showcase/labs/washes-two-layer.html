@@ -135,12 +135,12 @@
   const hud  = document.getElementById("hud");
 
   // ── Background layer: animated washes, no input, perf instrumentation on. ──
-  const bg = Washes.create(bgEl, { gpu: false });
+  const bg = Washes.compat1(Washes.create(bgEl, { gpu: false }));  // v1-surface pin
   bg.setAnimation("partlyCloudy");
   bg.perf(true);
 
   // ── Foreground layer: transparent + interactive (binds its own pointer events). ──
-  const fg = Washes.create(fgEl, { gpu: false });
+  const fg = Washes.compat1(Washes.create(fgEl, { gpu: false }));  // v1-surface pin
   fg.transparent(true);
   fg.pigment(0);
   fg.brushSize(28);

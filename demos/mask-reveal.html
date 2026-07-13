@@ -311,8 +311,8 @@ const status = document.getElementById('status');
 // ── init ──
 function init(){
   sizeAll(); buildGrain();
-  wc = Washes.create(sim, { gpu:false, pointer:false, transparent:true,
-                            paperColor:{r:1,g:1,b:1} });   // white paper → neutral mask alpha
+  wc = Washes.compat1(Washes.create(sim, { gpu:false, pointer:false, transparent:true,
+                            paperColor:{r:1,g:1,b:1} }));  // white paper → neutral mask alpha; compat1 = v1-surface pin
   G = wc.state();
   washCanvas = wc.canvas || (wc.el && wc.el('canvas')) || sim.querySelector('canvas');
   safe(()=> wc.transparent(true));

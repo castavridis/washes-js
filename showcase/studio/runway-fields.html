@@ -59,7 +59,7 @@ if(Washes&&sim){
   const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
   let wc=null,G=null;
   function init(){
-    wc=Washes.create(sim,{gpu:false,pointer:false,paperColor:{r:0.95,g:0.937,b:0.905}});
+    wc=Washes.compat1(Washes.create(sim,{gpu:false,pointer:false,paperColor:{r:0.95,g:0.937,b:0.905}}));  // v1-surface pin
     G=wc.state(); const gx=n=>n*G.gridWidth, gy=n=>n*G.gridHeight;
     safe(()=>wc.flow(0.14)); safe(()=>wc.evaporation(0.9)); safe(()=>wc.quality('auto'));
     safe(()=>wc.on('perflevel',d=>{ vb.textContent='auto · '+d.level; }));

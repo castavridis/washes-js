@@ -60,7 +60,7 @@ tap  = ping a return</div>
     if (Washes && stage){
       const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
       // paper pulled into the page's cool-grey hue family so the chart blends with the frame
-      const wc = Washes.create(stage, { gpu:true, pointer:false, paperColor:{ r:0.70, g:0.75, b:0.80 } });
+      const wc = Washes.compat1(Washes.create(stage, { gpu:true, pointer:false, paperColor:{ r:0.70, g:0.75, b:0.80 } }));  // v1-surface pin
       let G=wc.state();
       const gx=nx=>nx*G.gridWidth, gy=ny=>ny*G.gridHeight, safe=fn=>{try{return fn();}catch(_){}};
       addEventListener('resize', ()=>safe(()=>{G=wc.state();}), {passive:true});

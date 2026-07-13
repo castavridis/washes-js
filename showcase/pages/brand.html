@@ -213,7 +213,7 @@
       // create only once the panel has real pixel size (the in-flow aspect-ratio host
       // can measure 0 on first paint, which would build a 0x0 canvas)
       function init(){
-        wc = Washes.create(panel, { gpu:false, pointer:false, paperColor:{ r:0.91, g:0.81, b:0.63 } });
+        wc = Washes.compat1(Washes.create(panel, { gpu:false, pointer:false, paperColor:{ r:0.91, g:0.81, b:0.63 } }));  // v1-surface pin
         G = wc.state();
         safe(()=>wc.flow(0.14)); safe(()=>wc.evaporation(1.0)); safe(()=>wc.waterLoad&&wc.waterLoad(1.6));
         // settle layout, force a re-measure, then seed so the pools are sized correctly

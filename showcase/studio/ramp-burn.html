@@ -55,7 +55,7 @@ if(Washes&&sim){
   const bars=[ {x:0.10,h:0.62,waste:0.34},{x:0.30,h:0.78,waste:0.52},{x:0.50,h:0.50,waste:0.20},{x:0.70,h:0.68,waste:0.44},{x:0.90,h:0.84,waste:0.30} ];
   const $=v=>'$'+Math.round(v).toLocaleString();
   function init(){
-    wc=Washes.create(sim,{gpu:false,pointer:false,paperColor:{r:0.957,g:0.969,b:0.875}});
+    wc=Washes.compat1(Washes.create(sim,{gpu:false,pointer:false,paperColor:{r:0.957,g:0.969,b:0.875}}));  // v1-surface pin
     G=wc.state(); const gx=n=>n*G.gridWidth, gy=n=>n*G.gridHeight;
     safe(()=>wc.flow(0.13)); safe(()=>wc.evaporation(0.25)); safe(()=>wc.quality('auto'));
     function paintBars(){

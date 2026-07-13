@@ -46,7 +46,7 @@
     if (Washes && stage){
       const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
       // pointer:false → the engine won't paint with its default brush; WE own the bubble brush.
-      const wc = Washes.create(stage, { gpu:true, pointer:false, paperColor:{ r:0.05, g:0.18, b:0.27 } });
+      const wc = Washes.compat1(Washes.create(stage, { gpu:true, pointer:false, paperColor:{ r:0.05, g:0.18, b:0.27 } }));  // v1-surface pin
       let G = wc.state();
       const gx=nx=>nx*G.gridWidth, gy=ny=>ny*G.gridHeight, safe=fn=>{try{return fn();}catch(_){}};
       addEventListener('resize', ()=>safe(()=>{G=wc.state();}), {passive:true});

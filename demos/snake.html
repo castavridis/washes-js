@@ -319,7 +319,7 @@ function buildPalettePicker(){
 
 // ── init ──
 function init(){
-  wc = Washes.create(sim, { gpu:false, pointer:false, paperColor:{r:0.965,g:0.945,b:0.902} });
+  wc = Washes.compat1(Washes.create(sim, { gpu:false, pointer:false, paperColor:{r:0.965,g:0.945,b:0.902} }));  // v1-surface pin
   G = wc.state();
   safe(()=> wc.palette && wc.palette(PALETTES[activePalette].set));
   safe(()=> wc.flow(0.12));

@@ -50,7 +50,7 @@ const Washes = window.Washes;
 
 // ---- helpers --------------------------------------------------------------
 function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
-function newInst(host){const i=Washes.create(host,{gpu:false});const s=i.state();return {i,GW:s.gridWidth,GH:s.gridHeight};}
+function newInst(host){const i=Washes.compat1(Washes.create(host,{gpu:false}));const s=i.state();return {i,GW:s.gridWidth,GH:s.gridHeight};}
 function wetPaper(i){try{const wp=i.paperWetnessPresets&&i.paperWetnessPresets();if(wp&&wp.length){const pick=wp.find(n=>/wet|flood|soak|damp/i.test(n))||wp[wp.length-1];i.paperWetness(pick);}}catch(e){}}
 function bye(i){try{i.destroy();}catch(e){}}
 function paper(i,hex){try{const n=parseInt(hex.slice(1),16);i.paperColor(((n>>16)&255)/255,((n>>8)&255)/255,(n&255)/255);}catch(e){}}

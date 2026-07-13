@@ -137,35 +137,49 @@ export type HeatmapColor = string | [number, number, number];
 // =============================================================================
 
 /**
- * One epicenter for a splash. Coordinates are in display pixels relative to
- * the canvas host element. Velocity controls outward radial speed.
+ * One epicenter for a splash. Coordinates are GRID cells (the v1 space;
+ * {@link WashesInstance.splashNorm} takes the 0..1 form). Per-point
+ * overrides win over the preset's values.
  */
 export interface SplashEpicenter {
   x: number;
   y: number;
-  /** Outward radial velocity at the epicenter. Default ~40. */
+  /** Splash-zone radius in display pixels (scaled by canvasScale). Default: the preset's. */
+  radius?: number;
+  /** Outward radial velocity at the epicenter. Default: the preset's. */
   velocity?: number;
+  /** Peak pressure injection at the epicenter. Default: the preset's. */
+  pressure?: number;
 }
 
 /**
- * Options for a single splash call. Anything not specified falls back to the
- * library's current configuration (radius, pressure, etc.).
+ * v1.25 — one epicenter for {@link WashesInstance.splashNorm}: `x`/`y` are
+ * 0..1 fractions of the canvas; `radius` is a fraction of the smaller side
+ * (the convention every other `*Norm` radius uses). velocity/pressure are
+ * preset units, same as {@link SplashEpicenter}.
  */
-export interface SplashOptions {
-  /** Outer ring radius in display pixels. */
+export interface SplashEpicenterNorm {
+  x: number;
+  y: number;
   radius?: number;
-  /** Peak pressure at the epicenter. Drives the initial outward push. */
+  velocity?: number;
   pressure?: number;
-  /** Per-frame pressure decay multiplier. Range (0, 1]. Default ~0.94. */
-  liftRate?: number;
-  /** Angular offset for ray patterns, radians. */
+}
+
+/** Options for a single splash call (third positional argument). */
+export interface SplashOptions {
+  /** Radians to rotate each radial velocity vector around its epicenter. Default 0. (v0.58) */
   angleOffset?: number;
-  /** Random jitter on epicenter position, 0..1. */
-  jitter?: number;
-  /** Number of rays in the splash pattern. 1 = pure circular. */
-  rays?: number;
-  /** Pigment used by this splash. Default = active brush pigment. */
-  pigment?: PigmentOption;
+  /** Multiplier on velocity + pressure injection; pass 1/N when distributing an N-frame splash. Default 1. (v0.58) */
+  strengthMult?: number;
+  /** Skip the deposited→suspended lift and wet saturation — for the follow-up frames of a distributed splash. Default false. (v0.58) */
+  skipLift?: boolean;
+  /** 0..1 per-cell angular jitter of the radial field; smears the donor-cell cardinal bias within one frame. Default 0. (v0.59) */
+  jitterAmount?: number;
+  /** Replace each epicenter with N copies ring-arranged around it, each at full strength. Default 1. (v0.61) */
+  rayCount?: number;
+  /** Ring radius for ray placement, as a fraction of the splash's own radius. Default 0.05. (v0.61) */
+  rayOffsetFraction?: number;
 }
 
 /** Style of splash. Different presets shape the radial profile differently. */
@@ -583,6 +597,9 @@ export type WashesEventName = keyof WashesEventMap;
 /** v1.5 — governor levels (approximate cell count relative to base; renamed from high/medium/low in v1.8). */
 export type PerfLevel = 'full' | 'half' | 'quarter';
 
+/** v1.25 — run-state policies for {@link WashesInstance.run} (API 2.0 §2). */
+export type RunPolicy = 'auto' | 'until-dry' | 'always';
+
 /** v1.4 — report returned by {@link WashesInstance.diagnose}. */
 export interface DiagnoseReport {
   renderer: 'gpu' | 'cpu';
@@ -608,10 +625,24 @@ export interface WashesInstance {
   readonly target: HTMLElement;
   /** The `<canvas>` element the lib appended into `target`. */
   readonly canvas: HTMLCanvasElement;
-  /** Read-only grid dimensions in sim cells. */
+  /**
+   * The cell-space surface. `width`/`height` are live read-only grid dims
+   * (they change on rescale — don't cache). v1.25 grows this into the
+   * explicit cell-space home (API 2.0 §1): when 2.0 makes normalized the
+   * space of the primary names, code that genuinely thinks in grid cells
+   * lives here.
+   */
   readonly grid: {
     readonly width: number;
     readonly height: number;
+    /** v1.25 — exactly {@link WashesInstance.paintAt}: paint at grid coords with a grid-cell radius. */
+    paint(gx: number, gy: number, gridRadius: number, pigment?: PigmentOption, strength?: number): WashesInstance;
+    /** v1.25 */
+    toNorm(gx: number, gy: number): { nx: number; ny: number };
+    /** v1.25 */
+    fromNorm(nx: number, ny: number): { gx: number; gy: number };
+    /** v1.25 */
+    size(): { gridWidth: number; gridHeight: number };
   };
 
   // -----------------------------------------------------------------------
@@ -624,6 +655,16 @@ export interface WashesInstance {
   splash(style?: SplashStyle, ignored?: null, opts?: SplashOptions): WashesInstance;
   /** Object form: explicit coords and/or preset in one argument. */
   splash(spec: { coords?: SplashEpicenter[]; preset?: SplashStyle }, ignored?: null, opts?: SplashOptions): WashesInstance;
+
+  /**
+   * v1.25 — normalized twin of {@link WashesInstance.splash}: epicenter
+   * `x`/`y` are 0..1 fractions of the canvas, per-point `radius` a fraction
+   * of the smaller side. Becomes the plain `splash()` in 2.0. Same calling
+   * forms as splash().
+   */
+  splashNorm(epicenters: SplashEpicenterNorm[], style?: SplashStyle, opts?: SplashOptions): WashesInstance;
+  splashNorm(style?: SplashStyle, ignored?: null, opts?: SplashOptions): WashesInstance;
+  splashNorm(spec: { coords?: SplashEpicenterNorm[]; preset?: SplashStyle }, ignored?: null, opts?: SplashOptions): WashesInstance;
 
   /** List of named splash presets (e.g. `'default'`, `'bigSplash'`, `'fineSpritz'`). */
   splashPresets(): string[];
@@ -782,6 +823,15 @@ export interface WashesInstance {
   pauseDrying(v?: boolean): boolean;
 
   /**
+   * v1.25 — `pauseDrying` renamed to say what it does (API 2.0 §2):
+   * `drying(false)` pauses evaporation/drying, `drying(true)` resumes it,
+   * zero-arg reads whether drying is running. Chains (the v2 setter
+   * convention). `pauseDrying` moves into the compat shim in 2.0.
+   */
+  drying(): boolean;
+  drying(v: boolean): WashesInstance;
+
+  /**
    * Force the simulation to step every frame, even when the canvas is
    * quiet (no fresh paint). Default false — the lib auto-idles after a
    * brief grace period to save CPU/GPU. Set true to watch slow effects
@@ -805,6 +855,17 @@ export interface WashesInstance {
    * @returns the current runUntilDry state.
    */
   runUntilDry(v?: boolean): boolean;
+
+  /**
+   * v1.25 — ONE run-state policy (API 2.0 §2), replacing the
+   * `keepSimulating`/`runUntilDry` pair (both move into the compat shim in
+   * 2.0; `pause()` stays the one true freeze). `'auto'` idles when settled
+   * (the default), `'until-dry'` steps until bone dry then idles,
+   * `'always'` never idles. Writes the same internal flags as the v1
+   * controls, so the two surfaces cannot disagree.
+   */
+  run(): RunPolicy;
+  run(policy: RunPolicy): WashesInstance;
 
   /**
    * v1.4 — subscribe to lifecycle events. Returns an unsubscribe function.
@@ -1289,6 +1350,14 @@ export interface WashesInstance {
    * isn't transparent), the lib composites the paper color underneath
    * before encoding so the resulting image is self-contained.
    */
+  /**
+   * v1.25 — the honest name for {@link WashesInstance.exportPNG} (it
+   * encodes JPEG too via `mimeType`). Identical overloads; becomes the
+   * primary name in 2.0, with `exportPNG` in the compat shim.
+   */
+  exportImage(opts: { asBlob: true; transparent?: boolean; mimeType?: string; quality?: number }): Promise<Blob>;
+  exportImage(opts?: { transparent?: boolean; asBlob?: boolean; mimeType?: string; quality?: number }): string;
+
   exportPNG(opts: { asBlob: true; transparent?: boolean; mimeType?: string; quality?: number }): Promise<Blob>;
   exportPNG(opts?: {
     /** Force transparent background. Default: follows `transparent()` setting. */
@@ -1439,6 +1508,16 @@ export interface WashesStatic {
    * required by the caller anymore.
    */
   createHeadless(options?: CreateOptions & { width?: number; height?: number }): WashesInstance;
+
+  /**
+   * v1.25 — API 2.0 compat scaffolding. In 2.0 this wraps a v2 instance in
+   * the complete v1 surface (old names, old units, value-returning
+   * setters), warning once per distinct call site; it lives until 3.0.
+   * Today the instance already IS the v1 surface, so this is a documented
+   * passthrough — wrap your call sites now and the 2.0 flip cannot break
+   * them.
+   */
+  compat1(instance: WashesInstance): WashesInstance;
 
   /** v1.4 — the public surface tiered: start at core; tuning has defaults; debug diagnoses. */
   readonly tiers: { core: string[]; tuning: string[]; debug: string[] };

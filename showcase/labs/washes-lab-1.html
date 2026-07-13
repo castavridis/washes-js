@@ -59,7 +59,7 @@
 <script type="module">
 // ---------------------------------------------------------------------------
 // Helpers (shared) ----------------------------------------------------------
-function newInst(host){const i=Washes.create(host,{gpu:false,pointer:false});const s=i.state();return {i,GW:s.gridWidth,GH:s.gridHeight};}
+function newInst(host){const i=Washes.compat1(Washes.create(host,{gpu:false,pointer:false}));const s=i.state();return {i,GW:s.gridWidth,GH:s.gridHeight};}
 function canvasRect(host){const c=host&&host.querySelector&&host.querySelector('canvas');const r=(c||host).getBoundingClientRect();return {x:r.left,y:r.top,w:r.width||560,h:r.height||560};}
 function wetPaper(i){try{const wp=i.paperWetnessPresets&&i.paperWetnessPresets();if(wp&&wp.length){const pick=wp.find(n=>/wet|flood|soak|damp/i.test(n))||wp[wp.length-1];i.paperWetness(pick);}}catch(e){}}
 function bye(i){try{i.destroy();}catch(e){}}

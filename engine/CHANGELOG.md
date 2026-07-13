@@ -2,6 +2,61 @@
 
 All notable changes to **washes** are documented here. Dates are ISO 8601.
 
+## [1.25.0] — 2026-07-13
+
+**API 2.0 tranche 1 of the rename batch — the additive beachhead.** The
+v2 control surface arrives alongside v1, the compat scaffolding goes up,
+and every page in the repository pins itself to the v1 surface, so the
+2.0 flip (tranche 2) cannot break GitHub Pages at any merge point.
+
+### Added
+- **`run(policy)`** — one run-state control (`'auto' | 'until-dry' |
+  'always'`), replacing the `keepSimulating`/`runUntilDry` pair it will
+  retire into the compat shim in 2.0. Writes the same internal flags as
+  the v1 controls, so the two surfaces cannot disagree; zero-arg reads
+  the current policy back.
+- **`drying(v)`** — `pauseDrying` renamed to say what it does:
+  `drying(false)` pauses, `drying(true)` resumes, zero-arg reads. Chains.
+- **`wc.grid` grows into the cell-space home** (API 2.0 §1): `paint`
+  (exactly `paintAt`, proven bit-exact), `toNorm`, `fromNorm`, `size()`
+  join the existing live `width`/`height` getters.
+- **`splashNorm`** — the normalized splash form the API always lacked:
+  epicenter x/y as 0..1 fractions, per-point radius as a fraction of the
+  smaller side. Internally splash epicenters gained a pre-resolved
+  `radiusGrid` (null everywhere else — the px path is untouched and the
+  goldens prove it). Becomes plain `splash()` in 2.0.
+- **`exportImage`** — the honest name (it encodes JPEG too); identical
+  overloads to `exportPNG`, which becomes the compat spelling in 2.0.
+- **`Washes.compat1(instance)`** — the 2.0 migration keystone,
+  scaffolded: today a documented passthrough (the instance IS the v1
+  surface); in 2.0 it wraps a v2 instance in the complete v1 surface and
+  lives until 3.0. `tests/v1-surface.snapshot.json` freezes the v1
+  contract (143 members + typeof, regenerate via `npm run snapshot:v1`
+  only when 1.x intentionally adds API); `tests/compat-surface.test.mjs`
+  is the reflection test that holds compat1 to it forever.
+- `tests/api-v2-additive.test.mjs` — run() cross-consistency with the v1
+  pair, drying() inversion, grid.paint ≡ paintAt and splashNorm ≡ splash
+  bit-exact equivalences, exportImage ≡ exportPNG. Both new tests in CI.
+
+### Changed
+- **Every live page now creates its instance through
+  `Washes.compat1(...)`** — the hero, all three demos, and the fourteen
+  showcase pieces (18 call sites; docs snippets untouched). A no-op
+  today; the point is that tranche 2's renames land under pages already
+  holding the v1 adapter. Playground → demo v1.0.19 (in-app changelog
+  entry).
+
+### Fixed
+- `SplashEpicenter`/`SplashOptions` in the d.ts were the next two
+  signature-level fictions (the 1.23 theme continues): epicenters were
+  documented as display-pixel coords (they are grid cells) missing their
+  radius/pressure overrides, and SplashOptions declared six members the
+  runtime never reads (`radius`, `pressure`, `liftRate`, `jitter`,
+  `rays`, `pigment`) while omitting five of the six it does
+  (`strengthMult`, `skipLift`, `jitterAmount`, `rayCount`,
+  `rayOffsetFraction`). The per-point `lift` override is carried but
+  never consumed, so it stays undeclared.
+
 ## [1.24.0] — 2026-07-13
 
 P2 slice 3, API 2.0 sequencing item 3 (additive half): one event system.

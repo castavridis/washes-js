@@ -37,7 +37,7 @@ const splashes: SplashEpicenter[] = [
   { x: 200, y: 200, velocity: 50 },
 ];
 wc.splash(splashes, 'deluge');
-wc.splash([{ x: 0, y: 0 }], 'default', { radius: 200, pressure: 30 });
+wc.splash([{ x: 0, y: 0, radius: 200, pressure: 30 }], 'default', { rayCount: 4, jitterAmount: 0.5 });
 
 // --- Pigment selection ---
 const p1: PigmentOption = 0;
@@ -109,6 +109,33 @@ wc.background(null);
 const bg: string = wc.background();
 
 // --- v0.90: pause / resume ---
+// --- v1.25: additive v2 surface ---
+import type { RunPolicy, SplashEpicenterNorm } from '../src/washes';
+
+const policy: RunPolicy = wc.run();
+wc.run('until-dry').run('auto');
+console.log(policy);
+const dryingOn: boolean = wc.drying();
+wc.drying(false).drying(true);
+console.log(dryingOn);
+const gw: number = wc.grid.width;
+const dims = wc.grid.size();
+const nPt = wc.grid.toNorm(10, 20);
+const gPt = wc.grid.fromNorm(nPt.nx, nPt.ny);
+wc.grid.paint(gPt.gx, gPt.gy, 6, 'blue', 0.8).pause();
+console.log(gw, dims.gridWidth, dims.gridHeight);
+const nEpi: SplashEpicenterNorm[] = [{ x: 0.5, y: 0.5, radius: 0.1 }];
+wc.splashNorm(nEpi, 'bigSplash').splashNorm('fineSpritz', null, { rayCount: 4 });
+const imgUrl: string = wc.exportImage();
+console.log(imgUrl.length);
+async function blobExample() {
+  const b = await wc.exportImage({ asBlob: true });
+  console.log(b.size);
+}
+blobExample();
+const same: WashesInstance = Washes.compat1(wc);
+console.log(same === wc);
+
 // --- v1.24: typed event map + once() ---
 import type { WashesEventMap, PerfLevel } from '../src/washes';
 

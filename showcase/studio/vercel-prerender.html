@@ -59,7 +59,7 @@ if(Washes&&sim){
   let wc=null,G=null,busy=false;
   const log=(s,strong)=>{ term.innerHTML += "\n"+(strong?"<b>"+s+"</b>":s); term.scrollTop=term.scrollHeight; };
   function init(){
-    wc=Washes.create(sim,{gpu:false,pointer:false,paperColor:{r:1,g:1,b:1}});
+    wc=Washes.compat1(Washes.create(sim,{gpu:false,pointer:false,paperColor:{r:1,g:1,b:1}}));  // v1-surface pin
     G=wc.state();
     safe(()=>wc.flow(0.12)); safe(()=>wc.evaporation(1.6)); safe(()=>wc.quality('auto'));
     // ink = all three pigments stacked → chromatic black that splits at wet edges

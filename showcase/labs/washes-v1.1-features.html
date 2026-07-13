@@ -100,7 +100,7 @@
 
 <script type="module">
 const host = document.getElementById('stage');
-const wc = window.Washes.create(host, { gpu:false, pointer:false });
+const wc = window.Washes.compat1(window.Washes.create(host, { gpu:false, pointer:false }));  // v1-surface pin
 const $ = id => document.getElementById(id);
 const statusEl = $('status');
 const status = m => { statusEl.textContent = m; };
