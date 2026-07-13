@@ -42,6 +42,9 @@ let bindConsts = null;
 // re-reads it at every exported call, so updates apply with step granularity
 // — the same visibility the in-process CPU backend has.
 let live = null;
+// v1.21 — per-mode texture brush noise fields (crayon/dryBrush/salt/
+// splatter), uploaded via 'brushField' messages.
+const brushFields = Object.create(null);
 
 function makeFields(N) {
   const F = () => new Float32Array(N);
@@ -89,13 +92,28 @@ port.on((msg) => {
       if (msg.id != null) port.post({ t: 'stepped', id: msg.id, n });
       break;
     }
+    case 'brushField': {
+      // v1.21 — texture brush noise fields, uploaded once per mode (and
+      // re-uploaded on resolution change). Stamps reference them by mode
+      // name so a grid-sized array doesn't ride along with every dab —
+      // the same shape as the GPU handle's setBrushTexture.
+      brushFields[msg.mode] = msg.field;
+      if (msg.id != null) port.post({ t: 'brushFieldSet', id: msg.id, mode: msg.mode });
+      break;
+    }
     case 'stamp': {
       // v1.20 — resolved stamps (see washes-sim-core.js applyStamp). The
       // caller owns rect growth, so mirror the host's paintAt preamble.
+      // v1.21 — texture stamps carry texture.mode; substitute the cached
+      // noise field before handing the stamp to the core.
       for (const s of msg.stamps) {
         if (s.texture) {
-          port.post({ t: 'error', error: 'texture stamps need a brush-field upload protocol (follow-up); send kind pigment/rainbow/water/lift/paper/mask' });
-          continue;
+          const field = brushFields[s.texture.mode];
+          if (!field) {
+            port.post({ t: 'error', error: `texture stamp for mode "${s.texture.mode}" before its brushField upload` });
+            continue;
+          }
+          s.texture.field = field;
         }
         core.expandActiveRect(s.cx, s.cy, s.radius);
         core.applyStamp(s);

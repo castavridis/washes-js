@@ -46,6 +46,7 @@ export function createWorkerBackend(port, opts) {
   let destroyed = false;
   let nextId = 1;
   const pending = new Map(); // id -> {resolve, reject, kind, out?}
+  const uploadedFields = new Set(); // texture modes with a brush field uploaded
 
   let readyResolve;
   const ready = new Promise((res) => { readyResolve = res; });
@@ -112,12 +113,24 @@ export function createWorkerBackend(port, opts) {
     },
 
     /**
+     * v1.21 — upload a texture-brush noise field once per mode (and again
+     * after a resolution change). Texture stamps then reference the mode
+     * by name instead of carrying a grid-sized array per dab — the same
+     * shape as the GPU handle's setBrushTexture.
+     */
+    uploadBrushField(mode, field) {
+      if (destroyed) return Promise.resolve();
+      uploadedFields.add(mode);
+      return request({ t: 'brushField', mode, field });
+    },
+
+    /**
      * v1.20 — accepts RESOLVED stamps (the washes-sim-core applyStamp
      * shape: kind + grid coords + pre-resolved gains/weights), which the
-     * worker applies with the identical deposit math. Texture-mode stamps
-     * are the one remaining gap: their noise field is a grid-sized host
-     * array that needs a brush-field upload protocol (follow-up) — the
-     * worker rejects them with that guidance.
+     * worker applies with the identical deposit math. v1.21 — texture
+     * stamps ride too: set texture.mode to a previously uploaded brush
+     * field (texture.field stays null on the wire; the worker substitutes
+     * its cached array).
      */
     stampBrush(stamps) {
       if (destroyed || !stamps || !stamps.length) return;
@@ -130,10 +143,18 @@ export function createWorkerBackend(port, opts) {
           );
         }
         if (s.texture) {
-          throw new Error(
-            'washes worker backend: texture-mode stamps are not routed yet ' +
-            '(their noise field needs a brush-field upload protocol).'
-          );
+          if (s.texture.field) {
+            throw new Error(
+              'washes worker backend: texture stamps must not carry the field array — ' +
+              'uploadBrushField(mode, field) once, then reference texture.mode.'
+            );
+          }
+          if (!s.texture.mode || !uploadedFields.has(s.texture.mode)) {
+            throw new Error(
+              `washes worker backend: texture mode "${s.texture && s.texture.mode}" has no ` +
+              'uploaded brush field — call uploadBrushField(mode, field) first.'
+            );
+          }
         }
       }
       port.post({ t: 'stamp', stamps });

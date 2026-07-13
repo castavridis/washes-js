@@ -76,9 +76,35 @@ const start = packState(fields, allocState(N));
 // v1.20 — the run now PAINTS midway on both sides: resolved stamps of every
 // worker-routable kind (pigment, rainbow-with-carried-weights, water, mask),
 // applied through core.applyStamp locally and via backend.stampBrush remotely.
+// v1.21 — a deterministic noise field for the texture-stamp leg (mulberry32,
+// same generator the harness seeds with)
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const crayonField = new Float32Array(N);
+{
+  const rnd = mulberry32(0xC0FFEE);
+  for (let i = 0; i < N; i++) crayonField[i] = rnd();
+}
+const CRAYON_TEXTURE = {
+  baseThresh: 0.45, bandHalf: 0.10, anisoK: 1.2, paperWeight: 0.55,
+  bristleK: 0.15, motionX: 0.8, motionY: 0.6,
+};
+
 const STAMPS = [
   { kind: 'pigment', cx: 30, cy: 20, radius: 6, strength: 0.8, channel: 1,
     depositMult: 1, wetGain: 0.45, presGain: 0.18, texture: null },
+  // textured crayon stamp: local carries the field ref; the worker gets the
+  // field via uploadBrushField and references it by mode
+  { kind: 'pigment', cx: 52, cy: 28, radius: 8, strength: 0.9, channel: 0,
+    depositMult: 1, wetGain: 0.45 * 0.7, presGain: 0.18 * 0.7,
+    texture: { ...CRAYON_TEXTURE, field: crayonField } },
   { kind: 'rainbow', cx: 60, cy: 50, radius: 7, strength: 0.7,
     weights: [0.5, 0.3, 0.2], depositMult: 1, wetGain: 0.45, presGain: 0.18 },
   { kind: 'water', cx: 48, cy: 36, radius: 8, strength: 0.6,
@@ -100,8 +126,12 @@ const backend = createWorkerBackend(wrapWorkerPort(worker), {
 });
 await backend.ready;
 await backend.uploadState(start);
+await backend.uploadBrushField('crayon', crayonField);
 await backend.stepN(STEPS);
-backend.stampBrush(STAMPS);
+// wire form: texture stamps reference the uploaded mode, no field array
+backend.stampBrush(STAMPS.map((s) => s.texture
+  ? { ...s, texture: { ...s.texture, field: null, mode: 'crayon' } }
+  : s));
 await backend.stepN(STEPS);
 const workerEnd = allocState(N);
 await backend.downloadState(workerEnd);
@@ -128,8 +158,10 @@ assert.ok(sum(workerEnd.fluid) !== 0, 'fluid state evolved');
 // contract edges — raw (unresolved) stamps and texture stamps fail loud
 assert.throws(() => backend.stampBrush([{ cx: 1, cy: 1, radius: 2, brushType: 0 }]),
   /RESOLVED/, 'raw scaffold stamps fail loud with guidance');
-assert.throws(() => backend.stampBrush([{ kind: 'pigment', cx: 1, cy: 1, radius: 2, strength: 1, channel: 0, depositMult: 1, wetGain: 0.45, presGain: 0.18, texture: { field: null } }]),
-  /texture/, 'texture stamps fail loud pending the brush-field protocol');
+assert.throws(() => backend.stampBrush([{ kind: 'pigment', cx: 1, cy: 1, radius: 2, strength: 1, channel: 0, depositMult: 1, wetGain: 0.45, presGain: 0.18, texture: { field: null, mode: 'salt' } }]),
+  /no uploaded brush field/, 'texture stamps require their mode uploaded first');
+assert.throws(() => backend.stampBrush([{ kind: 'pigment', cx: 1, cy: 1, radius: 2, strength: 1, channel: 0, depositMult: 1, wetGain: 0.45, presGain: 0.18, texture: { field: crayonField, mode: 'crayon' } }]),
+  /must not carry the field/, 'texture stamps must not ship the array per dab');
 backend.destroy();
 await new Promise((res) => worker.on('exit', res));
 

@@ -2,6 +2,32 @@
 
 All notable changes to **washes** are documented here. Dates are ISO 8601.
 
+## [1.21.0] — 2026-07-13
+
+P1 slice 8: texture brushes cross the worker boundary — every brush mode
+now paints off-thread.
+
+### Added
+- **Brush-field upload protocol.** `uploadBrushField(mode, field)` on the
+  worker backend sends a texture-brush noise field once per mode (and
+  again after a resolution change); texture stamps then reference
+  `texture.mode` on the wire instead of carrying a grid-sized array per
+  dab — the same shape as the GPU handle's `setBrushTexture`. The worker
+  substitutes its cached array before handing the stamp to the core.
+  Fail-loud edges: a stamp whose mode has no uploaded field, and a stamp
+  that tries to carry the array inline.
+- Parity proof extended: the worker test's stamp leg now includes a
+  crayon-style textured stamp (deterministic noise field, anisotropy,
+  bristle skip, paper blend) — still **bit-exact** across all four state
+  planes.
+
+### Notes
+- The `pigment-data` part's graduation was scoped and DEFERRED: the part
+  is mislabeled — it holds the Curtis data *plus* a large block of
+  mutable host state (pause/gravity/heatmap/brush state) and stateful
+  pigment functions. A data-only module needs that boundary re-cut
+  first; it stays a verbatim fragment until then.
+
 ## [1.20.0] — 2026-07-13
 
 P1 slice 7 (migration Phase 1): the brush deposit lives in the core —

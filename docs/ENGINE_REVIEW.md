@@ -102,6 +102,17 @@ packaging, and GPU paths. Line references are into `engine/src/washes.js` /
 > worker parity test paints mid-run — 240 steps with stamps on both
 > paths, byte-identical. Remaining #8: browser frame-loop integration;
 > texture brush-field protocol.
+>
+> **P1 slice 8 (branch `engine-review-p1-slice8` → engine 1.21.0):
+> texture brushes cross the worker boundary.** `uploadBrushField(mode,
+> field)` sends the noise field once per mode; texture stamps reference
+> `texture.mode` on the wire (GPU setBrushTexture's shape); the parity
+> test's crayon-style textured stamp (anisotropy + bristle skip + paper
+> blend) is bit-exact. The pigment-data graduation was scoped and
+> deferred — that part is data PLUS mutable host state, and needs its
+> boundary re-cut first. What remains of the whole review's engineering
+> is browser-facing (frame-loop integration; GPU render validation;
+> the P2 API 2.0 batch), all needing real-browser QA.
 
 ---
 

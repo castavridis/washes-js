@@ -81,6 +81,10 @@ export type ResolvedStamp =
       channel: number; depositMult: number; wetGain: number; presGain: number;
       texture: {
         field: Float32Array | null;
+        /** Worker wire form (v1.21): field stays null and `mode` names a
+         *  brush field previously sent via uploadBrushField(). Ignored by
+         *  the core itself — the worker substitutes the cached array. */
+        mode?: string;
         baseThresh: number; bandHalf: number; anisoK: number;
         paperWeight: number; bristleK: number;
         motionX: number; motionY: number;
