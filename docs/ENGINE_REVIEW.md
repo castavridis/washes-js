@@ -56,6 +56,16 @@ packaging, and GPU paths. Line references are into `engine/src/washes.js` /
 > full battery, CI verifies `npm pack`. Remaining in P1: the module
 > extraction proper (#6) and the worker backend (#8) — both now
 > materially easier behind the seam.
+>
+> **P1 slice 4 (branch `engine-review-p1-slice4` → engine 1.17.0):** the
+> extraction is underway — 2,142 lines carved into `src/parts/`
+> (`pigment-data`, `sim-core`, `sim-backend`) as source-of-truth
+> fragments assembled verbatim into `washes.js` by `scripts/assemble.cjs`
+> (CI-enforced, byte-stable; the carve-out's only `washes.js` diff is the
+> sentinel comments and every golden stayed bit-exact). The physics now
+> has an editable home a tenth the size of the monolith. Next: graduate
+> `sim-core` to a real module behind the SimBackend seam, then the worker
+> backend (#8).
 
 ---
 

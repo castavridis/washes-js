@@ -14,7 +14,7 @@ links to everything below. The flagship demo is the
 |---|---|
 | `index.html` | Landing page (GitHub Pages entry) — a live, paintable engine hero plus navigation |
 | `demos/` | `playground.html` (the full instrument, with built-in docs + changelog) · `snake.html` ("Serpentine") · `mask-reveal.html` ("Develop") |
-| `engine/` | The `washes` npm-shaped package, v1.16.0 — `src/` (core, GPU sim, timeline sidecar, typings, shader), `tests/`, `dist/washes.standalone.js` for classic script tags |
+| `engine/` | The `washes` npm-shaped package, v1.17.0 — `src/` (core, GPU sim, timeline sidecar, typings, shader), `tests/`, `dist/washes.standalone.js` for classic script tags |
 | `presets/` | Saved brush/palette modules (`rainbow-spray`, `reveal-blue`) |
 | `showcase/` | Finished pieces: `pages/` (GRAIN, Surfacing, VANTAGE) · `studio/` (six brand studies) · `personality/` (ten temperament studies) · `labs/` (physics + experiments) |
 | `reference/papers/` | Seven interactive explainers of the papers the engine is built on |
@@ -23,7 +23,7 @@ links to everything below. The flagship demo is the
 
 ## Two changelogs, by design
 
-- **`engine/CHANGELOG.md`** tracks the engine package (0.98.0 → 1.16.0).
+- **`engine/CHANGELOG.md`** tracks the engine package (0.98.0 → 1.17.0).
 - **The playground's in-app changelog** (docs panel) tracks the demo itself
   (v0.1 → v1.0.17). A demo release that embeds a new engine says so — e.g.
   "v1.0.16 — engine 1.12.1: pigments, masks, transparent, timeline".

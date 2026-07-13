@@ -1284,6 +1284,8 @@ function initGpuSim(gl, GW, GH) {
 
     ("use strict");
 
+    // >>> PART pigment-data BEGIN — assembled from src/parts/pigment-data.part.js;
+    // edit THAT file, then run `npm run assemble` (CI enforces --check).
     // ============================================================
     // PIGMENT DATA — from Figure 5 of Curtis et al. 1997
     // K, S coefficients given per RGB channel; rho = density,
@@ -1864,6 +1866,7 @@ function initGpuSim(gl, GW, GH) {
     let _brushFlow = 0.4;
     let _usePointerPressure = false;
 
+    // <<< PART pigment-data END
     // ============================================================
     // GRID — sized to fit the viewport. SCALE display pixels per cell.
     // Computed once at module load; window resize is not handled (would
@@ -2056,6 +2059,8 @@ function initGpuSim(gl, GW, GH) {
     // values while writing this-step values into wet[].
     let wet_tmp = new Float32Array(N);
 
+    // >>> PART sim-core BEGIN — assembled from src/parts/sim-core.part.js;
+    // edit THAT file, then run `npm run assemble` (CI enforces --check).
     // ============================================================
     // IDLE-SKIP STATE — declared early so paintAt / resetSim / rewet can
     // reference markCanvasActive at init without hitting a TDZ on the
@@ -3513,6 +3518,9 @@ function initGpuSim(gl, GW, GH) {
       }
     }
 
+    // <<< PART sim-core END
+    // >>> PART sim-backend BEGIN — assembled from src/parts/sim-backend.part.js;
+    // edit THAT file, then run `npm run assemble` (CI enforces --check).
     // ============================================================
     // SIM BACKEND SEAM (v1.16 — docs/gpu-migration MIGRATION.md Phase 0,
     // now in production). The de-facto contract the GPU module already
@@ -3618,6 +3626,7 @@ function initGpuSim(gl, GW, GH) {
         },
       };
     })();
+    // <<< PART sim-backend END
 
     // ============================================================
     // KUBELKA–MUNK COMPOSITING (§5)

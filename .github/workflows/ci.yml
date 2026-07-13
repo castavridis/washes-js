@@ -27,6 +27,8 @@ jobs:
         run: node tests/gpu-sync.test.cjs
       - name: GPU single-sourcing (embedded block regenerates byte-identical)
         run: node scripts/sync-gpu.cjs --check
+      - name: parts assembly (src/parts fragments match washes.js)
+        run: node scripts/assemble.cjs --check
       - name: bare-Node headless (no DOM shim)
         run: node tests/headless-bare.test.mjs
       - name: npm pack sanity (tarball assembles with declared files)

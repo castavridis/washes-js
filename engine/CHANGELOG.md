@@ -2,6 +2,26 @@
 
 All notable changes to **washes** are documented here. Dates are ISO 8601.
 
+## [1.17.0] — 2026-07-12
+
+P1 slice 4: the extraction begins for real — 2,142 lines of `washes.js`
+now live as source-of-truth part files.
+
+### Changed
+- **Three sections of `washes.js` are assembled from `src/parts/`.**
+  `pigment-data.part.js` (the Curtis Fig. 5 pigment sets + tool
+  sentinels), `sim-core.part.js` (the physics: rect tracking, paper,
+  blurs, edge darkening, velocity, advection, drainage, transfer,
+  evaporation, `simStep`), and `sim-backend.part.js` (the seam) are
+  spliced verbatim between `PART` sentinels by `scripts/assemble.cjs`
+  (`npm run assemble`; CI enforces `--check`). `washes.js` remains one
+  self-contained, directly loadable file — the parts are where you edit.
+  Because the splice is verbatim closure text, the carve-out itself is
+  provably behavior-free: the only `washes.js` diff is the sentinel
+  comments, and every golden stayed bit-exact. Parts graduate to real
+  ES modules as their seams land (sim core is next, behind SimBackend);
+  see `src/parts/README.md` for the rules.
+
 ## [1.16.0] — 2026-07-12
 
 P1 slice 3: the backend seam from the migration plan is now production
