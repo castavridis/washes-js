@@ -1,18 +1,27 @@
-// washes-test-harness.js
+// washes-test-harness.cjs
 //
-// Headless Node.js test harness for the Washes watercolor lib,
-// extracted from the diagnostic scripts that drove the v0.56-v0.72
-// bug-hunting arc.
+// Headless Node.js test harness for the Washes watercolor lib, extracted
+// from the diagnostic scripts that drove the v0.56-v0.72 bug-hunting arc.
 //
-// The lib targets browsers but its core simulation is pure JS arrays
-// and math. This harness stubs the DOM/Canvas APIs so the lib can be
-// loaded in Node, then injects per-test `_debug_*` helpers via string
-// replacement before eval'ing the source. The result: a few seconds
-// of numerical inspection instead of staring at rendered output for
-// 13 versions.
+// The lib targets browsers but its core simulation is pure JS arrays and
+// math. This harness stubs the DOM/Canvas APIs (tests/dom-shim.cjs) so the
+// lib can be loaded in Node, then injects per-test `_debug_*` helpers via
+// string replacement before eval'ing the source.
+//
+// v2 (engine-review P0): the patterns now ASSERT, not just print.
+//   - Math.random is seeded (mulberry32) so every run is reproducible;
+//     paper noise, splash jitter, and granulation are deterministic.
+//   - Each pattern checks its documented expectations with tolerance
+//     bands; any failure makes the process exit non-zero (CI-able).
+//   - New `equivalence` pattern: drives scripted scenarios and compares
+//     per-field statistics against tests/equivalence-goldens.json.
+//     `--golden=write` records goldens; `--golden=check` (default when
+//     the file exists) fails on drift beyond ~1e-9 relative. Regenerate
+//     goldens ONLY for a change that intentionally alters simulation
+//     behavior, and say so in the commit message.
 //
 // USAGE:
-//   node washes-test-harness.js  /path/to/watercolor-lib.js  [pattern]
+//   node washes-test-harness.cjs /path/to/washes.js [pattern] [--seed=N] [--golden=write|check]
 //
 // PATTERNS:
 //   anisotropy     — cardinal vs diagonal advection ratio (v0.69 √2 bug)
@@ -21,139 +30,56 @@
 //                    their neighbors (v0.71-0.72 verification)
 //   cfl            — CFL stability bound for explicit advection
 //   mass-balance   — closed/open/gravity edge mode verification (v0.84)
+//   equivalence    — golden field-statistics regression over scripted
+//                    scenarios (engine-review P0)
+//   active-rect    — active-region tracking behavior (tighten/empty)
 //   all            — run all patterns
-//
-// EXAMPLE:
-//   node washes-test-harness.js ./watercolor-lib.js anisotropy
-//
-// This file is meant to be copied and adapted — each pattern below
-// is a self-contained example of the diagnostic technique it was
-// named after.
 
 'use strict';
 
 const fs = require('fs');
+const path = require('path');
+const { makeEl, installMockDOM, seedMathRandom, mulberry32 } = require('./dom-shim.cjs');
 
 // ---------------------------------------------------------------------------
-// Mock DOM. Just enough to get window.Washes.create() to run. None of these
-// stubs do anything useful visually — they just satisfy the lib's bootstrap
-// code that touches document/window/canvas APIs.
+// CLI
 // ---------------------------------------------------------------------------
 
-function makeEl(tag) {
-  const e = {
-    tagName: (tag || 'div').toUpperCase(),
-    nodeName: (tag || 'div').toUpperCase(),
-    attributes: {},
-    children: [],
-    childNodes: [],
-    style: {},
-    dataset: {},
-    parentNode: null,
-    parentElement: null,
-    width: 1024,
-    height: 768,
-    _listeners: {},
-    ownerSVGElement: null,
-    classList: {
-      toggle() {}, add() {}, remove() {}, contains() { return false; },
-    },
-    setAttribute(n, v) { this.attributes[n] = String(v); },
-    getAttribute(n) {
-      return Object.prototype.hasOwnProperty.call(this.attributes, n)
-        ? this.attributes[n] : null;
-    },
-    appendChild(c) {
-      this.children.push(c);
-      this.childNodes.push(c);
-      c.parentNode = this;
-      c.parentElement = this;
-      return c;
-    },
-    removeChild(c) {
-      this.children = this.children.filter((x) => x !== c);
-      return c;
-    },
-    replaceChildren() {
-      this.children = [];
-      this.childNodes = [];
-    },
-    addEventListener(t, fn) {
-      this._listeners[t] = this._listeners[t] || [];
-      this._listeners[t].push(fn);
-    },
-    removeEventListener() {},
-    dispatchEvent(ev) {
-      (this._listeners[ev.type] || []).forEach((f) => f(ev));
-      return true;
-    },
-    setPointerCapture() {},
-    releasePointerCapture() {},
-    getBoundingClientRect() {
-      return { left: 0, top: 0, right: 1080, bottom: 900, width: 1080, height: 900, x: 0, y: 0 };
-    },
-    toDataURL() { return 'data:image/png;base64,F'; },
-    toBlob(cb) { setTimeout(() => cb({ size: 1, type: 'image/png' }), 0); },
-    querySelector() { return null; },
-    querySelectorAll() { return []; },
-    getContext(t) {
-      if (t === 'webgl2') return null;
-      return {
-        createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4), width: w, height: h }),
-        getImageData: (x, y, w, h) => ({ data: new Uint8ClampedArray(w * h * 4), width: w, height: h }),
-        putImageData() {}, drawImage() {}, clearRect() {}, fillRect() {}, fillText() {},
-        measureText() { return { width: 50 }; },
-        save() {}, restore() {}, translate() {}, rotate() {}, scale() {},
-        imageSmoothingEnabled: true, imageSmoothingQuality: 'high',
-        fillStyle: '', strokeStyle: '', font: '',
-        textBaseline: '', textAlign: '',
-        globalAlpha: 1, globalCompositeOperation: 'source-over',
-      };
-    },
-  };
-  return e;
+const args = process.argv.slice(2);
+const flags = {};
+const positional = [];
+for (const a of args) {
+  if (a.startsWith('--')) {
+    const [k, v] = a.slice(2).split('=');
+    flags[k] = v === undefined ? true : v;
+  } else positional.push(a);
+}
+const libPath = positional[0];
+const pattern = positional[1] || 'all';
+const SEED = flags.seed ? (Number(flags.seed) >>> 0) : 0xDEADBEEF;
+const GOLDEN_PATH = path.join(__dirname, 'equivalence-goldens.json');
+
+// ---------------------------------------------------------------------------
+// Assertion plumbing. Failures are loud, counted, and turn the exit code.
+// ---------------------------------------------------------------------------
+
+let CHECKS = 0;
+let FAILURES = 0;
+
+function check(cond, msg) {
+  CHECKS++;
+  if (!cond) {
+    FAILURES++;
+    console.error(`  ✗ FAIL: ${msg}`);
+  }
+  return cond;
 }
 
-function installMockDOM() {
-  global.document = {
-    _body: makeEl('body'),
-    createElement: (t) => makeEl(t),
-    createElementNS: (ns, t) => makeEl(t),
-    getElementById: () => null,
-    querySelectorAll: () => [],
-    documentElement: { style: { setProperty() {} }, dataset: {} },
-  };
-  global.document.body = global.document._body;
-  global.window = {
-    innerWidth: 1080,
-    innerHeight: 900,
-    devicePixelRatio: 1,
-    addEventListener() {},
-    location: { search: '' },
-    requestAnimationFrame: () => 0,
-    cancelAnimationFrame: () => {},
-    matchMedia: () => ({ matches: false }),
-  };
-  // navigator and performance became read-only getters on global in Node 20+;
-  // defineProperty works where direct assignment doesn't.
-  Object.defineProperty(global, 'navigator', {
-    value: { maxTouchPoints: 0 },
-    configurable: true, writable: true,
-  });
-  Object.defineProperty(global, 'performance', {
-    value: { now: () => Date.now() },
-    configurable: true, writable: true,
-  });
-  global.requestAnimationFrame = () => 0;
-  global.cancelAnimationFrame = () => {};
-  global.URLSearchParams = URLSearchParams;
-  global.URL = { createObjectURL: () => 'blob:fake', revokeObjectURL: () => {} };
-  global.Blob = function () {};
-  global.DOMParser = function () {
-    return { parseFromString: () => ({ querySelector: () => null, querySelectorAll: () => [] }) };
-  };
-  global.Image = function () {};
-  global.CustomEvent = function (t, o) { this.type = t; this.detail = o && o.detail; };
+function checkRange(val, lo, hi, msg) {
+  return check(
+    Number.isFinite(val) && val >= lo && val <= hi,
+    `${msg} — got ${val}, expected [${lo} .. ${hi}]`
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -176,19 +102,28 @@ function loadLibWithHelpers(libPath, extraMethods) {
   return global.window.Washes;
 }
 
+// Shared injection snippets used by several patterns.
+const INJECT_SIMSTEP = `
+    _debug_simStep(n) { for (let i = 0; i < n; i++) simStep(); },`;
+const INJECT_GRID = `
+    _debug_grid() { return { GW, GH, N }; },`;
+const INJECT_RECT = `
+    _debug_rect() {
+      return { minX: activeMinX, maxX: activeMaxX, minY: activeMinY, maxY: activeMaxY,
+               empty: activeMaxX < activeMinX || activeMaxY < activeMinY };
+    },`;
+
 // ===========================================================================
 // PATTERN 1 — Anisotropy detection
 // ===========================================================================
 // This is the test that found the v0.69 cross-artifact root cause. After 13
-// versions of patching the pigment advection code (donor-cell, flux clamp,
-// substep CFL, semi-Lagrangian, mass-conserving semi-Lagrangian), the cross
-// still appeared. Comparing pigment density at distance d in cardinal vs
-// diagonal directions revealed a ratio of √2 — the tell of an L1-vs-L2 norm
-// confusion. Root cause: per-axis velocity clamp instead of magnitude clamp.
+// versions of patching the pigment advection code, comparing pigment density
+// at distance d in cardinal vs diagonal directions revealed a ratio of √2 —
+// the tell of an L1-vs-L2 norm confusion (per-axis velocity clamp).
+// Assertion: default (semilag) advection stays isotropic at every velocity.
 // ---------------------------------------------------------------------------
 
 function runAnisotropy(libPath) {
-  installMockDOM();
   const Washes = loadLibWithHelpers(libPath, `
     _debug_run(n) {
       for (let i = 0; i < n; i++) { movePigment(); transferPigment(); }
@@ -223,24 +158,23 @@ function runAnisotropy(libPath) {
     wc._debug_run(5);
     const a = wc._debug_anisotropy(100);
     console.log(`  ${sc.label.padEnd(32)} card=${a.card.toFixed(3)}  diag=${a.diag.toFixed(3)}  ratio=${a.ratio.toFixed(3)}`);
+    check(a.card > 0, `anisotropy ${sc.label}: cardinal pigment present`);
+    checkRange(a.ratio, 0.8, 1.2, `anisotropy ${sc.label}: isotropy ratio`);
   }
 }
 
 // ===========================================================================
 // PATTERN 2 — Per-cell trace over time
 // ===========================================================================
-// This is the test that finally cracked the v0.72 pinpoint. The earlier v0.70
-// and v0.71 fixes (smoothing g/d/wet/pressure at "skipped" cells) only made
-// things worse: they created a pressure dip that, after the initial outward
-// injection decayed, reversed neighbors' velocity to point INWARD and turned
-// the skipped cell into a pigment sink. Visible only by tracing velocities
-// across multiple frames — no single-frame snapshot showed it.
+// The test that cracked the v0.72 pinpoint: a pressure dip could reverse
+// neighbors' velocity to point INWARD, turning a skipped cell into a pigment
+// sink — visible only across multiple frames. Assertions: the west neighbor's
+// u stays non-positive and the east neighbor's u stays non-negative (outward
+// flow away from the epicenter), and no field goes NaN.
 // ---------------------------------------------------------------------------
 
 function runTrace(libPath) {
-  installMockDOM();
-  const Washes = loadLibWithHelpers(libPath, `
-    _debug_simStep(n) { for (let i = 0; i < n; i++) simStep(); },
+  const Washes = loadLibWithHelpers(libPath, `${INJECT_SIMSTEP}
     _debug_cell(x, y) {
       const i = y * GW + x;
       return {
@@ -258,11 +192,11 @@ function runTrace(libPath) {
   const wc = Washes.create(makeEl('div'));
   wc._debug_paintGrid(0.5);
   // Epicenter at (324.4, 270.7) — a fractional position that triggered the
-  // pinpoint in v0.70-v0.71. Two cells fall inside the d²<0.5 skip region
-  // (324, 271) and (325, 271).
+  // pinpoint in v0.70-v0.71.
   wc.splash([{ x: 324.4, y: 270.7, velocity: 40 }], 'deluge');
 
   const cells = [[324, 271], [325, 271], [323, 271], [324, 270]];
+  const EPS = 1e-6;
 
   function snapshot(label) {
     console.log('\n  ' + label);
@@ -273,14 +207,18 @@ function runTrace(libPath) {
         `u=${c.u.toFixed(3).padStart(7)} v=${c.v.toFixed(3).padStart(7)} ` +
         `wet=${c.wet.toFixed(3)} pres=${c.pressure.toFixed(2)}`
       );
+      for (const k of ['g', 'd', 'u', 'v', 'wet', 'pressure']) {
+        check(Number.isFinite(c[k]), `trace ${label} (${x},${y}): ${k} is finite`);
+      }
     }
+    const west = wc._debug_cell(323, 271);
+    const east = wc._debug_cell(325, 271);
+    check(west.u <= EPS, `trace ${label}: west cell u stays outward (≤0), got ${west.u}`);
+    check(east.u >= -EPS, `trace ${label}: east cell u stays outward (≥0), got ${east.u}`);
   }
 
   console.log('\n=== Per-cell trace (splash at (324.4, 270.7)) ===');
-  console.log('  Watch the u column for the inward (target=324) cells:');
-  console.log('  west (323): u should stay NEGATIVE (outward, away from epicenter)');
-  console.log('  east (325): u should stay POSITIVE (outward, away from epicenter)');
-  console.log('  Sign reversal = pinpoint bug (pre-v0.72).');
+  console.log('  Sign reversal on the flank cells = pinpoint bug (pre-v0.72).');
   snapshot('Immediately after splash:');
   wc._debug_simStep(1);  snapshot('After 1 simStep:');
   wc._debug_simStep(9);  snapshot('After 10 simSteps:');
@@ -290,17 +228,14 @@ function runTrace(libPath) {
 // ===========================================================================
 // PATTERN 3 — Hotspot scan
 // ===========================================================================
-// Sweep the grid for cells that have substantially more pigment than their
-// 4-cardinal neighbors. Used to verify v0.72: no pinpoints near the splash
-// epicenter, only the expected corner-accumulation hotspots from mass-
-// conserving advection at canvas boundaries. The scan is brute-force O(GW*GH)
-// but fast enough for a single test pass.
+// Sweep the grid for cells with substantially more pigment than their
+// 4-cardinal neighbors. Post-v0.72 expectation: only canvas-corner
+// accumulation from mass-conserving advection at boundaries — nothing near
+// the splash epicenter. Assertions encode exactly that.
 // ---------------------------------------------------------------------------
 
 function runHotspots(libPath) {
-  installMockDOM();
-  const Washes = loadLibWithHelpers(libPath, `
-    _debug_simStep(n) { for (let i = 0; i < n; i++) simStep(); },
+  const Washes = loadLibWithHelpers(libPath, `${INJECT_SIMSTEP}${INJECT_GRID}
     _debug_findHotspots(threshold) {
       const hotspots = [];
       for (let y = 2; y < GH - 2; y++) {
@@ -327,9 +262,6 @@ function runHotspots(libPath) {
       setActiveRectFull();
     },`);
 
-  // A spread of fractional epicenter positions. Pre-v0.72, several of these
-  // produced pinpoints near the click site. Post-v0.72, only canvas corners
-  // appear (expected mass-conservation boundary accumulation).
   const cases = [
     [324.0, 270.0], [324.1, 270.0], [324.0, 270.1], [324.1, 270.1],
     [324.3, 270.7], [324.4, 270.7], [324.5, 270.5], [324.6, 270.3],
@@ -338,32 +270,40 @@ function runHotspots(libPath) {
   ];
 
   console.log('\n=== Hotspot scan over fractional epicenters ===');
-  console.log('  Each row: epicenter coord → hotspots (self/avg ratio > 1.5×).');
   console.log('  Expected (post-v0.72): only canvas corners, no near-epicenter hotspots.');
   for (const [ex, ey] of cases) {
     const wc = Washes.create(makeEl('div'));
     wc._debug_paintGrid(0.5);
     wc.splash([{ x: ex, y: ey, velocity: 40 }], 'deluge');
     wc._debug_simStep(30);
+    const { GW, GH } = wc._debug_grid();
     const hs = wc._debug_findHotspots(1.5);
     const summary = hs.length === 0
       ? 'CLEAN'
       : `${hs.length} hotspot(s): ${hs.slice(0, 8).map((h) => `(${h.x},${h.y})`).join(', ')}${hs.length > 8 ? ', …' : ''}`;
     console.log(`  ec=(${ex}, ${ey})  →  ${summary}`);
+    const nearEpicenter = hs.filter((h) => Math.abs(h.x - ex) < 30 && Math.abs(h.y - ey) < 30);
+    check(nearEpicenter.length === 0,
+      `hotspots ec=(${ex},${ey}): no near-epicenter pinpoints (found ${nearEpicenter.length})`);
+    check(hs.length <= 6, `hotspots ec=(${ex},${ey}): at most corner accumulation (found ${hs.length})`);
+    for (const h of hs) {
+      const nearCorner =
+        (h.x <= 6 || h.x >= GW - 7) && (h.y <= 6 || h.y >= GH - 7);
+      check(nearCorner, `hotspots ec=(${ex},${ey}): (${h.x},${h.y}) is at a canvas corner`);
+    }
   }
 }
 
 // ===========================================================================
 // PATTERN 4 — CFL bound check
 // ===========================================================================
-// First-order donor-cell advection is conditionally stable: |u|·Δt + |v|·Δt
-// must be ≤ 1 per cell or the cell donates more than it holds, goes negative,
-// and Kubelka-Munk renders negative values as brighter-than-paper streaks.
-// Useful as an early sanity check when changing velocity scales or timestep.
+// First-order donor-cell advection is conditionally stable: (|u|+|v|)·Δt ≤ 1
+// per cell. Assertions: the bound grows monotonically with splash velocity,
+// and the default-deluge case genuinely exceeds 1 at the semilag inner
+// timestep — the documented reason the default advection is semi-Lagrangian.
 // ---------------------------------------------------------------------------
 
 function runCFL(libPath) {
-  installMockDOM();
   const Washes = loadLibWithHelpers(libPath, `
     _debug_maxCFL(adt) {
       let max = 0;
@@ -387,32 +327,34 @@ function runCFL(libPath) {
 
   console.log('\n=== CFL bound (|u|+|v|)·adt per cell ===');
   console.log('  Donor-cell stable when max ≤ 1. Semi-Lagrangian has no bound.');
+  const results = [];
   for (const sc of scenarios) {
     const wc = Washes.create(makeEl('div'));
     wc._debug_paintGrid(0.5);
     wc.splash([{ x: 324, y: 270, velocity: sc.vel }], 'deluge');
     const maxCFL = wc._debug_maxCFL(sc.adt);
+    results.push(maxCFL);
     const verdict = maxCFL > 1 ? 'UNSTABLE (donor-cell)' : 'stable';
     console.log(`  ${sc.label.padEnd(40)} max=${maxCFL.toFixed(2)}  ${verdict}`);
+    check(Number.isFinite(maxCFL), `cfl ${sc.label}: bound is finite`);
   }
+  check(results[0] <= results[1] && results[1] <= results[2],
+    `cfl: bound grows with velocity (${results.slice(0, 3).map((r) => r.toFixed(2)).join(' ≤ ')})`);
+  check(results[3] > 1,
+    `cfl: default deluge exceeds donor-cell stability at semilag adt (got ${results[3].toFixed(2)}) — the reason semilag is the default`);
 }
 
 // ===========================================================================
 // PATTERN 5 — Mass balance (verifies boundary-mode invariants, v0.84+)
 // ===========================================================================
-// Total mass tracking distinguishes the three edge modes numerically. The
-// pattern that validates the v0.81-v0.84 boundary work: closed conserves
-// mass (modulo evaporation), open drains based on outflow flux, gravity
-// drains more with higher Pull, radial drains ~4x faster than directional.
-// Used as a regression check that closed mode hasn't been changed by the
-// boundary work, and as a numerical sanity check that open/gravity modes
-// are doing something measurable.
+// Closed conserves mass (modulo evaporation), open drains based on outflow
+// flux, gravity drains directionally, radial drains from all 4 edges.
+// Assertion bands are derived from the documented expectations; the closed-
+// mode Pull-invariance is checked exactly (seeded runs are deterministic).
 // ---------------------------------------------------------------------------
 
 function runMassBalance(libPath) {
-  installMockDOM();
-  const Washes = loadLibWithHelpers(libPath, `
-    _debug_simStep(n) { for (let i = 0; i < n; i++) simStep(); },
+  const Washes = loadLibWithHelpers(libPath, `${INJECT_SIMSTEP}
     _debug_totalMass() {
       let m = 0;
       for (let i = 0; i < N; i++) {
@@ -426,16 +368,16 @@ function runMassBalance(libPath) {
     },`);
 
   const scenarios = [
-    { mode: 'closed',  dir: 'down',   str: 0.00, expect: 'evaporation only (~5%)' },
-    { mode: 'open',    dir: 'down',   str: 0.00, expect: 'drainage from splash velocity (~7%)' },
-    { mode: 'gravity', dir: 'down',   str: 0.05, expect: 'mild downward drainage (~3-4%)' },
-    { mode: 'gravity', dir: 'down',   str: 0.10, expect: 'stronger downward drainage (~2-3%)' },
-    { mode: 'gravity', dir: 'radial', str: 0.05, expect: 'radial drainage from 4 edges (~9-10%)' },
-    { mode: 'gravity', dir: 'radial', str: 0.10, expect: 'aggressive radial drainage (~9-12%)' },
+    { mode: 'closed',  dir: 'down',   str: 0.00, band: [3, 8],   expect: 'evaporation only (~5%)' },
+    { mode: 'open',    dir: 'down',   str: 0.00, band: [4.5, 11], expect: 'drainage from splash velocity (~7%)' },
+    { mode: 'gravity', dir: 'down',   str: 0.05, band: [1.5, 6],  expect: 'mild downward drainage (~3-4%)' },
+    { mode: 'gravity', dir: 'down',   str: 0.10, band: [1, 5],    expect: 'stronger downward drainage (~2-3%)' },
+    { mode: 'gravity', dir: 'radial', str: 0.05, band: [6, 14],   expect: 'radial drainage from 4 edges (~9-10%)' },
+    { mode: 'gravity', dir: 'radial', str: 0.10, band: [6, 14],   expect: 'aggressive radial drainage (~9-12%)' },
   ];
 
   console.log('\n=== Mass balance over 100 simSteps (centered splash) ===');
-  console.log('  Closed should retain almost all mass; open/gravity should lose measurable fractions.');
+  const losses = {};
   for (const sc of scenarios) {
     const wc = Washes.create(makeEl('div'));
     wc.edgeMode(sc.mode);
@@ -446,15 +388,20 @@ function runMassBalance(libPath) {
     const m0 = wc._debug_totalMass();
     wc._debug_simStep(100);
     const m100 = wc._debug_totalMass();
-    const lossPct = ((m0 - m100) / m0 * 100).toFixed(1);
+    const lossPct = (m0 - m100) / m0 * 100;
+    const key = `${sc.mode}/${sc.dir}/${sc.str}`;
+    losses[key] = lossPct;
     const label = `${sc.mode.padEnd(8)} dir=${sc.dir.padEnd(7)} str=${sc.str.toFixed(2)}`;
-    console.log(`  ${label}  →  ${lossPct.padStart(5)}% loss   (expect: ${sc.expect})`);
+    console.log(`  ${label}  →  ${lossPct.toFixed(1).padStart(5)}% loss   (expect: ${sc.expect})`);
+    checkRange(lossPct, sc.band[0], sc.band[1], `mass-balance ${label}: loss %`);
   }
+  check(losses['open/down/0'] > losses['closed/down/0'],
+    'mass-balance: open drains more than closed');
+  check(losses['gravity/radial/0.05'] > losses['gravity/down/0.05'],
+    'mass-balance: radial drains more than directional at equal Pull');
 
-  // Sanity check: closed mode mass loss should be approximately equal to
-  // evaporation, not affected by gravity Pull (which only fires in
-  // gravity mode anyway).
   console.log('\n  Closed-mode regression: Pull should have no effect in closed mode');
+  const closedLosses = [];
   for (const str of [0.0, 0.10, 0.50]) {
     const wc = Washes.create(makeEl('div'));
     wc.edgeMode('closed');
@@ -464,21 +411,219 @@ function runMassBalance(libPath) {
     const m0 = wc._debug_totalMass();
     wc._debug_simStep(100);
     const m100 = wc._debug_totalMass();
-    const lossPct = ((m0 - m100) / m0 * 100).toFixed(1);
-    console.log(`    closed, Pull=${str.toFixed(2)}: ${lossPct}% loss  (should match across all Pull values)`);
+    const lossPct = (m0 - m100) / m0 * 100;
+    closedLosses.push(lossPct);
+    console.log(`    closed, Pull=${str.toFixed(2)}: ${lossPct.toFixed(1)}% loss`);
   }
+  const spread = Math.max(...closedLosses) - Math.min(...closedLosses);
+  check(spread <= 0.15,
+    `mass-balance: closed-mode loss invariant under Pull (spread ${spread.toFixed(3)}pp)`);
+}
+
+// ===========================================================================
+// PATTERN 6 — Equivalence goldens (engine-review P0)
+// ===========================================================================
+// Drives scripted scenarios and records per-field statistics (sum, min, max,
+// nonzero count, centroid) at checkpoints. A perf refactor that claims to be
+// behavior-preserving must reproduce these to ~1e-9 relative. Scenarios are
+// chosen to exercise the paths the P0 work touches: full-rect processing,
+// rect growth across the grid, masked cells, open-edge drainage, and the
+// fade-enabled evaporation branch.
+// ---------------------------------------------------------------------------
+
+const FIELD_KEYS = ['wet', 'u', 'v', 'pressure', 'g0', 'g1', 'g2', 'd0', 'd1', 'd2'];
+const STAT_KEYS = ['sum', 'min', 'max', 'nz', 'cx', 'cy'];
+
+function buildEquivalenceScenarios(Washes) {
+  // Each scenario: fresh instance, seeded RNG, returns a list of checkpoints.
+  function makeInstance() {
+    return Washes.create(makeEl('div'));
+  }
+  return [
+    {
+      name: 'center-splash-dry',
+      run(cp) {
+        const wc = makeInstance();
+        wc._debug_paintGrid(0.3);
+        wc.splash([{ x: 324, y: 270, velocity: 25 }], 'deluge');
+        wc._debug_simStep(60);  cp('after-60', wc);
+        wc._debug_simStep(240); cp('after-300', wc);
+      },
+    },
+    {
+      name: 'two-corner-strokes',
+      run(cp) {
+        const wc = makeInstance();
+        const { GW, GH } = wc._debug_grid();
+        for (let s = 0; s < 8; s++) {
+          // NOTE: pigment is typed optional but the deposit path indexes
+          // g[pigmentIdx] unguarded — omit it and paintAt throws. (P2 item.)
+          wc.paintAt(40 + s * 3, 40 + s * 2, 10, s % 3, 0.6);
+          wc.paintAt(GW - 40 - s * 3, GH - 40 - s * 2, 10, (s + 1) % 3, 0.6);
+        }
+        wc._debug_simStep(80); cp('after-80', wc);
+      },
+    },
+    {
+      name: 'masked-splash',
+      run(cp) {
+        const wc = makeInstance();
+        const { GW, GH } = wc._debug_grid();
+        const mx0 = (GW / 2 - 40) | 0, mx1 = (GW / 2 + 40) | 0;
+        const my0 = (GH / 2 - 30) | 0, my1 = (GH / 2 + 30) | 0;
+        wc._debug_maskBlock(mx0, my0, mx1, my1);
+        wc.splash([{ x: GW / 2 - 60, y: GH / 2, velocity: 25 }], 'deluge');
+        wc._debug_simStep(60); cp('after-60', wc);
+      },
+    },
+    {
+      name: 'open-edge-drain',
+      run(cp) {
+        const wc = makeInstance();
+        wc.edgeMode('open');
+        wc._debug_paintGrid(0.3);
+        wc.splash([{ x: 324, y: 270, velocity: 40 }], 'deluge');
+        wc._debug_simStep(100); cp('after-100', wc);
+      },
+    },
+    {
+      name: 'fade-enabled-steps',
+      run(cp) {
+        const wc = makeInstance();
+        wc.fadePainting(1500);
+        wc.splash([{ x: 200, y: 200, velocity: 20 }], 'deluge');
+        wc._debug_simStep(80); cp('after-80', wc);
+      },
+    },
+  ];
+}
+
+const EQUIV_INJECT = `${INJECT_SIMSTEP}${INJECT_GRID}${INJECT_RECT}
+    _debug_paintGrid(amt) {
+      for (let i = 0; i < N; i++) d[0][i] = amt;
+      setActiveRectFull();
+    },
+    _debug_maskBlock(x0, y0, x1, y1) {
+      for (let y = y0; y <= y1; y++)
+        for (let x = x0; x <= x1; x++) mask[y * GW + x] = 1;
+      maskActive = true;
+      maskRectMinX = x0; maskRectMaxX = x1;
+      maskRectMinY = y0; maskRectMaxY = y1;
+    },
+    _debug_fieldStats() {
+      function stats(a) {
+        let sum = 0, min = Infinity, max = -Infinity, nz = 0, cx = 0, cy = 0;
+        for (let i = 0; i < N; i++) {
+          const val = a[i];
+          sum += val;
+          if (val < min) min = val;
+          if (val > max) max = val;
+          if (val !== 0) { nz++; cx += (i % GW) * val; cy += ((i / GW) | 0) * val; }
+        }
+        return { sum, min, max, nz, cx, cy };
+      }
+      return {
+        wet: stats(wet), u: stats(u), v: stats(v), pressure: stats(pressure),
+        g0: stats(g[0]), g1: stats(g[1]), g2: stats(g[2]),
+        d0: stats(d[0]), d1: stats(d[1]), d2: stats(d[2]),
+      };
+    },`;
+
+function runEquivalence(libPath) {
+  const mode = flags.golden || (fs.existsSync(GOLDEN_PATH) ? 'check' : 'none');
+  if (mode === 'none') {
+    console.error('\n=== Equivalence ===');
+    console.error('  No goldens found. Run with --golden=write on a known-good engine first.');
+    FAILURES++;
+    return;
+  }
+
+  const Washes = loadLibWithHelpers(libPath, EQUIV_INJECT);
+  const scenarios = buildEquivalenceScenarios(Washes);
+  const results = {};
+
+  scenarios.forEach((sc, idx) => {
+    // Reseed per scenario so scenario order never matters.
+    Math.random = mulberry32(SEED + idx * 7919);
+    const checkpoints = {};
+    sc.run((label, wc) => { checkpoints[label] = wc._debug_fieldStats(); });
+    results[sc.name] = checkpoints;
+  });
+
+  if (mode === 'write') {
+    fs.writeFileSync(GOLDEN_PATH, JSON.stringify({ seed: SEED, results }, null, 1));
+    console.log(`\n=== Equivalence ===\n  goldens written to ${path.basename(GOLDEN_PATH)} (seed ${SEED})`);
+    return;
+  }
+
+  const golden = JSON.parse(fs.readFileSync(GOLDEN_PATH, 'utf8'));
+  console.log('\n=== Equivalence vs goldens ===');
+  if (!check(golden.seed === SEED,
+    `equivalence: golden seed ${golden.seed} matches run seed ${SEED} (pass --seed=${golden.seed})`)) return;
+
+  const REL_TOL = 1e-9;
+  for (const sc of scenarios) {
+    const gold = golden.results[sc.name];
+    if (!check(!!gold, `equivalence ${sc.name}: scenario present in goldens`)) continue;
+    let worst = 0, worstAt = '';
+    for (const cpName of Object.keys(gold)) {
+      const got = results[sc.name][cpName];
+      if (!check(!!got, `equivalence ${sc.name}/${cpName}: checkpoint produced`)) continue;
+      const goldCp = gold[cpName];
+      for (const f of FIELD_KEYS) {
+        for (const s of STAT_KEYS) {
+          const a = got[f][s], b = goldCp[f][s];
+          const dev = Math.abs(a - b) / Math.max(1e-9, Math.abs(b));
+          if (dev > worst) { worst = dev; worstAt = `${cpName}.${f}.${s} (got ${a}, golden ${b})`; }
+        }
+      }
+    }
+    const ok = worst <= REL_TOL;
+    console.log(`  ${sc.name.padEnd(22)} max rel dev ${worst.toExponential(2)}  ${ok ? 'EXACT' : 'DRIFT at ' + worstAt}`);
+    check(ok, `equivalence ${sc.name}: fields match goldens (worst ${worst.toExponential(2)} at ${worstAt})`);
+  }
+}
+
+// ===========================================================================
+// PATTERN 7 — Active-rect behavior
+// ===========================================================================
+// Documents/verifies the active-region tracking contract: the rect grows to
+// cover paint, and (once shrink is wired into simStep) tightens as content
+// settles and empties after a full dry-down. Before the shrink wiring lands,
+// run this pattern to see the rect never tightening — it is included in
+// `all` only from the commit that wires shrink.
+// ---------------------------------------------------------------------------
+
+function runActiveRect(libPath) {
+  const Washes = loadLibWithHelpers(libPath, EQUIV_INJECT);
+  console.log('\n=== Active-rect behavior ===');
+
+  const wc = Washes.create(makeEl('div'));
+  const { GW, GH } = wc._debug_grid();
+  check(wc._debug_rect().empty, 'active-rect: starts empty');
+
+  // A small localized splash grows the rect around it, not the whole grid.
+  wc.splash([{ x: 150, y: 150, velocity: 15 }], 'deluge');
+  const r1 = wc._debug_rect();
+  console.log(`  after splash: [${r1.minX}..${r1.maxX}]×[${r1.minY}..${r1.maxY}] of ${GW}×${GH}`);
+  check(!r1.empty, 'active-rect: covers the splash');
+  check(r1.maxX < GW - 1 || r1.maxY < GH - 1, 'active-rect: localized paint does not claim the whole grid');
+
+  // Run well past full dry-down; with shrink wired the rect must tighten to
+  // empty (no suspended pigment, no positive pressure anywhere).
+  wc._debug_simStep(2400);
+  const r2 = wc._debug_rect();
+  console.log(`  after 2400 steps (fully dry): ${r2.empty ? 'EMPTY' : `[${r2.minX}..${r2.maxX}]×[${r2.minY}..${r2.maxY}]`}`);
+  check(r2.empty, 'active-rect: empties after full dry-down (shrink wired)');
 }
 
 // ---------------------------------------------------------------------------
 // CLI dispatcher
 // ---------------------------------------------------------------------------
 
-const libPath = process.argv[2];
-const pattern = process.argv[3] || 'all';
-
 if (!libPath) {
-  console.error('usage: node washes-test-harness.js <path-to-watercolor-lib.js> [pattern]');
-  console.error('patterns: anisotropy | trace | hotspots | cfl | mass-balance | all');
+  console.error('usage: node washes-test-harness.cjs <path-to-washes.js> [pattern] [--seed=N] [--golden=write|check]');
+  console.error('patterns: anisotropy | trace | hotspots | cfl | mass-balance | equivalence | active-rect | all');
   process.exit(1);
 }
 if (!fs.existsSync(libPath)) {
@@ -492,14 +637,38 @@ const patterns = {
   hotspots: runHotspots,
   cfl: runCFL,
   'mass-balance': runMassBalance,
+  equivalence: runEquivalence,
+  'active-rect': runActiveRect,
 };
 
+// active-rect asserts post-shrink-wiring behavior; it joins `all` in the
+// commit that wires shrinkActiveRect into simStep.
+const ALL = ['anisotropy', 'trace', 'hotspots', 'cfl', 'mass-balance', 'equivalence'];
+
+function runPattern(name) {
+  installMockDOM();
+  const restore = seedMathRandom(SEED);
+  try {
+    patterns[name](libPath);
+  } finally {
+    restore();
+  }
+}
+
 if (pattern === 'all') {
-  for (const name of Object.keys(patterns)) patterns[name](libPath);
+  for (const name of ALL) runPattern(name);
 } else if (patterns[pattern]) {
-  patterns[pattern](libPath);
+  runPattern(pattern);
 } else {
   console.error('unknown pattern:', pattern);
   console.error('available:', Object.keys(patterns).join(', '));
   process.exit(1);
+}
+
+console.log(`\n${'='.repeat(60)}`);
+if (FAILURES > 0) {
+  console.error(`RESULT: ${FAILURES} failure(s) in ${CHECKS} checks`);
+  process.exitCode = 1;
+} else {
+  console.log(`RESULT: all ${CHECKS} checks passed`);
 }
