@@ -398,6 +398,7 @@ wc.paintNorm(0.5, 0.5, 0.06, 'blue', 0.8);
       wc.edgeMode('closed-gravity');                 // sheet keeps its mass, but feels the tilt
       wc.gravityDirection('down');
       wc.gravityStrength(1);                         // full pull — washes run down the page
+      wc.edgeDarkening(true);                        // dark rims as blooms dry (Curtis §4.3.3) — explicit, not default-dependent
       const fitBrush = () => wc.brushSize(host.clientHeight / 5);  // brush ⌀ = hero height / 5
       fitBrush();
       if (matchMedia('(pointer: fine)').matches) wc.cursorPreview(true);  // brush-ring cursor
