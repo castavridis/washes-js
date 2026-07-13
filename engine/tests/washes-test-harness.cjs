@@ -600,21 +600,37 @@ function runActiveRect(libPath) {
 
   const wc = Washes.create(makeEl('div'));
   const { GW, GH } = wc._debug_grid();
-  check(wc._debug_rect().empty, 'active-rect: starts empty');
 
-  // A small localized splash grows the rect around it, not the whole grid.
-  wc.splash([{ x: 150, y: 150, velocity: 15 }], 'deluge');
+  // Reality of init (documented by probe, 2026-07-12): create() sets the
+  // rect FULL so the first frames composite the whole sheet, and the
+  // virgin paper starts uniformly damp (~0.6 wet) — so the rect must stay
+  // full while that surface dries (wet cells are simulated cells), then
+  // empty once evaporate snaps the last cells to exactly 0.
+  const r0 = wc._debug_rect();
+  check(!r0.empty && r0.minX === 0 && r0.maxX === GW - 1,
+    'active-rect: starts full (initial whole-sheet composite)');
+
+  wc._debug_simStep(2600);
   const r1 = wc._debug_rect();
-  console.log(`  after splash: [${r1.minX}..${r1.maxX}]×[${r1.minY}..${r1.maxY}] of ${GW}×${GH}`);
-  check(!r1.empty, 'active-rect: covers the splash');
-  check(r1.maxX < GW - 1 || r1.maxY < GH - 1, 'active-rect: localized paint does not claim the whole grid');
+  console.log(`  virgin sheet after 2600 steps: ${r1.empty ? 'EMPTY' : `[${r1.minX}..${r1.maxX}]×[${r1.minY}..${r1.maxY}]`}`);
+  check(r1.empty, 'active-rect: empties once the virgin surface has fully dried');
 
-  // Run well past full dry-down; with shrink wired the rect must tighten to
-  // empty (no suspended pigment, no positive pressure anywhere).
-  wc._debug_simStep(2400);
+  // Localized paint on the dry sheet: the rect covers the stamps + margin,
+  // not the whole grid. (A deluge splash would legitimately pressurize the
+  // whole grid — use plain stamps for the locality claim.)
+  for (let s = 0; s < 6; s++) wc.paintAt(150 + s * 2, 150 + s, 8, s % 3, 0.7);
+  wc._debug_simStep(120); // includes at least one shrink scan
   const r2 = wc._debug_rect();
-  console.log(`  after 2400 steps (fully dry): ${r2.empty ? 'EMPTY' : `[${r2.minX}..${r2.maxX}]×[${r2.minY}..${r2.maxY}]`}`);
-  check(r2.empty, 'active-rect: empties after full dry-down (shrink wired)');
+  console.log(`  after local stamps + 120 steps: [${r2.minX}..${r2.maxX}]×[${r2.minY}..${r2.maxY}] of ${GW}×${GH}`);
+  check(!r2.empty, 'active-rect: covers local paint');
+  check(r2.maxX - r2.minX < GW * 0.7 && r2.maxY - r2.minY < GH * 0.7,
+    'active-rect: local paint keeps a local rect (tightened by shrink)');
+
+  // And it releases again after the paint dries down.
+  wc._debug_simStep(3000);
+  const r3 = wc._debug_rect();
+  console.log(`  after dry-down: ${r3.empty ? 'EMPTY' : `[${r3.minX}..${r3.maxX}]×[${r3.minY}..${r3.maxY}]`}`);
+  check(r3.empty, 'active-rect: empties again after the painting dries');
 }
 
 // ---------------------------------------------------------------------------
@@ -641,9 +657,7 @@ const patterns = {
   'active-rect': runActiveRect,
 };
 
-// active-rect asserts post-shrink-wiring behavior; it joins `all` in the
-// commit that wires shrinkActiveRect into simStep.
-const ALL = ['anisotropy', 'trace', 'hotspots', 'cfl', 'mass-balance', 'equivalence'];
+const ALL = ['anisotropy', 'trace', 'hotspots', 'cfl', 'mass-balance', 'equivalence', 'active-rect'];
 
 function runPattern(name) {
   installMockDOM();

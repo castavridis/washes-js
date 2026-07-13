@@ -2060,11 +2060,34 @@ function initGpuSim(gl, GW, GH) {
         newMaxX = activeMinX - 1;
       let newMinY = activeMaxY + 1,
         newMaxY = activeMinY - 1;
+      // v1.13 — what counts as "active", refined for the wiring:
+      //   wet > 1e-6      — every sim pass gates its per-cell work on
+      //     wetness (advection/edge at 0.04, the diffusion stencil at
+      //     1e-6), and evaporate snaps sub-0.025 wet to exactly 0, so any
+      //     cell a pass could still change is wet. The original
+      //     g/pressure-only criterion cut still-wet clear-water halos and
+      //     froze their diffusion/damping mid-flight.
+      //   pressure — INTERIOR cells only. Splash modes write pressure to
+      //     the full grid including the outermost ring, but every pass
+      //     that evolves pressure iterates the interior, so boundary
+      //     pressure never decays — one deluge would otherwise pin the
+      //     rect at full-grid forever. Boundary pressure is dead state:
+      //     nothing wet-gated reads it once its interior neighbors dry.
+      //   g — any cell (advection does flux into the boundary ring).
+      const yTop = 1,
+        yBot = GH - 2;
       for (let y = activeMinY; y <= activeMaxY; y++) {
         const yo = y * GW;
+        const interiorRow = y >= yTop && y <= yBot;
         for (let x = activeMinX; x <= activeMaxX; x++) {
           const i = yo + x;
-          if (g0[i] > thr || g1[i] > thr || g2[i] > thr || pressure[i] > thr) {
+          const p =
+            interiorRow && x >= 1 && x <= GW - 2 ? pressure[i] : 0;
+          if (
+            wet[i] > 1e-6 ||
+            g0[i] > thr || g1[i] > thr || g2[i] > thr ||
+            p > thr
+          ) {
             if (x < newMinX) newMinX = x;
             if (x > newMaxX) newMaxX = x;
             if (y < newMinY) newMinY = y;
@@ -3379,6 +3402,19 @@ function initGpuSim(gl, GW, GH) {
       drainBoundaries(DT * 0.7);
       transferPigment();
       if (!dryingPaused) evaporate();
+      // v1.13 — the shrink half of active-region tracking. The header
+      // comment above the rect state always described this ("runs every
+      // ACTIVE_SHRINK_INTERVAL frames in the main loop") but it was never
+      // wired — the rect only ever grew, so after strokes near opposite
+      // corners every rect-bounded pass ran effectively full-grid until
+      // the canvas idled. Counted in sim steps here (the loop runs two
+      // per frame) so headless drivers exercise it identically; tightens
+      // to current suspended-pigment/pressure content, and empties after
+      // a full dry-down (which also lets simStep take its early-return).
+      if (++framesSinceShrink >= ACTIVE_SHRINK_INTERVAL * 2) {
+        framesSinceShrink = 0;
+        shrinkActiveRect();
+      }
     }
 
     // ============================================================
