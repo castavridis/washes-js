@@ -2358,8 +2358,14 @@ function createSimCore(env) {
     // Lower values produce subtler granulation and less distinct low spots on the paper.
     const TEXTURE_AMPLITUDE = 0.5;
 
-    function generatePaper() {
-      for (let y = 0; y < GH; y++) {
+    // v2.2 — row-ranged so createAsync can time-slice generation across
+    // frames. Rows are independent (each cell's value depends only on its
+    // own coordinates), so any row partition is bit-identical to the full
+    // pass — the render/equivalence goldens prove it.
+    function generatePaper(yFrom, yTo) {
+      const y0 = yFrom === undefined ? 0 : yFrom;
+      const y1 = yTo === undefined ? GH : yTo;
+      for (let y = y0; y < y1; y++) {
         for (let x = 0; x < GW; x++) {
           // SCALE-derived: freq scales as `s` to keep texture feature size
           // in display pixels constant. At SCALE_REF (s=1) → 12.0 (v0.8
@@ -10808,7 +10814,19 @@ function _ensureTextureNoise(mode) {
     // at top-level. In library mode we do it here after all functions are
     // defined but before the loop starts.
 
-    generatePaper();
+    // v2.2 — deferred paper (the createAsync path). generatePaper is the
+    // dominant create() cost (~80% — 17 sin-based hash calls per cell), and
+    // create() is synchronous, so at hero sizes it froze the host page for
+    // ~1s. With { deferPaper: true } the loop time-slices the rows across
+    // frames (bit-identical — rows are independent) and the boot render
+    // waits for the last chunk. Until then the loop does nothing else and
+    // pointer deposits are not applied; 'ready' fires (on() + DOM mirror)
+    // after the first rendered frame on BOTH paths.
+    let _paperReady = !(options && options.deferPaper);
+    let _paperNextRow = 0;
+    let _readyEmitted = false;
+
+    if (_paperReady) generatePaper();
     // Re-initialize the canvas dimensions now that the target element's
     // bounding rect is known. The sim arrays were sized based on
     // instanceWindow.innerWidth/Height at top-of-file, so this is mostly
@@ -10822,7 +10840,7 @@ function _ensureTextureNoise(mode) {
     }
     markCanvasActive();
     setActiveRectFull();
-    render(true);
+    if (_paperReady) render(true);
 
     // ============================================================
     // POINTER PAINTING (v2) — mouse + touch input
@@ -11451,8 +11469,40 @@ function _ensureTextureNoise(mode) {
       _gpuResync();
     }
 
+    // v2.2 — fires once, on the first frame after the boot render, so hosts
+    // can subscribe after create() returns and still see it. Mirrored as a
+    // lowercase DOM CustomEvent like every other engine event.
+    function _emitReady() {
+      if (_readyEmitted) return;
+      _readyEmitted = true;
+      _emit("ready", {});
+      try {
+        targetEl.dispatchEvent(new CustomEvent("ready", { bubbles: false }));
+      } catch (_) {}
+    }
+
     function loop() {
       _frameBusyStart = performance.now();   // v1.8 — busy-time measurement origin
+      // v2.2 — deferred paper: spend a ~12ms slice on paper rows, then get
+      // out of the frame. Nothing else (pending pointer paint, sim, render,
+      // governor) runs until the paper exists; the final chunk triggers the
+      // boot render that the sync path did inline.
+      if (!_paperReady) {
+        const _pt0 = performance.now();
+        while (_paperNextRow < GH && performance.now() - _pt0 < 12) {
+          const _pEnd = _paperNextRow + 4 > GH ? GH : _paperNextRow + 4;
+          generatePaper(_paperNextRow, _pEnd);
+          _paperNextRow = _pEnd;
+        }
+        if (_paperNextRow >= GH) {
+          _paperReady = true;
+          render(true);
+          _emitReady();
+        }
+        rafToken = requestAnimationFrame(loop);
+        return;
+      }
+      _emitReady();
       // v2 perf instrumentation: gated on perfEnabled. When off the calls
       // compile down to a single boolean check at each gate — negligible.
       const t0 = perfEnabled ? performance.now() : 0;
@@ -14267,6 +14317,99 @@ function _ensureTextureNoise(mode) {
       });
       return createInstance(host, merged);
     },
+    // v2.2 — the loader. create() is synchronous and paper generation is
+    // ~80% of its cost, so at hero sizes it froze the host page for ~1s —
+    // no spinner a host shows can even PAINT during the block. createAsync
+    // yields a frame first (so a veil can paint), creates the instance with
+    // paper generation time-sliced across frames ({ deferPaper }), and
+    // resolves after the first rendered frame. A built-in paper-toned veil
+    // covers the host until then; pass { loader: false } to bring your own
+    // (listen for 'ready'). Browser-oriented: it needs a ticking
+    // requestAnimationFrame (createHeadless stays synchronous for tests).
+    createAsync(targetEl, opts) {
+      const o = Object.assign({}, opts || {});
+      const showLoader = o.loader !== false;
+      delete o.loader;
+      let veil = null;
+      if (showLoader && typeof document !== "undefined" && targetEl && targetEl.appendChild) {
+        try {
+          // Same host promotion create() itself performs: an absolute veil
+          // needs the target to be a containing block.
+          const cs = typeof getComputedStyle === "function" ? getComputedStyle(targetEl) : null;
+          if (cs && cs.position === "static") targetEl.style.position = "relative";
+        } catch (_) {}
+        try {
+          veil = document.createElement("div");
+          veil.className = "washes-loading";
+          veil.setAttribute("aria-hidden", "true");
+          let bg = "rgb(251,246,234)"; // engine default paper (0.985, 0.965, 0.918)
+          const pc = o.paperColor;
+          if (typeof pc === "string") bg = pc;
+          else if (pc && typeof pc.r === "number" && typeof pc.g === "number" && typeof pc.b === "number")
+            bg = "rgb(" + Math.round(pc.r * 255) + "," + Math.round(pc.g * 255) + "," + Math.round(pc.b * 255) + ")";
+          veil.style.cssText =
+            "position:absolute;inset:0;z-index:4;pointer-events:none;" +
+            "background:" + bg + ";opacity:1;transition:opacity 320ms ease;";
+          let reduced = false;
+          try { reduced = matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (_) {}
+          if (!reduced) {
+            try {
+              if (!document.getElementById("washes-loading-kf")) {
+                const st = document.createElement("style");
+                st.id = "washes-loading-kf";
+                st.textContent =
+                  "@keyframes washes-loading-drift{0%,100%{opacity:.5}50%{opacity:.95}}";
+                (document.head || document.documentElement).appendChild(st);
+              }
+              const blobs = document.createElement("div");
+              blobs.style.cssText =
+                "position:absolute;inset:0;filter:blur(18px);" +
+                "animation:washes-loading-drift 2.6s ease-in-out infinite;" +
+                "background:" +
+                "radial-gradient(34% 46% at 30% 42%,rgba(47,111,176,.14),transparent 70%)," +
+                "radial-gradient(28% 40% at 62% 60%,rgba(176,53,59,.10),transparent 70%)," +
+                "radial-gradient(30% 42% at 74% 34%,rgba(214,138,46,.11),transparent 70%);";
+              veil.appendChild(blobs);
+            } catch (_) {}
+          }
+          targetEl.appendChild(veil);
+        } catch (_) { veil = null; }
+      }
+      const dropVeil = (immediate) => {
+        if (!veil) return;
+        const v = veil;
+        veil = null;
+        try {
+          if (immediate) { v.remove(); return; }
+          v.style.opacity = "0";
+          setTimeout(() => { try { v.remove(); } catch (_) {} }, 380);
+        } catch (_) {}
+      };
+      return new Promise((resolve, reject) => {
+        const boot = () => {
+          let inst;
+          try {
+            inst = createInstance(targetEl, Object.assign({}, o, { deferPaper: true }));
+          } catch (e) {
+            dropVeil(true);
+            reject(e);
+            return;
+          }
+          inst.once("ready").then(() => {
+            dropVeil(false);
+            resolve(inst);
+          });
+        };
+        // Double-rAF: the first schedules after the current frame's style/
+        // layout, the second guarantees the veil has actually painted before
+        // create()'s (now brief) synchronous allocation block runs.
+        if (typeof requestAnimationFrame === "function") {
+          requestAnimationFrame(() => { requestAnimationFrame(boot); });
+        } else {
+          boot();
+        }
+      });
+    },
     // v1.4 — the 109-method surface, tiered. Start at core; everything in
     // tuning has a sensible default; debug is for diagnosing, not composing.
     // v2.0.0 — COMPLETE (§4): all 118 instance members, exactly once each,
@@ -14424,7 +14567,7 @@ function _ensureTextureNoise(mode) {
     // declared but never implemented — undefined at runtime through all
     // of v1; the api-surface test only reflects the instance, so statics
     // could lie.) Bump alongside package.json.
-    version: '2.1.1',
+    version: '2.2.0',
   };
   // v0.53 — Brand alias. `Washes` is the user-facing brand for the
   // library; `Watercolor` is preserved as the long-standing internal /

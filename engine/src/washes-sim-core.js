@@ -214,8 +214,14 @@ export function createSimCore(env) {
     // Lower values produce subtler granulation and less distinct low spots on the paper.
     const TEXTURE_AMPLITUDE = 0.5;
 
-    function generatePaper() {
-      for (let y = 0; y < GH; y++) {
+    // v2.2 — row-ranged so createAsync can time-slice generation across
+    // frames. Rows are independent (each cell's value depends only on its
+    // own coordinates), so any row partition is bit-identical to the full
+    // pass — the render/equivalence goldens prove it.
+    function generatePaper(yFrom, yTo) {
+      const y0 = yFrom === undefined ? 0 : yFrom;
+      const y1 = yTo === undefined ? GH : yTo;
+      for (let y = y0; y < y1; y++) {
         for (let x = 0; x < GW; x++) {
           // SCALE-derived: freq scales as `s` to keep texture feature size
           // in display pixels constant. At SCALE_REF (s=1) → 12.0 (v0.8

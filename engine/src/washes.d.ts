@@ -600,6 +600,13 @@ export interface WashesEventMap {
   presetapplied: { preset: Preset };
   /** `dry()` force-dried the whole sheet. Mirror: `driedinstantly`. */
   driedinstantly: Record<string, never>;
+  /**
+   * v2.2 — fires once, on the first frame after the boot render: the paper
+   * exists, the canvas has pixels, input is live. On `create()` that's the
+   * first RAF tick after it returns (subscribe in the same task);
+   * `createAsync()` resolves on it. Mirror: DOM `ready` on the target.
+   */
+  ready: Record<string, never>;
 }
 
 /** v1.4 — lifecycle event names accepted by {@link WashesInstance.on}. */
@@ -1487,6 +1494,19 @@ export interface WashesStatic {
    * required by the caller anymore.
    */
   createHeadless(options?: CreateOptions & { width?: number; height?: number }): WashesInstance;
+
+  /**
+   * v2.2 — the loader. `create()` is synchronous — paper generation is ~80%
+   * of its cost, and at hero sizes it blocks the host page long enough
+   * (~1s at 1080p) that nothing a host shows can even paint. createAsync
+   * yields a frame first (so a veil can paint), generates the paper in
+   * time-sliced chunks (bit-identical rows), and resolves after the first
+   * rendered frame. A built-in paper-toned veil covers the target until
+   * ready; pass `loader: false` to bring your own and listen for the
+   * `'ready'` event instead. Browser-oriented — it needs a ticking
+   * `requestAnimationFrame` (`createHeadless` stays synchronous for tests).
+   */
+  createAsync(targetEl: HTMLElement, options?: CreateOptions & { loader?: boolean }): Promise<WashesInstance>;
 
   /**
    * v2.0.0 — wrap a v2 instance in the complete v1 surface: old names,
