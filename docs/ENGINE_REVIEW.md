@@ -113,6 +113,25 @@ packaging, and GPU paths. Line references are into `engine/src/washes.js` /
 > boundary re-cut first. What remains of the whole review's engineering
 > is browser-facing (frame-loop integration; GPU render validation;
 > the P2 API 2.0 batch), all needing real-browser QA.
+>
+> **P2 slice 1 (branch `engine-review-p2-slice1` → engine 1.22.0):**
+> `saveState()`/`loadState()` shipped (bit-exact painting round-trip via
+> the shared codec), and `docs/API_2_0_DESIGN.md` holds the full breaking
+> -batch proposal — its **"Decisions needed" section is the next step and
+> needs the maintainer**. Same branch: **all 27 demo/showcase pages now
+> load the LIVE engine** (`engine/dist/washes.standalone.js` + the new
+> timeline standalone) instead of embedded snapshots — every engine
+> release reaches every page automatically; ~15.5 MB of duplicated source
+> deleted; playground → demo v1.0.18.
+>
+> **Open work, in priority order:** ① the five API 2.0 taste decisions
+> (design doc tail) → then its additive sequence (seed 1.23, event map
+> 1.24, rename batch 2.0); ② first real-browser QA pass on Pages — the 27
+> live-engine pages, the hero, the CI Playwright job's first run, GPU
+> render validation (unblocks GPU-by-default + the falloff² parity fix);
+> ③ worker frame-loop integration in the browser (render-latency model);
+> ④ boundary-ring pressure fix (golden-regenerating, needs eyes);
+> ⑤ pigment-data boundary re-cut. P3 (npm publish, docs site) whenever.
 
 ---
 
