@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Washes v1.0.21 — live engine, after Curtis et al. 1997</title>
+<title>Washes v1.0.22 — live engine, after Curtis et al. 1997</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Crimson+Pro:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -2229,7 +2229,7 @@
     <div class="docs-grid">
       <aside class="docs-nav" aria-label="Documentation table of contents">
         <div class="docs-nav-title">Washes</div>
-        <div class="docs-nav-subtitle">v1.0.21</div>
+        <div class="docs-nav-subtitle">v1.0.22</div>
         <nav>
           <!-- v0.21 — accordion sections. Each .docs-nav-group has a
                button-styled header (.docs-nav-section) plus a list of
@@ -2291,7 +2291,7 @@
             </button>
             <div class="docs-nav-items">
               <a href="#api-quickstart" class="docs-nav-item">Quickstart</a>
-              <a href="#api-cursors" class="docs-nav-item">Cursors</a>
+              <a href="#api-cursors" class="docs-nav-item">Painting from code</a>
               <a href="#api-modes" class="docs-nav-item">Modes</a>
               <a href="#api-text-svg" class="docs-nav-item">Text &amp; SVG</a>
               <a href="#api-toggles" class="docs-nav-item">Toggles</a>
@@ -2411,6 +2411,7 @@
             </button>
             <div class="docs-nav-items">
               <a href="#changelog" class="docs-nav-item">All versions</a>
+              <a href="#cl-1-0-22" class="docs-nav-item">v1.0.22 — the docs speak v2</a>
               <a href="#cl-1-0-21" class="docs-nav-item">v1.0.21 — native v2</a>
               <a href="#cl-1-0-20" class="docs-nav-item">v1.0.20 — engine 2.0 ready</a>
               <a href="#cl-1-0-19" class="docs-nav-item">v1.0.19 — compat1 pin</a>
@@ -2555,7 +2556,7 @@
 
         <h2 id="philosophy">Design philosophy</h2>
         <p>
-          Every feature composes through one path: <code>paintAt</code>.
+          Every feature composes through one path: <code>paint</code>.
           When you click the canvas, when the Tornado animation paints
           its funnel, when the Kaleidoscope visualization stamps its
           rotational pattern, when text or SVG geometry traces — all
@@ -2675,7 +2676,7 @@
         <h2 id="animations">Animations</h2>
         <p>
           Continuously-running weather and ambient scenes. Each calls
-          <code>paintAt</code> on its own schedule with appropriate
+          <code>paint</code> on its own schedule with appropriate
           brushes:
         </p>
         <dl class="docs-deflist">
@@ -2707,7 +2708,7 @@
           Type any phrase in the Text control's input, press Enter or
           click <strong>Paint</strong>. The text renders at 96px Georgia
           bold to an offscreen canvas, then each ink pixel becomes a
-          <code>paintAt</code> call. Uses the currently-selected brush —
+          <code>paint</code> call. Uses the currently-selected brush —
           try Rainbow for shifting hue, or Mask to reserve a text-shaped
           area for a later wash.
         </p>
@@ -2798,9 +2799,13 @@ Watercolor.perf(true);</pre>
         <h1 id="api">Programmatic API</h1>
         <p class="docs-lede">
           Everything in the UI is also reachable through
-          <code>window.Watercolor</code>. Drive the canvas from the
+          <code>window.Watercolor</code> &mdash; the page's live engine
+          instance (the factory namespace itself is
+          <code>window.Washes</code>). Drive the canvas from the
           browser console, an external script, or an automation file.
-          Designed to be small, composable, and discoverable.
+          Designed to be small, composable, and discoverable. The
+          engine speaks <strong>API 2.0</strong>: normalized 0..1
+          coordinates everywhere, every setter chains.
         </p>
 
         <h2 id="api-quickstart">Quickstart</h2>
@@ -2809,77 +2814,79 @@ Watercolor.perf(true);</pre>
           at a time, and watch the canvas:
         </p>
         <pre class="docs-code">// Set a sunset wash
-Watercolor.setBackground('sunset');
+Watercolor.backgroundAnimation('sunset');
 
-// Stamp a rainbow brush at canvas center
-Watercolor.cursor({ color: 'rainbow', size: 40 }).stamp();
+// One rainbow dab at canvas center — normalized coords,
+// radius as a fraction of the smaller side
+Watercolor.paint(0.5, 0.5, 0.04, 'rainbow', 0.8);
 
-// Six cursors painting in a hexagonal orbit
-const cs = Array.from({length: 6}, () =&gt; Watercolor.cursor({ color: 'blue', size: 18 }));
+// Six brushes painting in a hexagonal orbit
 let t = 0;
 setInterval(() =&gt; {
   t += 0.03;
-  const { width, height } = Watercolor.grid;
-  cs.forEach((c, i) =&gt; {
+  for (let i = 0; i &lt; 6; i++) {
     const angle = t + i * Math.PI / 3;
-    const r = 200 + Math.sin(t * 2) * 80;
-    c.move(width/2 + Math.cos(angle)*r, height/2 + Math.sin(angle)*r).stamp();
-  });
+    const r = 0.2 + Math.sin(t * 2) * 0.08;
+    Watercolor.paint(0.5 + Math.cos(angle) * r,
+                     0.5 + Math.sin(angle) * r,
+                     0.015, 'blue', 0.5);
+  }
 }, 33);</pre>
 
-        <h2 id="api-cursors">Cursors</h2>
+        <h2 id="api-cursors">Painting from code</h2>
         <p>
-          Cursors are programmable brushes. They hold position and
-          appearance state; they never paint on their own — call
-          <code>.stamp()</code> when you want a deposit. Many cursors
-          can coexist; the caller's references keep them alive.
+          Four verbs put pigment on paper. All take normalized
+          coordinates &mdash; <code>0..1</code> across the canvas,
+          radius as a fraction of the smaller display side &mdash; and
+          all return the instance for chaining.
         </p>
-
-        <h3>Constructor</h3>
-        <pre class="docs-code"><span class="docs-sig">Watercolor.cursor(opts)</span> → cursor handle</pre>
-        <p>Accepted options (all optional):</p>
         <dl class="docs-deflist">
-          <dt><code>color</code></dt>  <dd>One of <code>'rose'</code>, <code>'yellow'</code>, <code>'blue'</code> (alias <code>'cerulean'</code>), <code>'rainbow'</code>, <code>'water'</code>, <code>'lift'</code>, <code>'mask'</code>. Default <code>'blue'</code>.</dd>
-          <dt><code>size</code></dt>     <dd>Brush diameter in display pixels. Default 16.</dd>
-          <dt><code>strength</code></dt> <dd>Deposit strength per stamp. Default 0.35. Range 0&ndash;1.</dd>
-          <dt><code>x</code>, <code>y</code></dt> <dd>Grid coordinates. Default canvas center. See <a href="#api-coords">coordinates</a>.</dd>
+          <dt><code>paint(nx, ny, nradius?, pigment?, strength?)</code></dt>
+          <dd>One dab. Omitted arguments fall back to live brush state (<code>brushSize()</code>, <code>pigment()</code>, <code>pressure()</code>).</dd>
+          <dt><code>stroke(nx, ny, opts?)</code></dt>
+          <dd>Feed it a stream of positions (e.g. from pointer events) and it interpolates stamps between them with the live flow/taper model &mdash; the same path your mouse uses. Call <code>penUp()</code> to end the stroke.</dd>
+          <dt><code>line(nx0, ny0, nx1, ny1, opts?)</code></dt>
+          <dd>A complete straight stroke from A to B in one call.</dd>
+          <dt><code>splash(epicenters?, style?)</code></dt>
+          <dd>Water dispersal &mdash; see <a href="#api-actions">Actions</a>.</dd>
         </dl>
-
-        <h3>Methods</h3>
-        <dl class="docs-deflist">
-          <dt><code>cursor.move(x, y)</code></dt> <dd>Update position in grid coordinates. Returns the cursor for chaining.</dd>
-          <dt><code>cursor.set({...})</code></dt> <dd>Update one or more of <code>color</code>, <code>size</code>, <code>strength</code>, <code>x</code>, <code>y</code>. Returns the cursor.</dd>
-          <dt><code>cursor.stamp()</code></dt>   <dd>Paint once at the current position with current properties. Returns the cursor.</dd>
-          <dt><code>cursor.remove()</code></dt>  <dd>Detach from the active set. Optional &mdash; just dropping the reference also works.</dd>
-        </dl>
-
-        <h3>Read-only properties</h3>
         <p>
-          <code>cursor.id</code>, <code>cursor.x</code>,
-          <code>cursor.y</code>, <code>cursor.size</code>,
-          <code>cursor.strength</code>, <code>cursor.color</code>.
+          A "programmable brush" is just a plain object your code
+          moves around &mdash; no special handle type needed:
         </p>
-
-        <pre class="docs-code"><span class="docs-sig">Watercolor.cursors()</span> → cursor[]</pre>
-        <p>Returns an array of all currently-alive cursor handles.</p>
+        <pre class="docs-code">// A self-propelled brush in ~6 lines
+const b = { x: 0.5, y: 0.5, hue: 'blue', size: 0.02 };
+setInterval(() =&gt; {
+  b.x += (Math.random() - 0.5) * 0.03;
+  b.y += (Math.random() - 0.5) * 0.03;
+  Watercolor.paint(b.x, b.y, b.size, b.hue, 0.5);
+}, 50);</pre>
+        <p>
+          Code that genuinely thinks in <em>grid cells</em> (pixel-art
+          pieces, cell automata) has a first-class home on the
+          <code>wc.grid</code> namespace &mdash; see
+          <a href="#api-coords">coordinates</a>.
+        </p>
 
         <h2 id="api-modes">Modes</h2>
         <p>
           The three composition layers — animations, visualizations,
-          backgrounds — each have a get/set pair. The <code>set</code>
-          variants accept <code>{replace: bool}</code>; default
+          backgrounds — each use one unified accessor: pass a name to
+          set, omit it to read. Setters accept
+          <code>{replace: bool}</code>; default
           <code>replace: true</code> mirrors the dropdown behavior
           (switching presets clears the old one's state).
         </p>
 
-        <pre class="docs-code"><span class="docs-sig">Watercolor.setAnimation(name, opts?)</span>
-<span class="docs-sig">Watercolor.getAnimation()</span> → string
+        <pre class="docs-code"><span class="docs-sig">Watercolor.animation(name, opts?)</span> // set
+<span class="docs-sig">Watercolor.animation()</span> → string       // read
 
-<span class="docs-sig">Watercolor.setVisualization(name, opts?)</span>
-<span class="docs-sig">Watercolor.getVisualization()</span> → string
+<span class="docs-sig">Watercolor.visualization(name, opts?)</span>
+<span class="docs-sig">Watercolor.visualization()</span> → string
 
-<span class="docs-sig">Watercolor.setBackground(name)</span>
-<span class="docs-sig">Watercolor.isBackgroundRunning()</span> → bool</pre>
+<span class="docs-sig">Watercolor.backgroundAnimation(name)</span>
+<span class="docs-sig">Watercolor.backgroundAnimation()</span> → string | null
+<span class="docs-sig">Watercolor.backgroundAnimationRunning()</span> → bool</pre>
 
         <p>Valid names:</p>
         <dl class="docs-deflist">
@@ -2893,9 +2900,11 @@ setInterval(() =&gt; {
 
 opts: { x, y, fontSize, sampleStep, strength, pigment }</pre>
         <p>
-          Renders text at the given grid coordinates. <code>pigment</code>
-          accepts a color name string (same as cursor); defaults to the
-          UI's currently-selected brush.
+          Renders text centered on the given <em>grid</em> coordinates
+          (defaults to canvas center). <code>pigment</code> accepts a
+          color name string (<code>'rose'</code>, <code>'blue'</code>,
+          <code>'rainbow'</code>, …); defaults to the UI's
+          currently-selected brush.
         </p>
 
         <pre class="docs-code"><span class="docs-sig">Watercolor.paintImage(source, opts?)</span> → Promise&lt;number of stamps&gt;
@@ -3104,7 +3113,7 @@ blue weight   = 1 - r    // blue ≈ cyan,    absorbs red</pre>
         </table>
         <p>
           <strong>How it deposits.</strong> Each approximated point
-          fires up to three <code>paintAt</code> calls &mdash; one per
+          fires up to three <code>paint</code> calls &mdash; one per
           non-zero weight &mdash; at strength scaled by that weight.
           The simulation's Kubelka-Munk compositor then renders the
           combined deposited pigment as the approximated color
@@ -3112,7 +3121,7 @@ blue weight   = 1 - r    // blue ≈ cyan,    absorbs red</pre>
         </p>
         <p>
           <strong>Wetness consequence.</strong> A mix-paint stamp can
-          fire 2&ndash;3 <code>paintAt</code> calls at the same point,
+          fire 2&ndash;3 <code>paint</code> calls at the same point,
           which is 2&ndash;3&times; the wetness of a single-pigment
           stamp. Mid-saturation colors and darks bleed more. This is
           actually accurate to real watercolor &mdash; mixing two
@@ -3249,7 +3258,7 @@ blue weight   = 1 - r    // blue ≈ cyan,    absorbs red</pre>
         </p>
         <p>
           <strong>Wetness consequence.</strong> A large filled shape
-          fires hundreds to thousands of <code>paintAt</code> calls in
+          fires hundreds to thousands of <code>paint</code> calls in
           its bounding box. Combined with <code>approximateColor</code>,
           each can become 2&ndash;3 calls per stamp (one per pigment
           weight). The simulation handles this fine, but if you're
@@ -3289,7 +3298,7 @@ blue weight   = 1 - r    // blue ≈ cyan,    absorbs red</pre>
         </p>
         <p>
           <strong>Performance note.</strong> Instant fills can fire
-          hundreds to thousands of <code>paintAt</code> calls in a
+          hundreds to thousands of <code>paint</code> calls in a
           single frame for a large SVG. The simulation handles this
           fine on desktop hardware; on mobile or for very dense SVGs
           you might see a brief stutter on the first frame. If that's
@@ -3360,10 +3369,9 @@ blue weight   = 1 - r    // blue ≈ cyan,    absorbs red</pre>
         <pre class="docs-code">Watercolor.edgeDarkening();        // current state
 Watercolor.edgeDarkening(false);   // disable
 
-Watercolor.pauseDrying(true);
+Watercolor.drying(false);          // pause evaporation (v2 polarity: drying ON is default)
 Watercolor.autoDryBackground(true);
 Watercolor.fadePainting(true);
-Watercolor.fadeFullRender(true);   // re-render whole canvas on fade tick
 Watercolor.transparent(true);
 Watercolor.webgl(true);            // enable WebGL render path
 Watercolor.webglDebugTint(true);   // visible green tint for verification
@@ -3397,7 +3405,7 @@ Watercolor.perf(true);             // enable perf instrumentation + overlay</pre
         </p>
 
         <pre class="docs-code">Watercolor.paperWetnessPresets();
-// → { flooded: 1, wetOnWet: 3, damp: 8, dryBrush: 18, boneDry: 50 }</pre>
+// → ['flooded', 'wetOnWet', 'damp', 'dryBrush', 'boneDry']</pre>
 
         <h3>Brush load</h3>
         <p>
@@ -3441,14 +3449,17 @@ Watercolor.waterLoad(0.5);   // damp water brush — gentle lifting</pre>
         </dl>
 
         <h2 id="api-actions">Actions</h2>
-        <p>All chainable — each returns <code>Watercolor</code>.</p>
+        <p>
+          Chainable unless noted — <code>exportImage</code> returns a
+          data URL, <code>obliterate</code> a Promise.
+        </p>
         <pre class="docs-code">Watercolor.rewet();
 Watercolor.splash();                    // default preset, auto epicenters
 Watercolor.splash('bigSplash');         // big preset
 Watercolor.splash('fineSpritz');        // fine preset
 Watercolor.dry();
 Watercolor.removeMask();
-Watercolor.exportPNG();
+Watercolor.exportImage();               // → data URL (was exportPNG in v1)
 Watercolor.reset();
 
 Watercolor.sketchMode();                // v0.30+ — felt-pen bundle
@@ -3459,8 +3470,9 @@ Watercolor.obliterate({ mode: 'paper', x: 60, y: 60, durationMs: 500 });</pre>
         <h3>sketchMode (v0.30+)</h3>
         <p>
           <code>sketchMode()</code> is a one-shot settings bundle, not
-          a mode flag. It calls a series of setters in sequence:
-          <code>brushSize(7)</code>, <code>paintLoad(1.6)</code>,
+          a mode flag. It applies a series of settings in sequence:
+          a 7px fine-tip brush (its <code>brushSize</code> option
+          stays in display pixels), <code>paintLoad(1.6)</code>,
           <code>waterLoad(0.25)</code>, <code>pressure(0.95)</code>,
           <code>paperWetness('boneDry')</code>,
           <code>continuousFlow(false)</code>,
@@ -3496,51 +3508,52 @@ await Watercolor.obliterate({
           plain click &rarr; <code>'water'</code>, shift &rarr;
           <code>'pigment'</code>, alt &rarr; <code>'paper'</code>.
           <code>{x, y}</code> are grid coordinates &mdash; use
-          <code>toGrid(clientX, clientY)</code> to convert pointer
-          events. The Multi-Watercolor quickstart's click handler
-          documents the common pattern.
+          <code>grid.fromDisplay(clientX, clientY)</code> to convert
+          pointer events and pass its <code>gx</code>/<code>gy</code>.
+          The Multi-Watercolor quickstart's click handler documents
+          the common pattern.
         </p>
 
         <h3>Splash with explicit coordinates</h3>
         <p>
-          Pass an array of <code>{x, y}</code> points (grid coordinates)
-          to choreograph the splash exactly. Each point can include
-          optional <code>radius</code>, <code>velocity</code>,
+          Pass an array of <code>{x, y}</code> points &mdash;
+          <strong>normalized 0..1</strong> across the canvas, like
+          every other v2 position &mdash; to choreograph the splash
+          exactly. Each point can include optional <code>radius</code>
+          (fraction of the smaller side), <code>velocity</code>,
           <code>pressure</code>, and <code>lift</code> overrides that
           apply just to that epicenter.
         </p>
         <pre class="docs-code">// Two splashes at specific locations
 Watercolor.splash([
-  { x: 200, y: 300 },
-  { x: 800, y: 500 }
+  { x: 0.2, y: 0.45 },
+  { x: 0.7, y: 0.75 }
 ]);
 
 // With a preset
-Watercolor.splash([{ x: 576, y: 324 }], 'fineSpritz');
+Watercolor.splash([{ x: 0.5, y: 0.5 }], 'fineSpritz');
 
 // Per-point overrides — one big, one subtle
 Watercolor.splash([
-  { x: 200, y: 300, radius: 300, velocity: 1.2 },
-  { x: 800, y: 500, radius: 50,  velocity: 0.3 }
+  { x: 0.2, y: 0.45, radius: 0.25, velocity: 1.2 },
+  { x: 0.7, y: 0.75, radius: 0.05, velocity: 0.3 }
 ]);
 
 // Object form (alternative)
 Watercolor.splash({
-  coords: [{ x: 576, y: 324 }],
+  coords: [{ x: 0.5, y: 0.5 }],
   preset: 'bigSplash'
 });
 
 // Discover preset names
 Watercolor.splashPresets();
-// → ['default', 'bigSplash', 'fineSpritz']
+// → ['default', 'bigSplash', 'fineSpritz', 'deluge']
 
 // Chain after a wash to disperse it
-Watercolor.setBackground('sunset').splash('fineSpritz');</pre>
+Watercolor.backgroundAnimation('sunset').splash('fineSpritz');</pre>
         <p>
-          Coordinates are in grid units (use <code>Watercolor.toGrid()</code>
-          to convert from pointer events). Per-point overrides win over
-          the preset; preset values fill in anything the point doesn't
-          specify. <code>radius</code> is in display pixels.
+          Per-point overrides win over the preset; preset values fill
+          in anything the point doesn't specify.
         </p>
 
         <h2 id="api-perf">Performance</h2>
@@ -3604,8 +3617,8 @@ localStorage.setItem('myPreset', JSON.stringify(wc.getPreset()));
 const saved = JSON.parse(localStorage.getItem('myPreset'));
 wc.applyPreset(saved);
 
-// Apply across instances
-const wc2 = Watercolor.create(otherEl);
+// Apply across instances (Washes is the factory namespace)
+const wc2 = Washes.create(otherEl);
 wc2.applyPreset(wc.getPreset());
 
 // React to applied presets
@@ -3615,19 +3628,32 @@ hostEl.addEventListener('presetapplied', (e) => {
 
         <h2 id="api-coords">Coordinates</h2>
         <p>
-          The canvas has internal <strong>grid coordinates</strong>
-          (0..GW × 0..GH) which is what cursors and <code>paintAt</code>
-          use. <strong>Display coordinates</strong> (CSS pixels) are
-          what pointer events come in as. Helpers convert between them:
+          <strong>Normalized coordinates are THE space of API 2.0</strong>
+          &mdash; <code>0..1</code> across the canvas in both axes,
+          radii as fractions of the smaller display side. They're
+          resolution-independent: the same call paints the same
+          composition at every quality setting. Two other spaces
+          exist at the edges: <strong>grid coordinates</strong>
+          (0..GW &times; 0..GH simulation cells) for code that thinks
+          in cells, and <strong>display pixels</strong>, which is what
+          pointer events come in as. The <code>grid</code> namespace
+          holds the cell-space verbs and all the converters:
         </p>
-        <pre class="docs-code">Watercolor.grid;
-// → { width: 1152, height: 648 }   (varies with resolution slider)
+        <pre class="docs-code">Watercolor.grid.width;   // → 1152   (live values — change on rescale,
+Watercolor.grid.height;  // → 648     so don't cache them)
 
-Watercolor.toGrid(displayX, displayY);
-// → { x, y } in grid units
+// Cell-space verb family (v1's grid-space calls, exactly)
+Watercolor.grid.paint(gx, gy, gridRadius, pigment?, strength?);
+Watercolor.grid.stir(gx, gy, vx, vy, gridRadius?);
+Watercolor.grid.rewet(gx, gy, gridRadius?);
+Watercolor.grid.dry(gx, gy, gridRadius?);
+Watercolor.grid.sample(gx, gy);
 
-Watercolor.toDisplay(gridX, gridY);
-// → { x, y } in display pixels</pre>
+// Converters
+Watercolor.grid.fromDisplay(displayX, displayY);  // → { gx, gy }
+Watercolor.grid.toDisplay(gx, gy);                // → { x, y } display px
+Watercolor.grid.toNorm(gx, gy);                   // → { nx, ny }
+Watercolor.grid.fromNorm(nx, ny);                 // → { gx, gy }</pre>
 
         <h2 id="api-state">State snapshot</h2>
         <pre class="docs-code"><span class="docs-sig">Watercolor.state()</span> → object</pre>
@@ -3636,11 +3662,19 @@ Watercolor.toDisplay(gridX, gridY);
           Does not include the giant Float32Arrays.
         </p>
         <pre class="docs-code">{
+  // governor + sim status (v1.4–v1.5)
+  autoPerf: true,
+  perfLevel: 'full',
+  isIdle: false,
+  totalWetness: 1841.2,
+  totalSuspended: 96.4,
+  // geometry + config
   gridWidth: 1152,
   gridHeight: 648,
   displayWidth: 1920,
   displayHeight: 1080,
-  brushSize: 30,
+  brushSize: 30,             // NOTE: internal px diameter — the
+                             // brushSize() accessor speaks fractions
   pigment: 0,                // current pigment index
   canvasScale: 0.6,
   animationMode: 'rainy',
@@ -3651,6 +3685,14 @@ Watercolor.toDisplay(gridX, gridY);
   pauseDrying: false,
   gouacheMode: false | true | 'auto'  // v0.37+, 'auto' added in v0.51
 }</pre>
+        <p>
+          <code>state()</code> is <em>settings and status</em> &mdash;
+          for the painting itself, <code>saveState()</code> returns a
+          full snapshot of the pigment/water field that
+          <code>loadState()</code> restores <strong>bit-exactly</strong>
+          (v1.22+). Pair with <code>getPreset()</code> to round-trip a
+          whole session.
+        </p>
       </section>
 
       <!-- ============================== AGENTS ============================== -->
@@ -3679,26 +3721,34 @@ Watercolor.toDisplay(gridX, gridY);
           <strong>How to mount.</strong> The library exposes a
           factory:
         </p>
-        <pre class="docs-code">const wc = Watercolor.create(targetEl, options?);</pre>
+        <pre class="docs-code">const wc = Washes.create(targetEl, options?);
+// (window.Watercolor is a legacy alias of the same namespace; on THIS
+// page the playground reassigns window.Watercolor to its live instance)</pre>
         <p>
           Every method on the returned <code>wc</code> handle is
-          stateful and synchronous. There are no callbacks, no
-          Promises (except <code>traceSVG</code> when passed a URL),
-          and no event-loop coordination required from the caller.
-          The simulation runs on a single
+          stateful, and nearly all are synchronous. The async
+          exceptions return Promises: <code>obliterate()</code>,
+          <code>paintImage()</code>,
+          <code>exportImage({ asBlob: true })</code>, and
+          <code>once(event)</code>. The simulation runs on a single
           <code>requestAnimationFrame</code> loop owned by the
           instance. The host's only job is to call methods when
           state changes are wanted.
         </p>
         <p>
-          <strong>Coordinate system.</strong> All position arguments
-          (<code>paintAt</code>, <code>paintText</code>, cursor
-          positions) are in <em>grid coordinates</em>: integer cells
-          on the simulation grid, not display pixels. Read
-          <code>wc.grid.width</code> /
-          <code>wc.grid.height</code> for current dimensions. Convert
-          display-pixel to grid via <code>wc.toGrid(clientX,
-          clientY)</code>.
+          <strong>Coordinate system.</strong> All primary position
+          arguments (<code>paint</code>, <code>stroke</code>,
+          <code>line</code>, <code>splash</code> epicenters, mask
+          rects) are <em>normalized</em>: <code>0..1</code> across the
+          canvas, radii as fractions of the smaller display side.
+          Grid-cell space lives on the <code>wc.grid</code> namespace
+          (<code>grid.paint</code>, <code>grid.stir</code>, …;
+          <code>paintText</code> and <code>obliterate</code> also take
+          grid coords). Read <code>wc.grid.width</code> /
+          <code>wc.grid.height</code> for current cell dimensions;
+          convert display px via
+          <code>wc.grid.fromDisplay(clientX, clientY)</code> &rarr;
+          <code>{gx, gy}</code>.
         </p>
         <p>
           <strong>Idle behavior.</strong> The sim auto-idles when no
@@ -3706,7 +3756,7 @@ Watercolor.toDisplay(gridX, gridY);
           running, no visualization). When idle, the RAF loop is
           essentially free &mdash; it ticks at 60Hz but skips
           <code>simStep</code> and <code>render</code>. Painting via
-          <code>paintAt</code> automatically wakes the sim.
+          <code>paint</code> automatically wakes the sim.
         </p>
 
         <h2 id="agents-signatures">Type signatures</h2>
@@ -3717,35 +3767,66 @@ Watercolor.toDisplay(gridX, gridY);
           otherwise noted.
         </p>
         <pre class="docs-code">// === FACTORY ===
-Watercolor.create(targetEl: HTMLElement, options?: CreateOptions): Instance
+Washes.create(targetEl: HTMLElement, options?: CreateOptions): Instance
+Washes.version   // engine semver string
+Washes.compat1(instance)   // rebuild the complete v1 surface (until 3.0)
 
 interface CreateOptions {
   canvasScale?: number       // 0.1..1.0, default auto from target width
+  scale?: number             // sim resolution divisor
+  size?: { width, height }   // fixed canvas size instead of host-fill
   mobile?: boolean           // override matchMedia('(pointer: coarse)')
   continuousFlow?: boolean   // default true
   pointer?: boolean          // default true; false disables pointer events
   cursorPreview?: boolean    // default: ON on desktop, OFF on touch devices
-  gouacheMode?: boolean      // default false; swap to opaque pigment K/S set
+  gouacheMode?: boolean | 'auto' | number
+  paperColor?: { r, g, b }   // 0..1 RGB
+  pauseDrying?: boolean
+  qualityHint?: string       // initial quality preset
+  transparent?: boolean
+  pigments?: PigmentSpec[]   // custom palette (K/S/density/staining/granulation)
+  seed?: number              // v1.23 — deterministic splash/rainbow randomness
 }
 
 // === BRUSH STATE ===
-brushSize(): number | brushSize(px: number): Instance     // display pixels
+brushSize(): number | brushSize(fraction: number): Instance
+    // RADIUS as fraction of the smaller display side; default 0.03
 pigment(): number | pigment(name: string | idx: number): Instance
 pressure(): number | pressure(v: number): Instance        // 0..1, default 0.7
 flow(): number | flow(v: number): Instance                // 0.05..2.0, default 0.4
 paintLoad(): number | paintLoad(v: number): Instance      // 0.1+, default 1.0
 waterLoad(): number | waterLoad(v: number): Instance      // 0.2+, default 1.0
+brushMode(): string | brushMode(name: string): Instance   // 'wash' | 'crayon' | …
 continuousFlow(): boolean | continuousFlow(v: boolean): Instance
 usePointerPressure(): boolean | usePointerPressure(v: boolean): Instance
 
-// === PAINTING ===
-paintAt(gx: number, gy: number, gridRadius: number,
-        pigment: number | string, strength: number): Instance
-paintText(text: string, opts?: TextOptions): number   // returns dabs painted
+// === PAINTING (normalized 0..1; nradius = fraction of smaller side) ===
+paint(nx, ny, nradius?, pigment?, strength?): Instance
+stroke(nx, ny, opts?): Instance      // pointer-stream stroke; penUp() ends it
+line(nx0, ny0, nx1, ny1, opts?): Instance
+penUp(): Instance
+stir(nx, ny, vx, vy, nradius?): Instance
+rewet(): Instance | rewet(nx, ny, nradius?): Instance
+dry(): Instance | dry(nx, ny, nradius?): Instance
+lift(nx, ny, nradius?, fraction?): Instance
+blot(nx, ny, nradius?, strength?): Instance
+sample(nx, ny): SampleResult
+mask(nx, ny, nw, nh, radii?): Instance
+unmask(nx, ny, nw, nh, radii?): Instance
+splash(epicenters?, style?, opts?): Instance
+paintText(text: string, opts?: TextOptions): number   // grid coords; returns dabs
 paintImage(source: File | Blob | HTMLImageElement | string,
-           opts?: PaintImageOptions): Promise&lt;number&gt;  // returns stamps painted (v0.49+)
+           opts?: PaintImageOptions): Promise&lt;number&gt;  // resolves to stamps painted
 traceSVG(svgText: string, opts?: SVGTraceOptions): number  // returns points queued
 cancelSVGTrace(): Instance
+
+// === GRID NAMESPACE (cell space) ===
+grid.width, grid.height          // live cell dims — don't cache
+grid.paint(gx, gy, gridRadius, pigment?, strength?): Instance
+grid.stir / grid.rewet / grid.dry / grid.sample   // v1 grid-space impls, exactly
+grid.fromDisplay(x, y) → {gx, gy}
+grid.toDisplay(gx, gy) → {x, y}
+grid.toNorm(gx, gy) → {nx, ny} | grid.fromNorm(nx, ny) → {gx, gy}
 
 interface TextOptions {
   x?: number; y?: number; fontSize?: number; sampleStep?: number;
@@ -3777,13 +3858,18 @@ interface SVGTraceOptions {
   colorMap?: boolean;                   // (deprecated alias for triggerColors)
 }
 
-// === SCENES ===
-setAnimation(name: AnimationName, opts?: object): Instance
-getAnimation(): string
-setVisualization(name: VisualizationName, opts?: object): Instance
-getVisualization(): string
-setBackground(name: BackgroundName): Instance
-isBackgroundRunning(): boolean
+// === SCENES (unified accessors: name to set, no args to read) ===
+animation(name: AnimationName, opts?: { replace?: boolean }): Instance
+animation(): string
+visualization(name: VisualizationName, opts?: { replace?: boolean }): Instance
+visualization(): string
+backgroundAnimation(name: BackgroundName): Instance
+backgroundAnimation(): string | null
+backgroundAnimationRunning(): boolean
+
+// === RUN POLICY ===
+run(policy: 'auto' | 'until-dry' | 'always'): Instance | run(): string
+drying(v: boolean): Instance | drying(): boolean   // false pauses evaporation
 
 type AnimationName = 'off' | 'ai' | 'rainy' | 'sunny' | 'windy'
                    | 'thunderstorm' | 'partlyCloudy' | 'snowing'
@@ -3792,36 +3878,39 @@ type VisualizationName = 'off' | 'kaleidoscope' | 'lissajous'
                        | 'flowField' | 'pulse';
 type BackgroundName = 'day' | 'dawn' | 'sunset' | 'night' | 'tornado';
 
-// === TOGGLES ===
-edgeDarkening(v?: boolean): boolean | Instance
-pauseDrying(v?: boolean): boolean | Instance
-autoDryBackground(v?: boolean): boolean | Instance
-fadePainting(v?: boolean): boolean | Instance
-transparent(v?: boolean): boolean | Instance
-webgl(v?: boolean): boolean | Instance
+// === TOGGLES (omit arg to read; setters return Instance) ===
+edgeDarkening(v?: boolean)
+autoDryBackground(v?: boolean)
+fadePainting(v?: boolean)
+transparent(v?: boolean)
+webgl(v?: boolean)
 webglAvailable(): boolean
-webglDebugTint(v?: boolean): boolean | Instance
-mobile(v?: boolean): boolean | Instance
+webglDebugTint(v?: boolean)
+mobile(v?: boolean)
 mobileDetected(): boolean
-cursorPreview(v?: boolean): boolean | Instance
-gouacheMode(v?: boolean): boolean | Instance
-perf(v?: boolean): boolean | Instance
+cursorPreview(v?: boolean)
+gouacheMode(v?: boolean | 'auto' | number)
+gouacheLerpAmount(): number
+perf(v?: boolean)
 
 // === CONTINUOUS PARAMS ===
-fadeHalfLife(ms?: number): number | Instance    // 500..30000
-scale(v?: number): number | Instance            // 1..6, REBUILDS sim
-paperWetness(name: string): Instance
-paperColor(r?: number, g?: number, b?: number): object | Instance
+fadeHalfLife(ms?: number)               // 500..30000
+scale(v?: number)                       // 1..6 — PRESERVES painting (v2);
+                                        //   { wipe: true } opts out
+remeasure(opts?: { wipe?: boolean })    // re-fit to host, preserving
+quality(preset?: string)                // 'auto' | 'full' | 'half' | …
+paperWetness(name?: string)
+paperColor(r?, g?, b?)                  // 0..1 RGB, or a CSS string
+evaporation(v?: number | string)
 
 // === ACTIONS ===
-rewet(): Instance        // re-saturate paper
-dry(): Instance          // instant-dry; fires 'driedinstantly' event on targetEl
+rewet(): Instance        // no-arg = full-canvas soak
+dry(): Instance          // no-arg = instant full dry; fires 'driedinstantly'
 reset(): Instance        // clear all paint + paper state
 removeMask(): Instance
-splash(arg1?, arg2?): Instance
 splashPresets(): string[]
 paperWetnessPresets(): string[]
-pigments(): { index: number, name: string }[]
+pigments(): number[]     // available pigment indices
 
 // === HIGH-LEVEL PRESETS (v0.30) ===
 sketchMode(opts?: SketchOptions): Instance   // felt-pen settings bundle
@@ -3844,14 +3933,20 @@ interface ObliterateOptions {
 }
 
 // === RENDER + EXPORT ===
-exportPNG(opts?: { mimeType?: string }): string  // returns data URL
+exportImage(opts?: { transparent?, mimeType?, quality? }): string  // data URL
+exportImage({ asBlob: true, ... }): Promise&lt;Blob&gt;
 buildPigmentSwatches(rootEl: HTMLElement): Instance
 
-// === STATE ===
-state(): StateSnapshot
-grid: { width: number, height: number }
-toGrid(clientX: number, clientY: number): { x: number, y: number }
-perfMetrics(): PerfSnapshot
+// === STATE + EVENTS ===
+state(): StateSnapshot                   // settings + status (small)
+saveState(): Snapshot                    // full painting — v1.22
+loadState(snapshot): Instance            // bit-exact restore
+getPreset(): Preset | applyPreset(p): Instance
+on(name, cb): Unsubscribe                // typed events; also mirrored as
+once(name): Promise&lt;detail&gt;              //   lowercase DOM CustomEvents
+onFrame(cb): Unsubscribe
+displayRect(): { width, height, ... }
+coverage(threshold?): number             // fraction of canvas painted
 destroy(): void   // cancels RAF, removes listeners, drops references</pre>
 
         <p>
@@ -3871,29 +3966,24 @@ destroy(): void   // cancels RAF, removes listeners, drops references</pre>
         <h2 id="agents-recipes">Recipes</h2>
         <p>
           Common tasks as standalone snippets. All assume
-          <code>wc = Watercolor.create(targetEl)</code> has been
+          <code>wc = Washes.create(targetEl)</code> has been
           called and the instance is in its default state.
         </p>
 
         <h3>Single dab at canvas center</h3>
-        <pre class="docs-code">const { width, height } = wc.grid;
-wc.paintAt(width / 2, height / 2, 20, 'blue', 0.7);</pre>
+        <pre class="docs-code">wc.paint(0.5, 0.5, 0.02, 'blue', 0.7);
+// Normalized: (0.5, 0.5) is center at every resolution; radius
+// 0.02 = 2% of the smaller display side.</pre>
 
         <h3>Continuous stroke from A to B</h3>
-        <pre class="docs-code">// Interpolated stamps along the line. Spacing should be roughly
-// brush-radius / 4 for smoothness. paintAt internally takes a
-// grid-radius (not diameter), so divide by 2.
-function stroke(x1, y1, x2, y2, brushPx = 20, pigment = 'rose') {
-  const r = brushPx / 2;
-  const dx = x2 - x1, dy = y2 - y1;
-  const dist = Math.sqrt(dx * dx + dy * dy);
-  const steps = Math.max(1, Math.ceil(dist / (r * 0.4)));
-  for (let i = 0; i &lt;= steps; i++) {
-    const t = i / steps;
-    wc.paintAt(x1 + dx * t, y1 + dy * t, r, pigment, 0.7);
-  }
-}
-stroke(100, 100, 500, 400);</pre>
+        <pre class="docs-code">// One call — line() interpolates stamps with the live flow model,
+// the same path pointer strokes take.
+wc.line(0.1, 0.15, 0.45, 0.6, { pigment: 'rose' });
+
+// For streamed input (a robot hand, a replay, generated points),
+// feed positions to stroke() and end with penUp():
+for (const p of points) wc.stroke(p.x, p.y);
+wc.penUp();</pre>
 
         <h3>Loop-driven painting (timed sequence)</h3>
         <pre class="docs-code">// Paint a sequence with realistic timing: paint, let it bleed for
@@ -3902,25 +3992,24 @@ stroke(100, 100, 500, 400);</pre>
 // just decide when to inject paint events.
 async function sequence() {
   const sleep = ms =&gt; new Promise(r =&gt; setTimeout(r, ms));
-  wc.pigment('rose'); wc.brushSize(40);
-  wc.paintAt(300, 300, 20, 'rose', 0.7);
+  wc.pigment('rose').brushSize(0.03);        // setters chain in v2
+  wc.paint(0.28, 0.45, 0.02, 'rose', 0.7);
   await sleep(2000);                          // bleed for 2s
-  wc.pigment('blue');
-  wc.paintAt(400, 350, 18, 'blue', 0.7);     // wet-on-wet mixing
+  wc.paint(0.36, 0.52, 0.018, 'blue', 0.7); // wet-on-wet mixing
   await sleep(3000);                          // bleed more
   wc.dry();                                   // instant dry
-  const png = wc.exportPNG();
+  const png = wc.exportImage();
   return png;
 }</pre>
 
         <h3>Multi-instance setup</h3>
         <pre class="docs-code">// Each create() returns an independent simulation. No globals
 // are shared between instances; safe to mount many on one page.
-const instA = Watercolor.create(document.getElementById('canvas-a'));
-const instB = Watercolor.create(document.getElementById('canvas-b'),
+const instA = Washes.create(document.getElementById('canvas-a'));
+const instB = Washes.create(document.getElementById('canvas-b'),
   { canvasScale: 0.5 });   // half-resolution for the smaller embed
-instA.setBackground('sunset');
-instB.setAnimation('rainy');</pre>
+instA.backgroundAnimation('sunset');
+instB.animation('rainy');</pre>
 
         <h3>SVG trace with custom brush</h3>
         <pre class="docs-code">const svgText = await fetch('/some-vector.svg').then(r =&gt; r.text());
@@ -3962,27 +4051,34 @@ wc.traceSVG(illustrationSvg, {
 
         <h3>Set scene + animation, then capture frames</h3>
         <pre class="docs-code">// Useful for procedurally generating training data / examples.
-wc.setBackground('dawn');
-wc.setAnimation('rainy');
+wc.backgroundAnimation('dawn');
+wc.animation('rainy');
 const frames = [];
 const intervalId = setInterval(() =&gt; {
-  frames.push(wc.exportPNG());
+  frames.push(wc.exportImage());
   if (frames.length &gt;= 60) {
     clearInterval(intervalId);
-    wc.setAnimation('off');
+    wc.animation('off');
   }
 }, 1000 / 30);   // 30 fps capture</pre>
 
         <h3>Listen for sim state changes</h3>
-        <pre class="docs-code">// The library dispatches CustomEvents on targetEl for some
-// state changes. Currently:
-//   'rescaled'         — fired after scale() rebuilds the sim
-//   'driedinstantly'   — fired after dry() completes
-//   'pigmentchange'    — fired by lib-built swatches when clicked
-//                        (only when using buildPigmentSwatches)
-targetEl.addEventListener('rescaled', (e) =&gt; {
-  console.log('grid is now', e.detail.gridWidth, 'x', e.detail.gridHeight);
-});</pre>
+        <pre class="docs-code">// v1.24 unified events: one typed map, subscribed via on()/once().
+// Names: 'idle', 'active', 'dry', 'rescale', 'perflevel',
+// 'palettechange', 'gouachechange', 'cursorpreviewchange',
+// 'presetapplied', 'driedinstantly'.
+const off = wc.on('rescale', (detail) =&gt; {
+  console.log('grid is now', detail.gridWidth, 'x', detail.gridHeight);
+});
+off();                                  // unsubscribe
+
+await wc.once('idle');                  // promise form — fires once
+
+// Every event is also mirrored as a lowercase DOM CustomEvent on
+// targetEl (detail on e.detail) for hosts that prefer listeners:
+targetEl.addEventListener('rescale', (e) =&gt; { /* e.detail.scale … */ });
+// Plus 'pigmentchange', fired by lib-built swatches when clicked
+// (only when using buildPigmentSwatches).</pre>
 
         <h3>Project thumbnails (sketch + obliterate)</h3>
         <p>
@@ -3992,9 +4088,9 @@ targetEl.addEventListener('rescaled', (e) =&gt; {
           bundle), <code>traceSVG()</code> (drawing engine), and
           <code>obliterate()</code> (transition animation).
         </p>
-        <pre class="docs-code">// Each thumbnail mounts its own Watercolor instance.
+        <pre class="docs-code">// Each thumbnail mounts its own Washes instance.
 async function mountThumbnail(targetEl, svgUrl, projectUrl) {
-  const wc = Watercolor.create(targetEl, {
+  const wc = Washes.create(targetEl, {
     canvasScale: 0.5,    // small canvas, scale brush proportionally
     pointer: false,      // no painting from clicks — we handle clicks ourselves
   });
@@ -4008,15 +4104,15 @@ async function mountThumbnail(targetEl, svgUrl, projectUrl) {
   // Click handler — obliterate the sketch, then navigate.
   targetEl.addEventListener('click', async (e) =&gt; {
     e.preventDefault();
-    // Pass clientX/Y DIRECTLY — toGrid does its own getBoundingClientRect
-    // internally. Pre-subtracting rect.left/top double-subtracts.
-    // Read x/y from the result (NOT gx/gy — those are undefined and
-    // would silently fall through to obliterate's default center).
-    const { x, y } = wc.toGrid(e.clientX, e.clientY);
+    // Pass clientX/Y DIRECTLY — grid.fromDisplay does its own
+    // getBoundingClientRect internally. Pre-subtracting rect.left/top
+    // double-subtracts. The result keys are gx/gy (honest cell-space
+    // names, renamed from v1 toGrid's ambiguous x/y).
+    const { gx, gy } = wc.grid.fromDisplay(e.clientX, e.clientY);
     await wc.obliterate({
       mode: 'water',     // or 'pigment' for a color wash
       durationMs: 500,
-      x, y,
+      x: gx, y: gy,      // obliterate speaks grid coords
     });
     window.location = projectUrl;
   });
@@ -4034,7 +4130,7 @@ tiles.forEach(t =&gt; mountThumbnail(document.querySelector(t.el), t.svg, t.url)
         <p>
           The hero canvas in the same page can run its own animation
           via a fifth instance &mdash; e.g.
-          <code>heroWc.setAnimation('rainy')</code> &mdash; with no
+          <code>heroWc.animation('rainy')</code> &mdash; with no
           coordination needed. Each instance owns its own RAF loop
           and state arrays.
         </p>
@@ -4058,21 +4154,21 @@ tiles.forEach(t =&gt; mountThumbnail(document.querySelector(t.el), t.svg, t.url)
           <code>paperColor()</code> for the "vibrant pigment on dark
           background" aesthetic (v0.37+):
         </p>
-        <pre class="docs-code">const wc = Watercolor.create(targetEl, {
+        <pre class="docs-code">const wc = Washes.create(targetEl, {
   canvasScale: 0.6,
   pointer: true,
   gouacheMode: true,             // opaque pigments from boot
 });
 
-// Near-black with a hint of warmth. Pure black (0,0,0) looks
-// flat — a few units of color give the gouache something to
-// register against, like real charcoal-grey paper.
-wc.paperColor(20, 18, 22);
+// Near-black with a hint of warmth. Pure black looks flat — a
+// little color gives the gouache something to register against,
+// like real charcoal-grey paper. 0..1 RGB (or a CSS string).
+wc.paperColor(0.08, 0.07, 0.09);
 
 // Standard brush state; the K/S values do the heavy lifting.
-wc.brushSize(60);
+wc.brushSize(0.08);
 wc.pigment('rose');
-wc.paintAt(/* … */);</pre>
+wc.paint(/* … */);</pre>
         <p>
           Toggle gouache mode at runtime to preview the difference
           mid-painting &mdash; the K/S values are read per-frame, so
@@ -4080,7 +4176,7 @@ wc.paintAt(/* … */);</pre>
         </p>
         <pre class="docs-code">// Paint a wash in transparent mode
 wc.pigment('rose');
-wc.paintAt(300, 300, 40, 'rose', 0.8);
+wc.paint(0.3, 0.45, 0.05, 'rose', 0.8);
 
 // Flip — same wash now renders opaque
 wc.gouacheMode(true);
@@ -4116,23 +4212,25 @@ wc.gouacheLerpAmount();            // → 0.3</pre>
           you from chasing phantom bugs.
         </p>
         <dl class="docs-deflist">
-          <dt>Coordinates are grid units, NOT pixels.</dt>
+          <dt>Coordinates are normalized 0..1, NOT pixels.</dt>
           <dd>
-            <code>paintAt(100, 100, 20, 'blue', 0.7)</code> paints at
-            grid cell (100, 100) with a grid-radius of 20 cells. With
-            the default <code>SCALE = 1.75</code>, those grid units
-            map to about 175 display pixels from the top-left. Use
-            <code>wc.grid.width</code> / <code>wc.grid.height</code>
-            for proportional placement; use <code>wc.toGrid()</code>
-            to convert clientX/Y from mouse events.
+            <code>paint(0.5, 0.5, 0.03, 'blue', 0.7)</code> paints at
+            canvas center with a radius of 3% of the smaller display
+            side &mdash; at every resolution. Values &gt; 1 are almost
+            always a v1 habit (grid or px coords) leaking through: the
+            cell-space calls live on <code>wc.grid</code>
+            (<code>grid.paint(gx, gy, gridRadius, …)</code>), and
+            pointer clientX/Y convert via
+            <code>wc.grid.fromDisplay()</code>.
           </dd>
 
-          <dt>paintAt takes grid-RADIUS, not diameter.</dt>
+          <dt>All radii are RADII, as fractions of the smaller side.</dt>
           <dd>
-            <code>brushSize()</code> is in display pixels and is
-            diameter. When converting between them: <code>r =
-            (brushSize / 2) / SCALE</code>. The recipe above does this
-            inline.
+            <code>brushSize()</code> too &mdash; v2 unified it with
+            every other radius (v1's px <em>diameter</em> is on
+            compat1 only). Default 0.03. To hit an exact px diameter,
+            bridge through <code>displayRect()</code>:
+            <code>wc.brushSize(px / 2 / Math.min(r.width, r.height))</code>.
           </dd>
 
           <dt>Pigments mix subtractively, not RGB-additively.</dt>
@@ -4145,13 +4243,16 @@ wc.gouacheLerpAmount();            // → 0.3</pre>
             into suspension.
           </dd>
 
-          <dt>scale() rebuilds the sim and clears the canvas.</dt>
+          <dt>scale() rebuilds the sim — but PRESERVES the painting (v2).</dt>
           <dd>
-            Changing resolution reallocates all state arrays. The
-            instance dispatches a <code>'rescaled'</code> event on
-            <code>targetEl</code> when done. Don't call
+            Changing resolution reallocates all state arrays and
+            resamples the painting into them (v1 wiped; pass
+            <code>{ wipe: true }</code> for that). The instance fires
+            <code>'rescale'</code> (renamed from v1's
+            <code>'rescaled'</code>) when done. Don't call
             <code>scale()</code> in a tight loop &mdash; debounce by
-            ~80ms.
+            ~80ms. One carve-out: the <em>automatic</em> rebuild on
+            host resize still wipes for now.
           </dd>
 
           <dt>mask is sticky.</dt>
@@ -4226,7 +4327,7 @@ wc.gouacheLerpAmount();            // → 0.3</pre>
 async function paint() {
   for (const step of plan) {
     if (step.type === 'paint') {
-      wc.paintAt(step.x, step.y, step.r, step.pigment, step.strength);
+      wc.paint(step.nx, step.ny, step.nr, step.pigment, step.strength);
     } else if (step.type === 'wait') {
       await new Promise(r =&gt; setTimeout(r, step.ms));
     } else if (step.type === 'dry') {
@@ -4236,15 +4337,15 @@ async function paint() {
 }
 
 // Pattern 2: Continuous control loop with state polling
-function controller(targetX, targetY) {
+function controller(targetNX, targetNY) {
   let active = true;
   function tick() {
     if (!active) return;
     const s = wc.state();
-    // Decide next action based on current state. For example, paint
-    // while the canvas is "dry enough" to absorb new paint cleanly.
-    if (!s.dryingPaused) {
-      wc.paintAt(targetX, targetY, 15, 'rose', 0.5);
+    // Decide next action based on current state — e.g. keep painting
+    // until the sim settles.
+    if (!s.isIdle) {
+      wc.paint(targetNX, targetNY, 0.015, 'rose', 0.5);
     }
     requestAnimationFrame(tick);
   }
@@ -4256,30 +4357,38 @@ function controller(targetX, targetY) {
 async function runEval(scenario) {
   const host = document.createElement('div');
   document.body.appendChild(host);
-  const wc = Watercolor.create(host, { pointer: false });   // no UI input
+  const wc = Washes.create(host, {
+    pointer: false,               // no UI input
+    seed: scenario.seed ?? 42,    // v1.23 — reproducible randomness
+  });
   for (const action of scenario.actions) action(wc);
   await new Promise(r =&gt; setTimeout(r, scenario.settleMs ?? 1500));
-  const png = wc.exportPNG();
+  const png = wc.exportImage();
   wc.destroy();
   document.body.removeChild(host);
   return png;
 }</pre>
         <p>
-          <strong>Determinism caveat.</strong> The sim isn't
-          bit-deterministic across runs &mdash; floating-point
-          ordering, RAF cadence, and the active-rect optimization
-          mean the same input sequence may produce slightly different
-          output. For deterministic evals, render frames yourself by
-          calling internal step methods directly via a fork, or
-          compare results structurally (pigment count, bounding box)
-          rather than byte-for-byte.
+          <strong>Determinism.</strong> The sim core is fully
+          deterministic &mdash; no <code>Math.random</code> inside the
+          physics, and <code>create({ seed })</code> (v1.23) pins the
+          splash/rainbow randomness, so an identical <em>call
+          sequence</em> stepped the same way reproduces a painting
+          bit-exactly (that's how the engine's 249 golden checks work).
+          What is <em>not</em> deterministic in the browser is timing:
+          RAF cadence decides how many sim steps land between your
+          calls, so wall-clock-driven runs still vary. For exact
+          round-trips use <code>saveState()</code>/<code>loadState()</code>
+          (bit-exact, v1.22); for RAF-driven evals compare
+          structurally (<code>coverage()</code>, <code>sample()</code>,
+          bounding boxes) rather than byte-for-byte.
         </p>
         <p>
           <strong>Pointer-free instances.</strong> Pass
           <code>{ pointer: false }</code> in create options to disable
           the built-in pointer event handlers. Useful for test
           harnesses where mouse-driven painting would interfere with
-          programmatic painting via <code>paintAt</code>.
+          programmatic painting via <code>paint</code>.
         </p>
 
         <h2 id="agents-llms-txt">llms.txt &amp; AGENTS.md</h2>
@@ -4300,21 +4409,23 @@ async function runEval(scenario) {
 A &lt;one-sentence project description&gt;.
 
 ## What it uses
-- Watercolor v0.29 library — a physical watercolor simulation
+- Washes 2.x engine — a physical watercolor simulation
   implementing Curtis et al. 1997. State is held inside a factory
-  instance returned by `Watercolor.create(targetEl, options)`.
+  instance returned by `Washes.create(targetEl, options)`.
+  Coordinates are normalized 0..1; radii are fractions of the
+  smaller display side.
 
 ## API surface this app uses
-- wc.setBackground(name)
-- wc.paintAt(x, y, r, pigment, strength)
-- wc.exportPNG()
+- wc.backgroundAnimation(name)
+- wc.paint(nx, ny, nr, pigment, strength)
+- wc.exportImage()
 
 ## Where to look
 - src/main.js — instance creation + UI wiring
 - src/scenes/ — declarative scene definitions
 - public/index.html — markup the library mounts into
 
-See the Watercolor library's own `/docs#agents` page for full
+See the Washes engine's own `/docs#agents` page for full
 API surface and gotchas.</pre>
         <p>
           <strong>AGENTS.md</strong> &mdash; A README-style file
@@ -4339,7 +4450,7 @@ API surface and gotchas.</pre>
 ## When making changes
 - DO NOT add npm dependencies without asking. This repo is
   zero-dependency by policy.
-- DO NOT modify `vendor/watercolor-lib.js` — it's an external
+- DO NOT modify `vendor/washes.standalone.js` — it's an external
   library. To customize behavior, configure via options or wrap
   the instance.
 - Tests live in `test/` and run via `node --test`.
@@ -4347,9 +4458,9 @@ API surface and gotchas.</pre>
 ## Common tasks
 - Add a new scene: create `src/scenes/yourName.js` exporting a
   default function `(wc) =&gt; void`, then register in `scenes.js`.
-- Change pigment palette: edit `PIGMENTS` array in
-  `vendor/watercolor-lib.js` — but consult `docs#agents` for the
-  K/S/density/granularity tuple meanings first.</pre>
+- Change pigment palette: pass `pigments: [...]` to
+  `Washes.create()` — consult `docs#agents` for the
+  K/S/density/staining/granulation tuple meanings first.</pre>
         <p>
           <strong>For evaluations and benchmarks.</strong> If you're
           building eval harnesses that drive this library, the
@@ -4376,9 +4487,9 @@ API surface and gotchas.</pre>
 
         <h2 id="multi-needs">What you'll need</h2>
         <p>
-          Two things: <code>watercolor-lib.js</code> (the simulation
-          library &mdash; one file, no dependencies, exposes a single
-          global <code>Watercolor.create()</code> factory) and an HTML
+          Two things: <code>washes.standalone.js</code> (the engine
+          &mdash; one file, no dependencies, exposes a global
+          <code>Washes.create()</code> factory) and an HTML
           file. No bundler, no build step, no npm. Open it in a
           browser and it works.
         </p>
@@ -4390,18 +4501,18 @@ API surface and gotchas.</pre>
           "instance" handle with all the painting methods. State
           (pigment arrays, paint loads, animation modes, the lot) is
           closed over per instance &mdash; they don't share anything
-          except the global <code>Watercolor</code> namespace.
+          except the global <code>Washes</code> namespace.
         </p>
         <p>
-          That means you can call <code>Watercolor.create()</code> as
+          That means you can call <code>Washes.create()</code> as
           many times as you want on the same page, and each canvas
           gets its own world. That's the trick that makes a
           "multi-watercolor" page possible at all.
         </p>
-        <pre class="docs-code">const hero   = Watercolor.create(document.getElementById('hero'));
-const thumb1 = Watercolor.create(document.getElementById('thumb-1'));
-const thumb2 = Watercolor.create(document.getElementById('thumb-2'));
-const thumb3 = Watercolor.create(document.getElementById('thumb-3'));
+        <pre class="docs-code">const hero   = Washes.create(document.getElementById('hero'));
+const thumb1 = Washes.create(document.getElementById('thumb-1'));
+const thumb2 = Washes.create(document.getElementById('thumb-2'));
+const thumb3 = Washes.create(document.getElementById('thumb-3'));
 // Four independent painting systems, ~150 lines of total code between them.</pre>
         <p>
           Each instance owns its own RAF loop, its own simulation
@@ -4522,17 +4633,16 @@ const thumb3 = Watercolor.create(document.getElementById('thumb-3'));
           The hero is full-viewport, paintable, and runs a
           randomized scene on load.
         </p>
-        <pre class="docs-code">const hero = Watercolor.create(document.getElementById('hero'), {
+        <pre class="docs-code">const hero = Washes.create(document.getElementById('hero'), {
   canvasScale: 0.6,             // smaller simulation grid → smoother on modest hardware
   pointer: true,                // enable mouse/touch/pen → paint
   cursorPreview: false,         // use the CSS crosshair instead of a DOM cursor
 });
 
-// Brush state tuned for casual finger/mouse painting on a large surface
-hero.brushSize(60);
-hero.paintLoad(0.85);
-hero.waterLoad(1.1);
-hero.pigment('rose');</pre>
+// Brush state tuned for casual finger/mouse painting on a large
+// surface — setters chain in v2. brushSize is a radius fraction of
+// the smaller display side: 0.055 ≈ a 60px brush on a 1080p viewport.
+hero.brushSize(0.055).paintLoad(0.85).waterLoad(1.1).pigment('rose');</pre>
         <p>
           A few of these are worth a second of context:
         </p>
@@ -4557,12 +4667,12 @@ hero.pigment('rose');</pre>
 const BACKGROUNDS = ['day', 'dawn', 'sunset', 'night'];
 const pick = (arr) =&gt; arr[Math.floor(Math.random() * arr.length)];
 
-hero.setBackground(pick(BACKGROUNDS));   // base wash first
-hero.setAnimation(pick(ANIMATIONS));     // animation on top</pre>
+hero.backgroundAnimation(pick(BACKGROUNDS));   // base wash first
+hero.animation(pick(ANIMATIONS));              // animation on top</pre>
         <p>
           <strong>Order matters here.</strong>
-          <code>setBackground</code> is a one-shot paint of a
-          time-of-day wash. <code>setAnimation</code> registers a
+          <code>backgroundAnimation</code> is a one-shot paint of a
+          time-of-day wash. <code>animation</code> registers a
           continuous per-frame step function. If you set the
           animation first, it paints briefly, then gets covered by
           the background. Background first &rarr; animation second
@@ -4593,7 +4703,7 @@ const thumbConfigs = [
 ];
 
 const thumbs = thumbConfigs.map((cfg, i) =&gt; {
-  const wc = Watercolor.create(document.getElementById(cfg.hostId), {
+  const wc = Washes.create(document.getElementById(cfg.hostId), {
     canvasScale: 0.7,
     pointer: false,          // clicks go to the card, not the canvas
     cursorPreview: false,
@@ -4621,7 +4731,7 @@ const thumbs = thumbConfigs.map((cfg, i) =&gt; {
           <dt><code>pointer: false</code></dt>
           <dd>Keeps the lib from listening for pointer events on the thumbnail canvas &mdash; we want clicks to route to the parent <code>&lt;article&gt;</code> card so we can run our own obliterate logic.</dd>
           <dt><code>sketchMode()</code></dt>
-          <dd>A one-shot settings bundle, not a mode flag. It calls a series of setters: <code>brushSize(7)</code>, <code>paintLoad(1.6)</code>, <code>waterLoad(0.25)</code>, <code>pressure(0.95)</code>, <code>paperWetness('boneDry')</code>, <code>continuousFlow(false)</code>, <code>edgeDarkening(false)</code>, <code>fadePainting(false)</code>. After it runs there's no "sketch mode" to turn off &mdash; just a brush configured for fine-line work.</dd>
+          <dd>A one-shot settings bundle, not a mode flag. It applies a series of settings: a 7px fine-tip brush, <code>paintLoad(1.6)</code>, <code>waterLoad(0.25)</code>, <code>pressure(0.95)</code>, <code>paperWetness('boneDry')</code>, <code>continuousFlow(false)</code>, <code>edgeDarkening(false)</code>, <code>fadePainting(false)</code>. After it runs there's no "sketch mode" to turn off &mdash; just a brush configured for fine-line work.</dd>
           <dt><code>easing: 'penStroke'</code></dt>
           <dd>The easing curve that mimics hand-drawn motion: a quick 15% ramp-up to get up to speed, a steady 70% middle, then a 15% deceleration to land. Combined with <code>perStrokePauseMs: 200</code>, you get a believable drawing rhythm &mdash; smooth strokes punctuated by pen-lift moments between SVG path elements. This is the single best feel-improvement you can make over linear timing.</dd>
           <dt>The setTimeout stagger</dt>
@@ -4632,8 +4742,8 @@ const thumbs = thumbConfigs.map((cfg, i) =&gt; {
         <p>
           When you click a thumbnail, you want the wash to start
           <em>where you clicked</em>, not at the center. The library
-          has <code>toGrid()</code> to convert client coordinates
-          into the simulation's internal grid coordinates.
+          has <code>grid.fromDisplay()</code> to convert client
+          coordinates into the simulation's internal grid coordinates.
         </p>
         <pre class="docs-code">thumbs.forEach((thumb) =&gt; {
   const card = document.querySelector(`[data-project="${thumb.project}"]`);
@@ -4644,13 +4754,13 @@ const thumbs = thumbConfigs.map((cfg, i) =&gt; {
     busy = true;
 
     // ⚠️ Pass clientX/clientY DIRECTLY. Don't pre-subtract rect.left.
-    // The lib does its own getBoundingClientRect() inside toGrid.
-    const { x, y } = thumb.wc.toGrid(e.clientX, e.clientY);
+    // The lib does its own getBoundingClientRect() inside fromDisplay.
+    const { gx, gy } = thumb.wc.grid.fromDisplay(e.clientX, e.clientY);
 
     await thumb.wc.obliterate({
       mode: 'water',           // water rinse — pigment lifts and diffuses
       durationMs: 500,
-      x, y,                    // splash centered where you clicked
+      x: gx, y: gy,            // splash centered where you clicked
     });
 
     console.log('Project clicked:', thumb.project);
@@ -4672,16 +4782,17 @@ const thumbs = thumbConfigs.map((cfg, i) =&gt; {
           <strong>The gotcha I want you to skip.</strong> Earlier
           versions of this demo had:
         </p>
-        <pre class="docs-code">// 🚨 Wrong
+        <pre class="docs-code">// 🚨 Wrong (v1 era)
 const rect = card.getBoundingClientRect();
 const grid = thumb.wc.toGrid(e.clientX - rect.left, e.clientY - rect.top);
 await thumb.wc.obliterate({ x: grid.gx, y: grid.gy });</pre>
         <p>
-          Two bugs in two lines. (1) <code>toGrid</code> already does
+          Two bugs in two lines. (1) The converter already does
           <code>getBoundingClientRect()</code> on its own canvas
-          &mdash; pre-subtracting double-subtracts. (2) The returned
-          object is <code>{x, y}</code>, not <code>{gx, gy}</code>.
-          The destructured <code>gx</code>/<code>gy</code> were
+          &mdash; pre-subtracting double-subtracts. (2) v1's
+          <code>toGrid</code> returned <code>{x, y}</code>, not
+          <code>{gx, gy}</code>. The destructured
+          <code>gx</code>/<code>gy</code> were
           <code>undefined</code>, which obliterate silently defaulted
           to canvas center.
         </p>
@@ -4692,8 +4803,10 @@ await thumb.wc.obliterate({ x: grid.gx, y: grid.gy });</pre>
         </p>
         <p>
           Moral: read the return shape, and trust the helper to do
-          what it says. <code>toGrid(clientX, clientY)</code> is the
-          whole interface.
+          what it says. Bug (2) is also why v2 renamed the helper:
+          <code>grid.fromDisplay(clientX, clientY)</code> returns
+          honest <code>{gx, gy}</code> keys, so the wrong destructure
+          can't fail silently anymore.
         </p>
         <p>
           The <code>busy</code> flag prevents double-clicks while an
@@ -4778,25 +4891,25 @@ function togglePerf() {
         </p>
         <ul class="docs-list">
           <li><strong>Project navigation on click</strong>: replace the demo's redraw with an actual route push. <code>router.push('/projects/' + thumb.project)</code> after the obliterate completes.</li>
-          <li><strong>Raster-trace thumbnails</strong>: instead of SVG paths, sample pixels from a PNG and <code>paintAt</code> each one. The obliterate animation works unchanged &mdash; it doesn't care how the pigment got onto the canvas.</li>
-          <li><strong>Persistent painting</strong>: serialize the hero's grid arrays to <code>localStorage</code> on <code>beforeunload</code>, restore on boot. The user's doodles survive across visits.</li>
+          <li><strong>Raster-trace thumbnails</strong>: instead of SVG paths, use <code>paintImage()</code> &mdash; or sample pixels yourself and <code>paint</code> each one. The obliterate animation works unchanged &mdash; it doesn't care how the pigment got onto the canvas.</li>
+          <li><strong>Persistent painting</strong>: <code>saveState()</code> the hero to <code>localStorage</code> on <code>beforeunload</code>, <code>loadState()</code> on boot &mdash; the round-trip is bit-exact (v1.22+). The user's doodles survive across visits.</li>
           <li><strong>Click-and-hold for sustained pour</strong>: increase the brush's <code>flow()</code> value while a pointer is held down, return to default on release. Felt-tip &rarr; fountain pen &rarr; faucet.</li>
           <li><strong>Color from URL</strong>: parse <code>?pigment=blue</code> from <code>location.search</code> and apply on load. Lets you link to specific moods.</li>
         </ul>
         <p>
           The library is the same in all these cases. You're just
-          composing its primitives &mdash; <code>paintAt</code>,
+          composing its primitives &mdash; <code>paint</code>,
           <code>traceSVG</code>, <code>obliterate</code>,
-          <code>setAnimation</code>, <code>setBackground</code>, the
+          <code>animation</code>, <code>backgroundAnimation</code>, the
           brush-state setters &mdash; in different patterns.
         </p>
 
         <h2 id="multi-remember">A short list of things to remember</h2>
         <ol class="docs-list">
-          <li><strong>One instance per host element.</strong> Each <code>Watercolor.create()</code> call is independent. State doesn't bleed.</li>
+          <li><strong>One instance per host element.</strong> Each <code>Washes.create()</code> call is independent. State doesn't bleed.</li>
           <li><strong><code>pointer: true</code> for drawable surfaces, <code>false</code> for displays.</strong> This is the single most important option.</li>
           <li><strong>Z-order routes clicks naturally.</strong> Cards above hero in stacking order = clicks on cards go to cards, clicks elsewhere go to hero. No coordination code needed.</li>
-          <li><strong><code>toGrid(clientX, clientY)</code> returns <code>{x, y}</code>.</strong> Pass raw client coordinates. Read raw <code>x</code> and <code>y</code>. Anything else is a bug.</li>
+          <li><strong><code>grid.fromDisplay(clientX, clientY)</code> returns <code>{gx, gy}</code>.</strong> Pass raw client coordinates. Read <code>gx</code> and <code>gy</code>. Anything else is a bug.</li>
           <li><strong><code>touch-action: none</code> on the html/body</strong> or finger-painting will scroll the page instead of leaving paint.</li>
           <li><strong>Background before animation.</strong> Setting an animation first then a background covers the animation with the wash.</li>
         </ol>
@@ -4901,11 +5014,12 @@ function togglePerf() {
           difference 3.3e-16).
         </p>
         <p>
-          Simulation phases still run on the CPU in this version;
-          state arrays are uploaded as textures each render frame.
-          Future v0.20.x releases will migrate individual sim phases
-          to compute over textures, with the perf overlay measuring
-          each migration's impact.
+          Simulation phases still run on the CPU when this toggle is
+          the only thing enabled; state arrays are uploaded as
+          textures each render frame. A full GPU <em>simulation</em>
+          path also exists (developed against the same bit-exactness
+          harness, reachable via <code>gpuSim()</code>) but stays
+          opt-in until real-browser render validation lands.
         </p>
         <p>
           The toggle silently no-ops if WebGL2 isn't available. The
@@ -5940,7 +6054,52 @@ node washes-test-harness.js ./watercolor-lib.js all</pre>
           so you can always go back to a previous version's exact behavior.
         </p>
 
-        <!-- ===== v1.0.20 ===== -->
+        <!-- ===== v1.0.22 ===== -->
+        <h2 id="cl-1-0-22">v1.0.22 &mdash; the docs speak v2</h2>
+        <p>
+          The teaching sections catch up with the engine. v1.0.21 made
+          the <em>app</em> native v2; every console snippet in the docs
+          still taught the v1 surface &mdash; on this page, where
+          <code>window.Watercolor</code> is the live v2 instance, most
+          of them would throw if pasted. This release is docs-only: no
+          wiring, no engine, no behavior changes.
+        </p>
+        <h3>Changed</h3>
+        <ul class="docs-list">
+          <li><span class="cl-tag cl-feature">docs</span>
+            <strong>Every teaching snippet audited against the 2.1.0
+            surface.</strong> Normalized coordinates throughout
+            (<code>paint</code>/<code>stroke</code>/<code>line</code>/<code>splash</code>),
+            unified mode accessors
+            (<code>animation()</code>/<code>visualization()</code>/<code>backgroundAnimation()</code>),
+            <code>drying(false)</code> for <code>pauseDrying(true)</code>,
+            <code>exportImage()</code> for <code>exportPNG()</code>,
+            <code>grid.fromDisplay()</code> for <code>toGrid()</code>,
+            <code>Washes.create()</code> as the factory spelling. The
+            agents page's type signatures are regenerated from the real
+            d.ts, and its determinism guidance inverts: the core is
+            deterministic, <code>create({ seed })</code> and
+            <code>saveState()</code>/<code>loadState()</code> make
+            replays bit-exact.</li>
+          <li><span class="cl-tag cl-fix">fix</span>
+            <strong>Documented-but-nonexistent API removed.</strong>
+            The <code>cursor()</code>/<code>cursors()</code> handle
+            API and <code>fadeFullRender()</code> appeared in no
+            version's runtime surface (not even the v1 143-member
+            snapshot); the section teaching them is replaced by the
+            real painting verbs. Also corrected:
+            <code>paperWetnessPresets()</code> returns names (not a
+            map), <code>splashPresets()</code> includes
+            <code>'deluge'</code>, <code>paperColor()</code> takes
+            0..1 RGB, and <code>state()</code> gained its v1.4/v1.5
+            governor keys.</li>
+        </ul>
+        <p>
+          Changelog entries below this line remain v1-phrased on
+          purpose &mdash; they describe the page as it was.
+        </p>
+
+        <!-- ===== v1.0.21 ===== -->
         <h2 id="cl-1-0-21">v1.0.21 &mdash; native v2</h2>
         <p>
           The playground now speaks the engine's v2 API directly &mdash; the
