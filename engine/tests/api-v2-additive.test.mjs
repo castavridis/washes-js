@@ -1,6 +1,8 @@
-// api-v2-additive.test.mjs — the v2 control surface that arrived in 1.25
-// (API 2.0 tranche 1, all additive): run() policies, drying(), the
-// wc.grid namespace, splashNorm, exportImage.
+// api-v2-additive.test.mjs — the v2 control surface (grown additively in
+// 1.25, primary since 2.0.0): run() policies, drying(), the wc.grid
+// namespace, normalized-as-default primaries, chaining setters, and the
+// 2.0 unit changes. Compat equivalences (v1 call ≡ v2 call, bit-exact)
+// live here too, driven through Washes.compat1().
 //
 // Run: node tests/api-v2-additive.test.mjs
 
@@ -12,82 +14,100 @@ const { Washes } = await import(new URL('../src/index.js', import.meta.url).href
 
 const wc = Washes.createHeadless({ width: 320, height: 240, seed: 5 });
 
-// --- run(): one policy, cross-consistent with the v1 pair ---
+// --- run(): one policy; the v1 pair is reachable only through compat1 ---
 assert.equal(wc.run(), 'auto', 'default policy is auto');
 assert.equal(wc.run('until-dry'), wc, 'setter chains');
 assert.equal(wc.run(), 'until-dry', 'policy reads back');
-assert.equal(wc.runUntilDry(), true, 'v1 twin sees the same flag');
-wc.keepSimulating(true);
-assert.equal(wc.run(), 'always', 'v1 writes surface through run()');
+assert.equal(wc.runUntilDry, undefined, 'runUntilDry retired from v2');
+assert.equal(wc.keepSimulating, undefined, 'keepSimulating retired from v2');
+const compat = Washes.compat1(wc, { warn: false });
+assert.equal(compat.runUntilDry(), true, 'compat sees the same flag');
+compat.keepSimulating(true);
+assert.equal(wc.run(), 'always', 'compat writes surface through run()');
 wc.run('auto');
-assert.equal(wc.keepSimulating(), false, 'auto clears keepSimulating');
-assert.equal(wc.runUntilDry(), false, 'auto clears runUntilDry');
-assert.throws(() => wc.run('forever'), /until-dry/, 'unknown policy throws with the valid names');
 
-// --- drying(): pauseDrying renamed to say what it does ---
+// --- drying(): pauseDrying retired; inverse holds through compat ---
 assert.equal(wc.drying(), true, 'drying runs by default');
 assert.equal(wc.drying(false), wc, 'setter chains');
-assert.equal(wc.pauseDrying(), true, 'drying(false) IS pauseDrying(true)');
-wc.pauseDrying(false);
-assert.equal(wc.drying(), true, 'and the inverse holds');
+assert.equal(compat.pauseDrying(), true, 'drying(false) IS pauseDrying(true)');
+wc.drying(true);
 
-// --- grid namespace ---
+// --- §4: value-returning setters chain in v2, return values in compat ---
+assert.equal(wc.evaporation(9), wc, 'v2 evaporation chains');
+assert.equal(wc.flow(0.5), wc, 'v2 flow chains');
+assert.equal(compat.flow(0.5), compat.flow(), 'compat flow returns the value, v1-style');
+assert.equal(wc.inkPaintLoad, undefined, 'the never-functional ink layer is gone from v2');
+assert.equal(wc.edgeMode('closed'), wc, 'v2 edgeMode chains');
+assert.equal(wc.edgeMode(), 'closed', 'getter form unchanged');
+
+// --- §1: normalized primaries; grid names live in wc.grid ---
+assert.equal(wc.paintNorm, undefined, 'paintNorm retired (it IS paint now)');
+assert.equal(wc.paintAt, undefined, 'paintAt retired (grid.paint is the cell home)');
+assert.equal(wc.paint(0.5, 0.5, 0.06, 0, 0.9), wc, 'paint chains');
+assert.ok(wc.coverage(0.001) > 0, 'paint painted');
 const dims = wc.grid.size();
 assert.ok(dims.gridWidth > 0 && dims.gridHeight > 0, 'grid.size() reads live dims');
-const st = wc.state();
-assert.equal(dims.gridWidth, st.gridWidth ?? dims.gridWidth, 'dims agree with state()');
 const n = wc.grid.toNorm(dims.gridWidth / 2, dims.gridHeight / 2);
 assert.deepEqual(n, { nx: 0.5, ny: 0.5 }, 'toNorm maps center to (0.5, 0.5)');
-const g = wc.grid.fromNorm(0.5, 0.5);
-assert.deepEqual(g, { gx: dims.gridWidth / 2, gy: dims.gridHeight / 2 }, 'fromNorm inverts');
-assert.equal(wc.grid.paint(g.gx, g.gy, 6, 'blue', 0.8), wc, 'grid.paint chains to the instance');
-assert.ok(wc.coverage(0.001) > 0, 'grid.paint painted');
+assert.equal(wc.grid.paint(10, 10, 4, 'blue', 0.7), wc, 'grid.paint chains to the v2 instance');
+const gd = wc.grid.fromDisplay(0, 0);
+assert.ok(typeof gd.gx === 'number' && typeof gd.gy === 'number', 'grid.fromDisplay bridges');
 
-// grid.paint ≡ paintAt, bit-exactly (same seed, same script)
+// v2 paint ≡ v1 paintNorm, bit-exactly (same seed, same script)
+function planes(snap) { return ['fluid', 'pigment', 'deposit', 'paper'].map((p) => Buffer.from(snap[p].buffer)); }
 {
   const a = Washes.createHeadless({ width: 320, height: 240, seed: 11 });
   const b = Washes.createHeadless({ width: 320, height: 240, seed: 11 });
-  a.paintAt(40, 30, 6, 2, 0.7);
-  b.grid.paint(40, 30, 6, 2, 0.7);
-  const sa = a.saveState(), sb = b.saveState();
-  for (const plane of ['fluid', 'pigment', 'deposit', 'paper']) {
-    assert.equal(Buffer.compare(Buffer.from(sa[plane].buffer), Buffer.from(sb[plane].buffer)), 0,
-      `grid.paint ≡ paintAt (${plane})`);
-  }
+  a.paint(0.4, 0.5, 0.05, 2, 0.7);
+  Washes.compat1(b, { warn: false }).paintNorm(0.4, 0.5, 0.05, 2, 0.7);
+  const pa = planes(a.saveState()), pb = planes(b.saveState());
+  pa.forEach((buf, i) => assert.equal(Buffer.compare(buf, pb[i]), 0, `paint ≡ compat paintNorm (plane ${i})`));
   a.destroy(); b.destroy();
 }
 
-// --- splashNorm ---
-// Coordinate mapping: splashNorm({x:.5,y:.5}) ≡ splash at grid center
-// (no radius override → both resolve the preset's radiusPx identically).
+// --- v2 splash is normalized; compat splash keeps grid epicenters ---
 {
   const a = Washes.createHeadless({ width: 320, height: 240, seed: 23 });
   const b = Washes.createHeadless({ width: 320, height: 240, seed: 23 });
-  a.paintNorm(0.5, 0.5, 0.08, 0, 0.9);
-  b.paintNorm(0.5, 0.5, 0.08, 0, 0.9);
+  a.paint(0.5, 0.5, 0.08, 0, 0.9);
+  b.paint(0.5, 0.5, 0.08, 0, 0.9);
   const { gridWidth: GW, gridHeight: GH } = a.grid.size();
-  a.splash([{ x: GW * 0.5, y: GH * 0.5 }], 'bigSplash');
-  b.splashNorm([{ x: 0.5, y: 0.5 }], 'bigSplash');
-  const sa = a.saveState(), sb = b.saveState();
-  for (const plane of ['fluid', 'pigment', 'deposit', 'paper']) {
-    assert.equal(Buffer.compare(Buffer.from(sa[plane].buffer), Buffer.from(sb[plane].buffer)), 0,
-      `splashNorm coords map to splash's grid coords (${plane})`);
-  }
-  // The normalized radius override has an effect (fraction of smaller side).
-  const c = Washes.createHeadless({ width: 320, height: 240, seed: 23 });
-  c.paintNorm(0.5, 0.5, 0.08, 0, 0.9);
-  c.splashNorm([{ x: 0.5, y: 0.5, radius: 0.1 }], 'bigSplash');
-  const sc = c.saveState();
-  assert.notEqual(Buffer.compare(Buffer.from(sb.fluid.buffer), Buffer.from(sc.fluid.buffer)), 0,
-    'normalized radius override changes the field');
-  a.destroy(); b.destroy(); c.destroy();
+  a.splash([{ x: 0.5, y: 0.5 }], 'bigSplash');
+  Washes.compat1(b, { warn: false }).splash([{ x: GW * 0.5, y: GH * 0.5 }], 'bigSplash');
+  const pa = planes(a.saveState()), pb = planes(b.saveState());
+  pa.forEach((buf, i) => assert.equal(Buffer.compare(buf, pb[i]), 0, `v2 splash ≡ compat grid splash (plane ${i})`));
+  a.destroy(); b.destroy();
 }
 
-// --- exportImage: same encoder as exportPNG ---
-assert.equal(typeof wc.exportImage, 'function', 'exportImage exists');
-assert.equal(wc.exportImage(), wc.exportPNG(), 'exportImage() returns byte-identical output');
+// --- §1: brushSize speaks fractions; compat keeps px diameters exactly ---
+wc.brushSize(0.1);
+assert.ok(Math.abs(wc.brushSize() - 0.1) < 1e-9, 'fraction round-trips');
+compat.brushSize(50);
+assert.equal(compat.brushSize(), 50, 'compat px diameter round-trips exactly');
+
+// --- §4: set/get unification + the dropped 'dry' alias ---
+assert.equal(wc.setAnimation, undefined, 'setAnimation retired');
+assert.equal(wc.animation('rainy'), wc, 'animation(name) chains');
+assert.equal(wc.animation(), 'rainy', 'animation() reads back');
+wc.animation(null);
+assert.equal(wc.animation(), 'off', 'animation(null) clears');
+assert.equal(wc.visualization(), 'off', 'visualization() reads');
+assert.equal(wc.backgroundAnimation(), null, 'backgroundAnimation() idle → null');
+assert.equal(wc.backgroundAnimationRunning(), false, 'not running');
+assert.throws(() => wc.brushMode('dry'), /crayon/, "brushMode('dry') throws with the migration hint");
+assert.equal(compat.brushMode('dry'), 'dry', 'compat still accepts the alias');
+wc.brushMode('wet');
+
+// --- exportImage is the name; exportPNG lives in compat ---
+assert.equal(wc.exportPNG, undefined, 'exportPNG retired from v2');
+assert.equal(typeof wc.exportImage(), 'string', 'exportImage works');
+assert.equal(compat.exportPNG(), wc.exportImage(), 'compat exportPNG ≡ v2 exportImage');
+
+// --- the hidden bridge is invisible to enumeration ---
+assert.ok(!Object.keys(wc).some((k) => k.includes('v1internal')), 'symbol bridge not enumerable');
+assert.throws(() => Washes.compat1({}), /2\.x instance/, 'compat1 of a foreign object throws');
 
 wc.destroy();
-console.log('api-v2-additive: OK — run() policies cross-consistent with the v1 pair, ' +
-  'drying() inverts pauseDrying, grid namespace ≡ paintAt bit-exactly, ' +
-  'splashNorm maps coords + radius, exportImage ≡ exportPNG');
+console.log('api-v2-additive: OK — v2 primaries normalized + chaining, retired names gone, ' +
+  'paint ≡ paintNorm and splash ≡ grid-splash bit-exact through compat1, ' +
+  'units adapt (fraction vs px), set/get unified, dry alias dropped');

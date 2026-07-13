@@ -20,8 +20,8 @@ const { Washes } = await import(new URL('../src/index.js', import.meta.url).href
 // splash with random epicenters AND per-cell jitter — the two heaviest
 // consumers of host randomness in one call.
 function paintScript(wc) {
-  wc.paintNorm(0.4, 0.5, 0.08, 0, 0.9);
-  wc.paintNorm(0.6, 0.4, 0.05, 2, 0.8);
+  wc.paint(0.4, 0.5, 0.08, 0, 0.9);
+  wc.paint(0.6, 0.4, 0.05, 2, 0.8);
   wc.splash('bigSplash', null, { jitterAmount: 1 });
 }
 

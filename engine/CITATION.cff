@@ -1,6 +1,6 @@
 cff-version: 1.2.0
 title: "Washes: a JavaScript watercolor simulation"
-version: 1.25.0
+version: 2.0.0
 date-released: 2026-07-13
 message: "If you use this software, please cite it using these metadata."
 type: software

@@ -104,7 +104,7 @@ export type GouacheMode = boolean | 'auto';
  * - `'salt'`: granular dispersion as if salt were sprinkled into a wash.
  * - `'splatter'`: scattered offset deposits — flicked-brush feel.
  */
-export type BrushMode = 'wet' | 'crayon' | 'dry' | 'dryBrush' | 'salt' | 'splatter';
+export type BrushMode = 'wet' | 'crayon' | 'dryBrush' | 'salt' | 'splatter';
 
 /**
  * Named quality presets. Each bundles `scale`, `advectionMode`, and a
@@ -290,13 +290,14 @@ export interface PaintTextOptions {
 
 export type AnimationName = 'off' | 'breathe' | 'drift' | 'pulse' | string;
 export interface AnimationOptions {
-  speed?: number;
-  amplitude?: number;
+  /** Clear the previous animation's state before starting. Default true. (v2.0.0 — the declared speed/amplitude options were fiction; `replace` is the only option the runtime reads.) */
+  replace?: boolean;
 }
 
 export type VisualizationName = 'off' | 'velocity' | 'pressure' | 'wet' | 'mask' | string;
 export interface VisualizationOptions {
-  opacity?: number;
+  /** Clear the previous visualization's state before starting. Default true. (v2.0.0 — the declared opacity option was fiction; `replace` is the only option the runtime reads.) */
+  replace?: boolean;
 }
 
 // =============================================================================
@@ -493,7 +494,7 @@ export interface CreateOptions {
   pointer?: boolean;
   /** Initial paper color. Default = cream (≈ 0.98, 0.97, 0.92). Set later via {@link WashesInstance.paperColor}. */
   paperColor?: { r: number; g: number; b: number };
-  /** Start with drying paused. Default false. Toggle later via {@link WashesInstance.pauseDrying}. */
+  /** Start with drying paused. Default false. Toggle later via {@link WashesInstance.drying}. */
   pauseDrying?: boolean;
   /**
    * v1.23 — seed for the instance's PRNG (mulberry32), used everywhere the
@@ -564,9 +565,10 @@ export type Unsubscribe = () => void;
  * v1.24 — the full typed event map for {@link WashesInstance.on} /
  * {@link WashesInstance.once}: event name → detail payload. All-lowercase,
  * no exceptions (the API 2.0 casing decision). Events marked *mirror* also
- * fire as DOM CustomEvents on the host element with the same detail (the
- * DOM names keep their v1 spellings — `rescaled`, `paletteChange` — until
- * the 2.0 rename batch).
+ * fire as DOM CustomEvents on the host element with the same detail —
+ * since 2.0.0 under exactly these lowercase names (v1 spelled two of them
+ * `rescaled` / `paletteChange`; DOM events can't be shimmed by compat1,
+ * so those listeners migrate by hand).
  */
 export interface WashesEventMap {
   /** The sim settled (auto-idle). */
@@ -575,11 +577,11 @@ export interface WashesEventMap {
   active: Record<string, never>;
   /** Settled with essentially no wetness left; fires once per wet episode. */
   dry: { totalWetness: number };
-  /** The grid was rebuilt — host remeasure, `scale()`, or a governor shift. Mirror: `rescaled`. */
+  /** The grid was rebuilt — host remeasure, `scale()`, or a governor shift. Mirror: `rescale` (v2.0.0 — was `rescaled`). */
   rescale: { scale: number; gridWidth: number; gridHeight: number };
   /** The auto performance governor shifted resolution. */
   perflevel: { level: PerfLevel; scale: number; gridWidth: number; gridHeight: number };
-  /** `palette()` changed the pigment set. Mirror: `paletteChange` (sic — v1 casing). */
+  /** `palette()` changed the pigment set. Mirror: `palettechange` (v2.0.0 — was camelCase `paletteChange`). */
   palettechange: { custom: boolean };
   /** Gouache mode toggled or its auto-LERP recomputed. Mirror: `gouachechange`. */
   gouachechange: { enabled: GouacheMode; lerpAmount: number };
@@ -626,109 +628,84 @@ export interface WashesInstance {
   /** The `<canvas>` element the lib appended into `target`. */
   readonly canvas: HTMLCanvasElement;
   /**
-   * The cell-space surface. `width`/`height` are live read-only grid dims
-   * (they change on rescale — don't cache). v1.25 grows this into the
-   * explicit cell-space home (API 2.0 §1): when 2.0 makes normalized the
-   * space of the primary names, code that genuinely thinks in grid cells
-   * lives here.
+   * The explicit cell-space home (API 2.0 §1) — normalized is THE space of
+   * the primary names; code that genuinely thinks in grid cells lives
+   * here. `width`/`height` are live read-only dims (they change on
+   * rescale — don't cache).
    */
   readonly grid: {
     readonly width: number;
     readonly height: number;
-    /** v1.25 — exactly {@link WashesInstance.paintAt}: paint at grid coords with a grid-cell radius. */
+    /** Paint a dab at grid coords with a grid-cell radius (v1's paintAt, exactly). */
     paint(gx: number, gy: number, gridRadius: number, pigment?: PigmentOption, strength?: number): WashesInstance;
-    /** v1.25 */
     toNorm(gx: number, gy: number): { nx: number; ny: number };
-    /** v1.25 */
     fromNorm(nx: number, ny: number): { gx: number; gy: number };
-    /** v1.25 */
     size(): { gridWidth: number; gridHeight: number };
+    /** v2.0.0 — display-px → grid bridge (v1's toGrid, with honest key names). */
+    fromDisplay(displayX: number, displayY: number): { gx: number; gy: number };
+    /** v2.0.0 — grid → display-px bridge (v1's toClient). */
+    toDisplay(gx: number, gy: number): { x: number; y: number };
   };
 
   // -----------------------------------------------------------------------
   // Painting input
   // -----------------------------------------------------------------------
 
-  /** Inject a splash at one or more epicenters. */
-  splash(epicenters: SplashEpicenter[], style?: SplashStyle, opts?: SplashOptions): WashesInstance;
+  /**
+   * Inject a splash at one or more epicenters. v2.0.0 — epicenters are
+   * NORMALIZED: `x`/`y` in 0..1 across the canvas, per-point `radius` a
+   * fraction of the smaller side (grid-epicenter callers live on
+   * `compat1`, which keeps the v1 units exactly).
+   */
+  splash(epicenters: SplashEpicenterNorm[], style?: SplashStyle, opts?: SplashOptions): WashesInstance;
   /** Named preset (or nothing for `'default'`) with pigment-density-sampled random epicenters. The second argument is ignored in this form — `opts` is always positional third. */
   splash(style?: SplashStyle, ignored?: null, opts?: SplashOptions): WashesInstance;
   /** Object form: explicit coords and/or preset in one argument. */
-  splash(spec: { coords?: SplashEpicenter[]; preset?: SplashStyle }, ignored?: null, opts?: SplashOptions): WashesInstance;
-
-  /**
-   * v1.25 — normalized twin of {@link WashesInstance.splash}: epicenter
-   * `x`/`y` are 0..1 fractions of the canvas, per-point `radius` a fraction
-   * of the smaller side. Becomes the plain `splash()` in 2.0. Same calling
-   * forms as splash().
-   */
-  splashNorm(epicenters: SplashEpicenterNorm[], style?: SplashStyle, opts?: SplashOptions): WashesInstance;
-  splashNorm(style?: SplashStyle, ignored?: null, opts?: SplashOptions): WashesInstance;
-  splashNorm(spec: { coords?: SplashEpicenterNorm[]; preset?: SplashStyle }, ignored?: null, opts?: SplashOptions): WashesInstance;
+  splash(spec: { coords?: SplashEpicenterNorm[]; preset?: SplashStyle }, ignored?: null, opts?: SplashOptions): WashesInstance;
 
   /** List of named splash presets (e.g. `'default'`, `'bigSplash'`, `'fineSpritz'`). */
   splashPresets(): string[];
 
   /** Soak the entire canvas in water — reactivates any deposited pigment. */
   rewet(): WashesInstance;
-  /** Re-wet just a circular region at grid coords; lifts deposited pigment back into suspension. (v1.1) */
-  rewet(gx: number, gy: number, gridRadius?: number): WashesInstance;
+  /** Re-wet a circular region (normalized coords; `nradius` a fraction of the smaller side, default 0.03); lifts deposited pigment back into suspension. */
+  rewet(nx: number, ny: number, nradius?: number): WashesInstance;
 
   /** Force-evaporate all wetness. Pigment stays where it is. */
   dry(): WashesInstance;
-  /** Dry just a circular region at grid coords; settles suspended → deposited and zeroes the fluid. (v1.1) */
-  dry(gx: number, gy: number, gridRadius?: number): WashesInstance;
+  /** Dry a circular region (normalized coords); settles suspended → deposited and zeroes the fluid. */
+  dry(nx: number, ny: number, nradius?: number): WashesInstance;
 
   /** Clear the canvas and reset all sim fields to defaults. */
   reset(): WashesInstance;
 
   /**
-   * Programmatic paint stamp at grid coordinates (not display coordinates).
-   * Use `toGrid(displayX, displayY)` to convert if you have display coords.
-   *
-   * v1.16 — the optional parameters are genuinely optional now: `pigment`
-   * defaults to the current brush ink (names resolve as in paintNorm) and
-   * `strength` defaults to 0.5.
+   * Paint a dab at normalized coordinates: `nx`/`ny` in 0..1 across the
+   * canvas, `nradius` as a fraction of the smaller side (default 0.03).
+   * `pigment` defaults to the current brush ink, `strength` to 0.5.
+   * (v2.0.0 — this is the one paint verb; grid cells live in
+   * {@link WashesInstance.grid}.paint.)
    */
-  paintAt(gx: number, gy: number, gridRadius: number, pigment?: PigmentOption, strength?: number): WashesInstance;
+  paint(nx: number, ny: number, nradius?: number, pigment?: PigmentOption, strength?: number): WashesInstance;
 
   /**
-   * Paint at **normalized** coordinates: `nx`/`ny` in 0..1 across the canvas,
-   * `nradius` as a fraction of the smaller side (default 0.03). No need to
-   * know the grid resolution. (v1.1)
+   * Inject velocity into the fluid within a radius, wetting the region so
+   * the velocity actually transports pigment — motion / gesture input can
+   * *stir* an existing wash. Normalized coords; `nradius` a fraction of
+   * the smaller side (default 0.03); `vx`/`vy` pass through unchanged.
    */
-  paintNorm(nx: number, ny: number, nradius?: number, pigment?: PigmentOption, strength?: number): WashesInstance;
-
-  /**
-   * Inject velocity into the fluid within a grid-radius, wetting the region
-   * so the velocity actually transports pigment. Lets motion / gesture input
-   * *stir* an existing wash instead of faking it with water + gravity.
-   * `stir` is an alias. (v1.1)
-   */
-  addVelocity(gx: number, gy: number, vx: number, vy: number, gridRadius?: number): WashesInstance;
-  /** Alias for {@link WashesInstance.addVelocity}. (v1.1) */
-  stir(gx: number, gy: number, vx: number, vy: number, gridRadius?: number): WashesInstance;
-
-  /** Normalized twin of {@link WashesInstance.addVelocity}. `nx`/`ny` in 0..1; `nradius` a fraction of the smaller side (default 0.03). Velocity `vx`/`vy` pass through unchanged. (v1.2) */
-  addVelocityNorm(nx: number, ny: number, vx: number, vy: number, nradius?: number): WashesInstance;
-  /** Alias for {@link WashesInstance.addVelocityNorm}. (v1.2) */
-  stirNorm(nx: number, ny: number, vx: number, vy: number, nradius?: number): WashesInstance;
-  /** Normalized twin of {@link WashesInstance.rewet}; no args re-wets the whole canvas. (v1.2) */
-  rewetNorm(nx?: number, ny?: number, nradius?: number): WashesInstance;
-  /** Normalized twin of {@link WashesInstance.dry}; no args dries the whole canvas. (v1.2) */
-  dryNorm(nx?: number, ny?: number, nradius?: number): WashesInstance;
+  stir(nx: number, ny: number, vx: number, vy: number, nradius?: number): WashesInstance;
 
   /**
    * Continuous stroke: lays overlapping dabs from the previous point to
-   * (`gx`,`gy`), so callers don't hand-roll the interpolation. The first call
-   * after {@link WashesInstance.penUp}, {@link WashesInstance.reset} or
-   * {@link WashesInstance.clearPaint} just stamps the start point. (v1.2)
+   * (`nx`,`ny`), so callers don't hand-roll the interpolation. The first
+   * call after {@link WashesInstance.penUp}, {@link WashesInstance.reset}
+   * or {@link WashesInstance.clearPaint} just stamps the start point.
+   * `opts.nradius` overrides `opts.radius`. (v2.0.0 — was strokeToNorm.)
    */
-  strokeTo(gx: number, gy: number, opts?: StrokeOptions): WashesInstance;
-  /** Normalized twin of {@link WashesInstance.strokeTo}; `opts.nradius` overrides `opts.radius`. (v1.2) */
-  strokeToNorm(nx: number, ny: number, opts?: StrokeOptions): WashesInstance;
-  /** One-call line segment from (`x0`,`y0`) to (`x1`,`y1`) in grid coords. (v1.2) */
-  line(x0: number, y0: number, x1: number, y1: number, opts?: StrokeOptions): WashesInstance;
+  stroke(nx: number, ny: number, opts?: StrokeOptions): WashesInstance;
+  /** One-call line segment between two normalized points. */
+  line(nx0: number, ny0: number, nx1: number, ny1: number, opts?: StrokeOptions): WashesInstance;
   /** Lift the stroke pen so the next {@link WashesInstance.strokeTo} starts a fresh line. (v1.2) */
   penUp(): WashesInstance;
 
@@ -746,15 +723,10 @@ export interface WashesInstance {
    */
   onFrame(cb: FrameCallback): Unsubscribe;
 
-  /** Read the simulation state at a grid cell. (v1.2) */
-  sample(gx: number, gy: number): SampleResult;
-  /** Normalized twin of {@link WashesInstance.sample}. (v1.2) */
-  sampleNorm(nx: number, ny: number): SampleResult;
+  /** Read the simulation state at a normalized point. (v2.0.0 — was sampleNorm; the cell under any grid coordinate is reachable via grid.toNorm.) */
+  sample(nx: number, ny: number): SampleResult;
   /** Fraction (0..1) of cells whose ink density exceeds `threshold` (default 0.04). (v1.2) */
   coverage(threshold?: number): number;
-
-  /** The valid brush-mode names, for discovery. (v1.2) */
-  brushModes(): BrushMode[];
 
   /** Stamp text using the active brush. */
   /** Stamp text as wet pigment. Returns the number of stamps painted (synchronous). */
@@ -772,8 +744,14 @@ export interface WashesInstance {
   // Brush state
   // -----------------------------------------------------------------------
 
-  /** Current brush diameter in display pixels. Default 28. */
-  brushSize(v?: number): number;
+  /**
+   * Brush size as a fraction of the smaller display side — the radius
+   * convention every other v2 radius uses. (v2.0.0 — v1 spoke display-px
+   * DIAMETER; that channel lives on compat1, and {@link
+   * WashesInstance.displayRect} bridges for hosts doing DOM math.)
+   */
+  brushSize(): number;
+  brushSize(fraction: number): WashesInstance;
 
   /**
    * Active pigment (or named brush) for subsequent paint operations.
@@ -796,70 +774,48 @@ export interface WashesInstance {
   waterLoad(v: number): WashesInstance;
 
   /** Brush pressure: epicenter intensity multiplier. */
-  pressure(v?: number): number;
+  pressure(): number;
+  pressure(v: number): WashesInstance;
 
   /** Flow rate: how quickly pigment spreads after stamping. */
-  flow(v?: number): number;
+  flow(): number;
+  flow(v: number): WashesInstance;
 
   /** Use pointer pressure (stylus) to modulate flow. Default true if supported. */
-  usePointerPressure(v?: boolean): boolean;
+  usePointerPressure(): boolean;
+  usePointerPressure(v: boolean): WashesInstance;
 
   /** Whether dragging produces continuous flow or per-stamp dots. Default true. */
-  continuousFlow(v?: boolean): boolean;
+  continuousFlow(): boolean;
+  continuousFlow(v: boolean): WashesInstance;
 
   // -----------------------------------------------------------------------
   // Paper state
   // -----------------------------------------------------------------------
 
   /** Set paper wetness preset (changes evaporation rate among other things). */
-  paperWetness(preset?: string): string;
+  paperWetness(): string | null;
+  paperWetness(preset: string): WashesInstance;
   /** List available wetness presets. */
   paperWetnessPresets(): string[];
 
   /** Direct evaporation rate. Higher = wash dries faster. */
-  evaporation(value?: number): number;
-
-  /** Pause/resume the drying simulation. */
-  pauseDrying(v?: boolean): boolean;
+  evaporation(): number;
+  evaporation(value: number): WashesInstance;
 
   /**
    * v1.25 — `pauseDrying` renamed to say what it does (API 2.0 §2):
    * `drying(false)` pauses evaporation/drying, `drying(true)` resumes it,
    * zero-arg reads whether drying is running. Chains (the v2 setter
-   * convention). `pauseDrying` moves into the compat shim in 2.0.
+   * convention). `pauseDrying` lives on compat1 since 2.0.
    */
   drying(): boolean;
   drying(v: boolean): WashesInstance;
 
   /**
-   * Force the simulation to step every frame, even when the canvas is
-   * quiet (no fresh paint). Default false — the lib auto-idles after a
-   * brief grace period to save CPU/GPU. Set true to watch slow effects
-   * settle: wet dissipating, gravity drift continuing, edge darkening
-   * stabilizing. Independent of `pauseDrying`: `pauseDrying` freezes
-   * the evaporation phase only; `keepSimulating` re-runs every phase
-   * each frame.
-   */
-  keepSimulating(v?: boolean): boolean;
-
-  /**
-   * Keep the simulation stepping until the wash is completely dry, then
-   * idle automatically. Unlike {@link keepSimulating} (which runs forever
-   * until you turn it off), this stops on its own once no wetness remains,
-   * so it won't burn CPU after drying. Fixes the common case where a
-   * localized stroke freezes mid-dry because the canvas auto-idled while
-   * that region was still wet. Independent of `pauseDrying`.
-   *
-   * @param v - true to run through the full drying tail then idle; false
-   *   to restore the default settle behavior. Omit to read current state.
-   * @returns the current runUntilDry state.
-   */
-  runUntilDry(v?: boolean): boolean;
-
-  /**
    * v1.25 — ONE run-state policy (API 2.0 §2), replacing the
-   * `keepSimulating`/`runUntilDry` pair (both move into the compat shim in
-   * 2.0; `pause()` stays the one true freeze). `'auto'` idles when settled
+   * `keepSimulating`/`runUntilDry` pair (both on compat1 since 2.0;
+   * `pause()` stays the one true freeze). `'auto'` idles when settled
    * (the default), `'until-dry'` steps until bone dry then idles,
    * `'always'` never idles. Writes the same internal flags as the v1
    * controls, so the two surfaces cannot disagree.
@@ -895,13 +851,19 @@ export interface WashesInstance {
    * resolution, and the next stroke simply re-downshifts if it must. Disabling restores the
    * original resolution, also preserving. Listen via on('perflevel').
    */
-  autoPerf(v?: boolean): boolean;
+  autoPerf(): boolean;
+  autoPerf(v: boolean): WashesInstance;
 
   /** v1.5 — current governor level. */
   perfLevel(): PerfLevel;
 
-  /** v1.4 — rebuild the grid at the host's current size. Wipes the painting. */
-  remeasure(): void;
+  /**
+   * v1.4 — rebuild the grid at the host's current size. v2.0.0 —
+   * PRESERVES the painting (resampled into the new grid) unless
+   * `{ wipe: true }`; chains. (v1 always wiped — that behavior lives on
+   * compat1.)
+   */
+  remeasure(opts?: { wipe?: boolean }): WashesInstance;
 
   /** v1.4 — one-call health report for "why is my canvas blank". */
   diagnose(): DiagnoseReport;
@@ -910,15 +872,13 @@ export interface WashesInstance {
    * v1.4 — watercolor verbs. Dried pigment is immobile until *lifted* back
    * into suspension; *flood* soaks the whole sheet; *blot* dabs water and
    * floating pigment away; *pour* tips the basin (gravity + open edges) and
-   * endPour() restores what it changed. lift/blot radii are grid cells; the
-   * Norm twins take normalized 0..1 coords and a radius as a fraction of the
-   * smaller grid dimension (default 0.03).
+   * endPour() restores what it changed. v2.0.0 — lift/blot take normalized
+   * 0..1 coords and a radius as a fraction of the smaller side (default
+   * 0.03), like every other verb.
    */
-  lift(x: number, y: number, r: number, fraction?: number): this;
-  liftNorm(nx: number, ny: number, nradius?: number, fraction?: number): this;
+  lift(nx: number, ny: number, nradius?: number, fraction?: number): this;
   flood(level?: number): this;
-  blot(x: number, y: number, r: number, strength?: number): this;
-  blotNorm(nx: number, ny: number, nradius?: number, strength?: number): this;
+  blot(nx: number, ny: number, nradius?: number, strength?: number): this;
   pour(dx: number, dy: number, strength?: number): this;
   endPour(): this;
 
@@ -970,7 +930,8 @@ export interface WashesInstance {
   // -----------------------------------------------------------------------
 
   /** Edge boundary mode: closed, closed-gravity, open, or gravity. */
-  edgeMode(v?: EdgeMode): EdgeMode;
+  edgeMode(): EdgeMode;
+  edgeMode(v: EdgeMode): WashesInstance;
 
   /** Read gravity direction (a compass name, or `{x,y}` if an angle/vector was set). */
   gravityDirection(): GravityDirection | { x: number; y: number };
@@ -1004,7 +965,8 @@ export interface WashesInstance {
    * otherwise show. The pigment is still mathematically present at the
    * edge; the render just makes it transparent. (v0.88)
    */
-  edgeFade(v?: number): number;
+  edgeFade(): number;
+  edgeFade(v: number): WashesInstance;
 
   /**
    * Per-cell velocity magnitude cap. Auto-computed from `scale` by default
@@ -1014,7 +976,8 @@ export interface WashesInstance {
    * Note: values above ~1.7 require semi-Lagrangian advection mode; donor-
    * cell modes will produce the cardinal-cross artifact above that bound.
    */
-  velocityClamp(v?: number | null): number;
+  velocityClamp(): number;
+  velocityClamp(v: number | null): WashesInstance;
 
   // -----------------------------------------------------------------------
   // Rendering / display
@@ -1033,20 +996,24 @@ export interface WashesInstance {
   palette(): PigmentRecord[];
   // (overloads: pass a list/null to set → instance; call empty to read → records)
 
-  gouacheMode(v?: GouacheMode): GouacheMode;
+  gouacheMode(): GouacheMode;
+  gouacheMode(v: GouacheMode): WashesInstance;
   /** Current LERP amount in 'auto' gouache mode. 0 = full watercolor, 1 = full gouache. */
   gouacheLerpAmount(): number;
 
   /** Advection scheme. */
-  advectionMode(v?: AdvectionMode): AdvectionMode;
+  advectionMode(): AdvectionMode;
+  advectionMode(v: AdvectionMode): WashesInstance;
   /** Substeps used by the most recent movePigment call. */
   advectionLastSubsteps(): number;
 
   /** Whether edge darkening is applied. Default true. */
-  edgeDarkening(v?: boolean): boolean;
+  edgeDarkening(): boolean;
+  edgeDarkening(v: boolean): WashesInstance;
 
   /** Show the amber tint over masked cells. Default true. */
-  maskTint(v?: boolean): boolean;
+  maskTint(): boolean;
+  maskTint(v: boolean): WashesInstance;
 
   /**
    * Wetness heatmap overlay. Visualizes the per-cell wet field as a
@@ -1060,11 +1027,12 @@ export interface WashesInstance {
    * - `wetnessHeatmap({ enabled: true, low: '#abc', high: '#def' })` — object form.
    */
   wetnessHeatmap(): boolean;
-  wetnessHeatmap(enabled: boolean, low?: HeatmapColor, high?: HeatmapColor): boolean;
-  wetnessHeatmap(opts: WetnessHeatmapOptions): boolean;
+  wetnessHeatmap(enabled: boolean, low?: HeatmapColor, high?: HeatmapColor): WashesInstance;
+  wetnessHeatmap(opts: WetnessHeatmapOptions): WashesInstance;
 
   /** Toggle WebGL rendering. Falls back to CPU if WebGL2 isn't supported. */
-  webgl(v?: boolean): boolean;
+  webgl(): boolean;
+  webgl(v: boolean): WashesInstance;
   /** Whether WebGL2 was available at init. */
   webglAvailable(): boolean;
   /**
@@ -1073,20 +1041,31 @@ export interface WashesInstance {
    * diverges from the CPU reference; all are plain boolean getter/setters
    * and no-ops until the corresponding GPU path is enabled.
    */
-  webglSmokeTest(v?: boolean): boolean;
-  webglGpuTextureTest(v?: boolean): boolean;
-  webglGpuWetTextureTest(v?: boolean): boolean;
-  webglGpuVelocityTextureTest(v?: boolean): boolean;
-  gpuSimBrushOnlyTest(v?: boolean): boolean;
-  gpuSimAdvectionOnlyTest(v?: boolean): boolean;
-  gpuSimVelocityOnlyTest(v?: boolean): boolean;
-  gpuSimWetDiffusionOnlyTest(v?: boolean): boolean;
-  gpuSimTransferOnlyTest(v?: boolean): boolean;
+  webglSmokeTest(): boolean;
+  webglSmokeTest(v: boolean): WashesInstance;
+  webglGpuTextureTest(): boolean;
+  webglGpuTextureTest(v: boolean): WashesInstance;
+  webglGpuWetTextureTest(): boolean;
+  webglGpuWetTextureTest(v: boolean): WashesInstance;
+  webglGpuVelocityTextureTest(): boolean;
+  webglGpuVelocityTextureTest(v: boolean): WashesInstance;
+  gpuSimBrushOnlyTest(): boolean;
+  gpuSimBrushOnlyTest(v: boolean): WashesInstance;
+  gpuSimAdvectionOnlyTest(): boolean;
+  gpuSimAdvectionOnlyTest(v: boolean): WashesInstance;
+  gpuSimVelocityOnlyTest(): boolean;
+  gpuSimVelocityOnlyTest(v: boolean): WashesInstance;
+  gpuSimWetDiffusionOnlyTest(): boolean;
+  gpuSimWetDiffusionOnlyTest(v: boolean): WashesInstance;
+  gpuSimTransferOnlyTest(): boolean;
+  gpuSimTransferOnlyTest(v: boolean): WashesInstance;
   /** Debug: tint visible cells green so you can see the active region. */
-  webglDebugTint(v?: boolean): boolean;
+  webglDebugTint(): boolean;
+  webglDebugTint(v: boolean): WashesInstance;
 
   /** Background transparent (canvas paper rendered transparent). */
-  transparent(v?: boolean): boolean;
+  transparent(): boolean;
+  transparent(v: boolean): WashesInstance;
 
   /**
    * Host-element CSS background. Accepts any valid CSS background value:
@@ -1099,7 +1078,8 @@ export interface WashesInstance {
    * Kubelka-Munk against the lib's internal paper color. The background
    * only shows in regions where alpha is below the full-opacity threshold.
    */
-  background(value?: string | null): string;
+  background(): string;
+  background(value: string | null): WashesInstance;
 
   /** Read whether per-frame fade is enabled. */
   fadePainting(): boolean;
@@ -1109,15 +1089,19 @@ export interface WashesInstance {
    */
   fadePainting(v: boolean | number): WashesInstance;
   /** Half-life of the fade-out (ms). */
-  fadeHalfLife(ms?: number): number;
+  fadeHalfLife(): number;
+  fadeHalfLife(ms: number): WashesInstance;
   /** Auto-fade the background between strokes. */
-  autoDryBackground(v?: boolean): boolean;
+  autoDryBackground(): boolean;
+  autoDryBackground(v: boolean): WashesInstance;
 
   /** Canvas resolution: display pixels per sim cell. Triggers a rescale event. */
-  /** v1.7 — pass { preserve: true } to resample the painting into the new grid instead of wiping. */
-  scale(v?: number, opts?: { preserve?: boolean }): number;
+  /** v2.0.0 — PRESERVES the painting (resampled into the new grid) unless { wipe: true }. (v1 wiped unless { preserve: true } — that behavior lives on compat1.) */
+  scale(): number;
+  scale(v: number, opts?: { wipe?: boolean }): WashesInstance;
   /** Canvas DPI scale factor. */
-  canvasScale(v?: number): number;
+  canvasScale(): number;
+  canvasScale(v: number): WashesInstance;
 
   /**
    * Quality preset — bundles `scale`, `advectionMode`, and a couple of
@@ -1141,13 +1125,8 @@ export interface WashesInstance {
    * Doesn't touch settings outside the preset's scope (gravity, edge mode,
    * mask state, etc.).
    */
-  quality(preset?: QualityPreset): QualityPreset | null;
-
-  /** Convert display coordinates to sim grid coordinates. */
-  toGrid(displayX: number, displayY: number): { gx: number; gy: number };
-
-  /** Inverse of {@link WashesInstance.toGrid}: grid → client (viewport) coords. (v1.1) */
-  toClient(gx: number, gy: number): { x: number; y: number };
+  quality(): QualityPreset | null;
+  quality(preset: QualityPreset): WashesInstance;
 
   /**
    * The live CSS rectangle of the display canvas — exactly the space
@@ -1164,45 +1143,15 @@ export interface WashesInstance {
   removeMask(): WashesInstance;
 
   /**
-   * Stamp a rounded rectangle directly into the mask field. Crisper edges
-   * and faster than approximating with many overlapping
-   * `paintAt(MASK_INDEX)` circle stamps. (v0.95)
-   *
-   * Coordinates and dimensions are in display pixels (same coord space as
-   * `getBoundingClientRect`). `radii` follows the
-   * `CanvasRenderingContext2D.roundRect()` spec — a number for uniform
-   * corners or an array (`[tl, tr, br, bl]` etc.). Omit for square corners.
-   * Mask cells are set to 1.0 (fully frozen).
+   * Freeze cells inside a rounded rectangle: `nx, ny, nw, nh` in 0..1
+   * across the canvas; `radii` follows the `roundRect()` spec (a number
+   * for uniform corners or an array). Frozen cells ignore paint, flow and
+   * drying until unmasked. (v2.0.0 — was maskNorm; the display-px
+   * maskRect/unmaskRect pair lives on compat1.)
    */
-  maskRect(
-    displayX: number,
-    displayY: number,
-    displayW: number,
-    displayH: number,
-    radii?: number | number[]
-  ): WashesInstance;
-
-  /**
-   * Inverse of `maskRect`. Clears mask cells inside a rounded rectangle so
-   * subsequent paint operations can deposit there. Useful for "open a
-   * window" effects in masked regions. (v0.96)
-   */
-  unmaskRect(
-    displayX: number,
-    displayY: number,
-    displayW: number,
-    displayH: number,
-    radii?: number | number[]
-  ): WashesInstance;
-
-  /**
-   * Normalized masking: `nx, ny, nw, nh` in 0..1 across the canvas. Maps to
-   * the correct client coordinates internally, sidestepping the
-   * grid-vs-display-vs-viewport coordinate confusion. (v1.1)
-   */
-  maskNorm(nx: number, ny: number, nw: number, nh: number, radii?: number | number[]): WashesInstance;
-  /** Normalized inverse of {@link WashesInstance.maskNorm}. (v1.1) */
-  unmaskNorm(nx: number, ny: number, nw: number, nh: number, radii?: number | number[]): WashesInstance;
+  mask(nx: number, ny: number, nw: number, nh: number, radii?: number | number[]): WashesInstance;
+  /** Inverse of {@link WashesInstance.mask}: clears mask cells inside the rectangle. */
+  unmask(nx: number, ny: number, nw: number, nh: number, radii?: number | number[]): WashesInstance;
 
   /**
    * v1.11 — freeze cells inside an SVG path. `d` is path data; coordinates are
@@ -1221,25 +1170,6 @@ export interface WashesInstance {
   maskInvert(): WashesInstance;
 
   // -----------------------------------------------------------------------
-  // Ink layer (v0.97)
-  // -----------------------------------------------------------------------
-
-  /**
-   * Per-stamp ink paint load. Independent of `paintLoad()` which applies
-   * to K-M pigments. Default 1.0 (saturate immediately).
-   */
-  inkPaintLoad(v?: number): number;
-
-  /**
-   * Per-stamp ink water load. Independent of `waterLoad()` which applies
-   * to K-M pigments. Default 0.05 (minimal self-bleed).
-   */
-  inkWaterLoad(v?: number): number;
-
-  /** Zero out the ink field everywhere. */
-  clearInk(): WashesInstance;
-
-  // -----------------------------------------------------------------------
   // Brush modes (v0.98)
   // -----------------------------------------------------------------------
 
@@ -1248,20 +1178,25 @@ export interface WashesInstance {
    * K-M pigments (rose/yellow/blue) — ink/water/lift/mask/paper brushes
    * ignore it. `'dry'` is a legacy alias for `'crayon'`.
    */
-  brushMode(v?: BrushMode): BrushMode;
+  brushMode(): BrushMode;
+  brushMode(v: BrushMode): WashesInstance;
 
   /**
    * Composite "dryness" slider. 0..1. Drives the per-knob defaults below
    * unless they're set individually.
    */
-  dryness(v?: number): number;
+  dryness(): number;
+  dryness(v: number): WashesInstance;
 
   /** Paper-tooth rejection strength. 0..1. Default 0.65. */
-  dryPaperReject(v?: number): number;
+  dryPaperReject(): number;
+  dryPaperReject(v: number): WashesInstance;
   /** Motion-direction streak strength. 0..1. Default 0.6. */
-  dryAnisotropy(v?: number): number;
+  dryAnisotropy(): number;
+  dryAnisotropy(v: number): WashesInstance;
   /** Fine random per-cell skip variance. 0..1. Default 0.5. */
-  dryBrushSkip(v?: number): number;
+  dryBrushSkip(): number;
+  dryBrushSkip(v: number): WashesInstance;
 
   // -----------------------------------------------------------------------
   // Composition modes
@@ -1294,36 +1229,46 @@ export interface WashesInstance {
   // Background animation / visualization
   // -----------------------------------------------------------------------
 
-  /** Set a named time-driven background wash. */
-  setBackground(name: string): WashesInstance;
-  isBackgroundRunning(): boolean;
+  /**
+   * v2.0.0 — the time-driven ambient background wash, as a getter/setter
+   * pair (was setBackground; it couldn't unify into `background(v?)` —
+   * that name means the CSS backdrop). The getter returns the running
+   * wash's name, or `null` when idle.
+   */
+  backgroundAnimation(): string | null;
+  backgroundAnimation(name: string): WashesInstance;
+  /** Whether a background wash is still running (they end on their own). */
+  backgroundAnimationRunning(): boolean;
 
-  /** Toggle an animation mode (breathe, drift, pulse, etc.). */
-  setAnimation(name: AnimationName, opts?: AnimationOptions): WashesInstance;
-  getAnimation(): AnimationName;
+  /** Animation mode (breathe, drift, pulse, etc.). Pass `null` to stop. (v2.0.0 — was setAnimation/getAnimation.) */
+  animation(): AnimationName;
+  animation(name: AnimationName | null, opts?: AnimationOptions): WashesInstance;
 
-  /** Toggle a debug visualization (velocity vectors, pressure heat, etc.). */
-  setVisualization(name: VisualizationName, opts?: VisualizationOptions): WashesInstance;
-  getVisualization(): VisualizationName;
+  /** Debug visualization (velocity vectors, pressure heat, etc.). Pass `null` to stop. (v2.0.0 — was setVisualization/getVisualization.) */
+  visualization(): VisualizationName;
+  visualization(name: VisualizationName | null, opts?: VisualizationOptions): WashesInstance;
 
   // -----------------------------------------------------------------------
   // Mobile / input
   // -----------------------------------------------------------------------
 
   /** Force mobile-mode heuristics. */
-  mobile(v?: boolean): boolean;
+  mobile(): boolean;
+  mobile(v: boolean): WashesInstance;
   /** Was mobile auto-detected at init? */
   mobileDetected(): boolean;
 
   /** Show floating cursor preview circle. */
-  cursorPreview(v?: boolean): boolean;
+  cursorPreview(): boolean;
+  cursorPreview(v: boolean): WashesInstance;
 
   // -----------------------------------------------------------------------
   // Performance
   // -----------------------------------------------------------------------
 
   /** Start/stop perf instrumentation. */
-  perf(v?: boolean): boolean;
+  perf(): boolean;
+  perf(v: boolean): WashesInstance;
   /** Current perf snapshot. */
   perfMetrics(): PerfMetrics;
 
@@ -1351,15 +1296,13 @@ export interface WashesInstance {
    * before encoding so the resulting image is self-contained.
    */
   /**
-   * v1.25 — the honest name for {@link WashesInstance.exportPNG} (it
-   * encodes JPEG too via `mimeType`). Identical overloads; becomes the
-   * primary name in 2.0, with `exportPNG` in the compat shim.
+   * Export the current canvas. By default returns a data URL string; pass
+   * `asBlob: true` for a `Promise<Blob>` (more reliable for large
+   * canvases). `mimeType`/`quality` select the encoder — it does JPEG
+   * too, which is why 2.0 renamed v1's `exportPNG` (on compat1) to this.
    */
   exportImage(opts: { asBlob: true; transparent?: boolean; mimeType?: string; quality?: number }): Promise<Blob>;
-  exportImage(opts?: { transparent?: boolean; asBlob?: boolean; mimeType?: string; quality?: number }): string;
-
-  exportPNG(opts: { asBlob: true; transparent?: boolean; mimeType?: string; quality?: number }): Promise<Blob>;
-  exportPNG(opts?: {
+  exportImage(opts?: {
     /** Force transparent background. Default: follows `transparent()` setting. */
     transparent?: boolean;
     /** Return `Promise<Blob>` instead of a data URL string. (v0.64) */
@@ -1481,6 +1424,18 @@ export interface WashesInstance {
  * user-facing brand alias added in v0.53. Both globals refer to the same
  * factory.
  */
+/**
+ * v2.0.0 — what {@link WashesStatic.compat1} returns: the complete v1
+ * surface (143 members) over the same instance. Deliberately loose — the
+ * authoritative member list is `tests/v1-surface.snapshot.json`, enforced
+ * by the compat reflection test. Write NEW code against
+ * {@link WashesInstance}; this type exists so old call sites keep
+ * compiling while they migrate.
+ */
+export interface WashesV1Compat {
+  [member: string]: any;
+}
+
 export interface WashesStatic {
   /**
    * Create a Washes instance attached to the given DOM element. The element
@@ -1510,17 +1465,16 @@ export interface WashesStatic {
   createHeadless(options?: CreateOptions & { width?: number; height?: number }): WashesInstance;
 
   /**
-   * v1.25 — API 2.0 compat scaffolding. In 2.0 this wraps a v2 instance in
-   * the complete v1 surface (old names, old units, value-returning
-   * setters), warning once per distinct call site; it lives until 3.0.
-   * Today the instance already IS the v1 surface, so this is a documented
-   * passthrough — wrap your call sites now and the 2.0 flip cannot break
-   * them.
+   * v2.0.0 — wrap a v2 instance in the complete v1 surface: old names,
+   * old units (grid/px coordinates, px brush diameters), value-returning
+   * setters. Every call runs the exact v1 code path, so behavior is
+   * bit-identical to 1.x. Warns once per v1-only member name with its
+   * migration hint (`{ warn: false }` silences). Lives until 3.0.
    */
-  compat1(instance: WashesInstance): WashesInstance;
+  compat1(instance: WashesInstance, opts?: { warn?: boolean }): WashesV1Compat;
 
   /** v1.4 — the public surface tiered: start at core; tuning has defaults; debug diagnoses. */
-  readonly tiers: { core: string[]; tuning: string[]; debug: string[] };
+  readonly tiers: Record<'core' | 'tuning' | 'debug', (keyof WashesInstance)[]>;
 
   /** The valid brush-mode names, available without an instance. (v1.2) */
   readonly brushModes: BrushMode[];

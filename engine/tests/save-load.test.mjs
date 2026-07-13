@@ -21,9 +21,9 @@ const here = path.dirname(url.fileURLToPath(import.meta.url));
 const { Washes } = await import(url.pathToFileURL(path.join(here, '..', 'src', 'index.js')).href);
 
 const wc = Washes.createHeadless({ width: 320, height: 240 });
-wc.paintNorm(0.4, 0.5, 0.08, 0, 0.9);
-wc.paintNorm(0.6, 0.4, 0.05, 2, 0.8);
-wc.paintAt(80, 60, 8, 'mask', 0.9);
+wc.paint(0.4, 0.5, 0.08, 0, 0.9);
+wc.paint(0.6, 0.4, 0.05, 2, 0.8);
+wc.grid.paint(80, 60, 8, 'mask', 0.9);
 
 const snap = wc.saveState();
 assert.equal(snap.format, 'washes-state@1');

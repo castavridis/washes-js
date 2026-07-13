@@ -72,6 +72,26 @@ if (staleAllow.length) {
   console.error(`✗ KNOWN_UNDECLARED entries that are stale (now declared or gone): ${staleAllow.join(', ')}`);
 }
 
-console.log(`api-surface: runtime ${runtime.size} members, declared ${declared.size}, allowlisted ${KNOWN_UNDECLARED.size}`);
+// ---- v2.0.0: the tiers table is COMPLETE — every runtime member appears
+// in exactly one tier, and no tier lists a phantom. ----
+const tierAll = [];
+for (const tier of ['core', 'tuning', 'debug']) tierAll.push(...Washes.tiers[tier]);
+const tierSet = new Set(tierAll);
+const untiered = [...runtime].filter((k) => !tierSet.has(k)).sort();
+const tierPhantom = [...tierSet].filter((k) => !runtime.has(k)).sort();
+if (untiered.length) {
+  failed = true;
+  console.error(`✗ runtime members missing from Washes.tiers (${untiered.length}): ${untiered.join(', ')}`);
+}
+if (tierPhantom.length) {
+  failed = true;
+  console.error(`✗ Washes.tiers lists members the runtime lacks: ${tierPhantom.join(', ')}`);
+}
+if (tierAll.length !== tierSet.size) {
+  failed = true;
+  console.error('✗ Washes.tiers lists a member in more than one tier');
+}
+
+console.log(`api-surface: runtime ${runtime.size} members, declared ${declared.size}, allowlisted ${KNOWN_UNDECLARED.size}, tiered ${tierSet.size}`);
 if (failed) process.exit(1);
-console.log('api-surface: OK — d.ts matches the runtime surface');
+console.log('api-surface: OK — d.ts matches the runtime surface; tiers table complete');

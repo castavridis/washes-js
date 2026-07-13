@@ -83,7 +83,7 @@ const bristleK = DRYNESS * BRISTLE;
 
 function freshInstance() {
   reseed(SEED);
-  const wc = Washes.create(makeEl('div'));
+  const wc = Washes.compat1(Washes.create(makeEl('div')), { warn: false });
   return wc;
 }
 

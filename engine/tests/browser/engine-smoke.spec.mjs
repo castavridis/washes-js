@@ -24,7 +24,7 @@ async function bootPage(page) {
 // Paint, run the sim, and report how many canvas pixels differ from paper.
 const PAINT_AND_COUNT = `
   async () => {
-    const wc = Washes.create(document.getElementById('host'));
+    const wc = Washes.compat1(Washes.create(document.getElementById('host')));
     wc.paintNorm(0.5, 0.5, 0.08, 0, 0.9);
     wc.paintNorm(0.3, 0.4, 0.05, 2, 0.8);
     wc.runUntilDry(true);
@@ -53,7 +53,7 @@ test('WebGL render path activates (or falls back) without breaking paint', async
   await bootPage(page);
   const res = await page.evaluate(`
     async () => {
-      const wc = Washes.create(document.getElementById('host'));
+      const wc = Washes.compat1(Washes.create(document.getElementById('host')));
       const available = wc.webglAvailable();
       wc.webgl(true); // silently falls back to CPU when unsupported
       wc.paintNorm(0.5, 0.5, 0.08, 1, 0.9);

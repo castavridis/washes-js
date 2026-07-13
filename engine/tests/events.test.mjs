@@ -32,14 +32,14 @@ const track = (name) => wc.on(name, (d) => (got[name] = got[name] || []).push(d)
 const trackDom = (type) => host.addEventListener(type, (ev) => (dom[type] = dom[type] || []).push(ev.detail));
 
 for (const n of ['rescale', 'palettechange', 'gouachechange', 'cursorpreviewchange', 'presetapplied', 'driedinstantly']) track(n);
-for (const t of ['rescaled', 'paletteChange', 'pigmentchange', 'gouachechange', 'cursorpreviewchange', 'presetapplied', 'driedinstantly']) trackDom(t);
+for (const t of ['rescale', 'palettechange', 'pigmentchange', 'gouachechange', 'cursorpreviewchange', 'presetapplied', 'driedinstantly']) trackDom(t);
 
 // --- palettechange (+ the v1.12.1 dual-fire and the camelCase DOM mirror) ---
 const oncePalette = wc.once('palettechange');
 wc.palette([{ color: '#336699' }, { color: '#996633' }, { color: '#339966' }]);
 assert.equal(got.palettechange?.length, 1, "on('palettechange') fired");
 assert.equal(got.palettechange[0].custom, true, 'detail says custom palette');
-assert.equal(dom.paletteChange?.length, 1, 'DOM paletteChange (camelCase, v1 spelling) still fires');
+assert.equal(dom.palettechange?.length, 1, 'DOM palettechange mirror fires (v2 lowercase spelling)');
 assert.equal(dom.pigmentchange?.length, 1, 'v1.12.1 pigmentchange dual-fire still fires');
 assert.equal((await oncePalette).custom, true, 'once() resolved with the detail');
 
@@ -65,18 +65,18 @@ assert.equal(got.presetapplied?.length, 1, "on('presetapplied') fired");
 assert.ok(got.presetapplied[0].preset && typeof got.presetapplied[0].preset === 'object', 'detail carries the preset');
 
 // --- driedinstantly ---
-wc.paintNorm(0.5, 0.5, 0.06, 0, 0.9);
+wc.paint(0.5, 0.5, 0.06, 0, 0.9);
 wc.dry();
 assert.equal(got.driedinstantly?.length, 1, "on('driedinstantly') fired");
 assert.equal(dom.driedinstantly?.length, 1, 'DOM mirror fired');
 
 // --- rescale now covers every rebuild: scale() was DOM-only before ---
 const before = got.rescale?.length || 0;
-wc.scale(wc.scale() + 0.25, { preserve: true });
+wc.scale(wc.scale() + 0.25);  // v2 preserves by default
 assert.equal((got.rescale?.length || 0) - before, 1, "on('rescale') fires from scale()");
 const r = got.rescale[got.rescale.length - 1];
 assert.ok(r.scale > 0 && r.gridWidth > 0 && r.gridHeight > 0, 'rescale detail: {scale, gridWidth, gridHeight}');
-assert.equal(dom.rescaled.length, got.rescale.length, 'DOM rescaled and on(rescale) fire 1:1');
+assert.equal(dom.rescale.length, got.rescale.length, 'DOM rescale mirror and on(rescale) fire 1:1');
 
 // --- once() unsubscribes after one firing ---
 let onceCount = 0;

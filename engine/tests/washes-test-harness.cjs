@@ -153,7 +153,7 @@ function runAnisotropy(libPath) {
   console.log('\n=== Anisotropy (cardinal/diagonal ratio at d=100) ===');
   console.log('  ratio = 1.0 is isotropic; ~1.4 = √2 = per-axis L1 norm bug');
   for (const sc of scenarios) {
-    const wc = Washes.create(makeEl('div'));
+    const wc = Washes.compat1(Washes.create(makeEl('div')), { warn: false });
     wc._debug_paintGrid(0.5);
     wc.splash([{ x: 324, y: 270, velocity: sc.vel }], 'deluge');
     wc._debug_run(5);
@@ -190,7 +190,7 @@ function runTrace(libPath) {
       setActiveRectFull();
     },`);
 
-  const wc = Washes.create(makeEl('div'));
+  const wc = Washes.compat1(Washes.create(makeEl('div')), { warn: false });
   wc._debug_paintGrid(0.5);
   // Epicenter at (324.4, 270.7) — a fractional position that triggered the
   // pinpoint in v0.70-v0.71.
@@ -273,7 +273,7 @@ function runHotspots(libPath) {
   console.log('\n=== Hotspot scan over fractional epicenters ===');
   console.log('  Expected (post-v0.72): only canvas corners, no near-epicenter hotspots.');
   for (const [ex, ey] of cases) {
-    const wc = Washes.create(makeEl('div'));
+    const wc = Washes.compat1(Washes.create(makeEl('div')), { warn: false });
     wc._debug_paintGrid(0.5);
     wc.splash([{ x: ex, y: ey, velocity: 40 }], 'deluge');
     wc._debug_simStep(30);
@@ -330,7 +330,7 @@ function runCFL(libPath) {
   console.log('  Donor-cell stable when max ≤ 1. Semi-Lagrangian has no bound.');
   const results = [];
   for (const sc of scenarios) {
-    const wc = Washes.create(makeEl('div'));
+    const wc = Washes.compat1(Washes.create(makeEl('div')), { warn: false });
     wc._debug_paintGrid(0.5);
     wc.splash([{ x: 324, y: 270, velocity: sc.vel }], 'deluge');
     const maxCFL = wc._debug_maxCFL(sc.adt);
@@ -380,7 +380,7 @@ function runMassBalance(libPath) {
   console.log('\n=== Mass balance over 100 simSteps (centered splash) ===');
   const losses = {};
   for (const sc of scenarios) {
-    const wc = Washes.create(makeEl('div'));
+    const wc = Washes.compat1(Washes.create(makeEl('div')), { warn: false });
     wc.edgeMode(sc.mode);
     wc.gravityDirection(sc.dir);
     wc.gravityStrength(sc.str);
@@ -404,7 +404,7 @@ function runMassBalance(libPath) {
   console.log('\n  Closed-mode regression: Pull should have no effect in closed mode');
   const closedLosses = [];
   for (const str of [0.0, 0.10, 0.50]) {
-    const wc = Washes.create(makeEl('div'));
+    const wc = Washes.compat1(Washes.create(makeEl('div')), { warn: false });
     wc.edgeMode('closed');
     wc.gravityStrength(str);  // ignored in closed mode
     wc._debug_paintGrid(0.5);
@@ -438,7 +438,7 @@ const STAT_KEYS = ['sum', 'min', 'max', 'nz', 'cx', 'cy'];
 function buildEquivalenceScenarios(Washes) {
   // Each scenario: fresh instance, seeded RNG, returns a list of checkpoints.
   function makeInstance() {
-    return Washes.create(makeEl('div'));
+    return Washes.compat1(Washes.create(makeEl('div')), { warn: false });
   }
   return [
     {
@@ -649,11 +649,11 @@ function runBackend(libPath) {
 
   // 1) stepping through the seam == stepping directly
   Math.random = mulberry32(SEED + 11);
-  const direct = Washes.create(makeEl('div'));
+  const direct = Washes.compat1(Washes.create(makeEl('div')), { warn: false });
   direct.splash([{ x: 324, y: 270, velocity: 25 }], 'deluge');
   direct._debug_simStep(50);
   Math.random = mulberry32(SEED + 11);
-  const seamed = Washes.create(makeEl('div'));
+  const seamed = Washes.compat1(Washes.create(makeEl('div')), { warn: false });
   seamed.splash([{ x: 324, y: 270, velocity: 25 }], 'deluge');
   seamed._debug_backendStep(50);
   const a = JSON.stringify(direct._debug_fieldStats());
@@ -663,11 +663,11 @@ function runBackend(libPath) {
 
   // 2) a stamp through stampBrush == the same paintAt call
   Math.random = mulberry32(SEED + 13);
-  const viaPaint = Washes.create(makeEl('div'));
+  const viaPaint = Washes.compat1(Washes.create(makeEl('div')), { warn: false });
   viaPaint.paintAt(200, 180, 10, 1, 0.8);
   viaPaint._debug_simStep(10);
   Math.random = mulberry32(SEED + 13);
-  const viaStamp = Washes.create(makeEl('div'));
+  const viaStamp = Washes.compat1(Washes.create(makeEl('div')), { warn: false });
   viaStamp._debug_backendStamp(200, 180, 10, 1, 0.8);
   viaStamp._debug_backendStep(10);
   const c = JSON.stringify(viaPaint._debug_fieldStats());
@@ -682,7 +682,7 @@ function runBackend(libPath) {
 
   // 4) paintAt default-pigment regression (was: threw on g[undefined])
   Math.random = mulberry32(SEED + 17);
-  const wc = Washes.create(makeEl('div'));
+  const wc = Washes.compat1(Washes.create(makeEl('div')), { warn: false });
   let threw = false;
   try { wc.paintAt(150, 150, 8); } catch (_) { threw = true; }
   check(!threw, 'paintAt: omitted pigment no longer throws');
@@ -728,12 +728,12 @@ function buildRenderScenarios(Washes) {
     {
       // rect starts full at create — this is a whole-sheet paper render
       name: 'virgin-paper',
-      run() { return Washes.create(makeEl('div')); },
+      run() { return Washes.compat1(Washes.create(makeEl('div')), { warn: false }); },
     },
     {
       name: 'splash-30-steps',
       run() {
-        const wc = Washes.create(makeEl('div'));
+        const wc = Washes.compat1(Washes.create(makeEl('div')), { warn: false });
         wc.splash([{ x: 324, y: 270, velocity: 25 }], 'deluge');
         wc._debug_simStep(30);
         return wc;
@@ -742,7 +742,7 @@ function buildRenderScenarios(Washes) {
     {
       name: 'custom-palette-paint',
       run() {
-        const wc = Washes.create(makeEl('div'));
+        const wc = Washes.compat1(Washes.create(makeEl('div')), { warn: false });
         wc.palette([{ color: '#635bff' }, { color: '#0a2540', granulation: 0.4 }, { color: '#00d4ff' }]);
         for (let s = 0; s < 5; s++) wc.paintAt(300 + s * 6, 250 + s * 4, 12, s % 3, 0.8);
         wc._debug_simStep(40);
@@ -752,7 +752,7 @@ function buildRenderScenarios(Washes) {
     {
       name: 'transparent-mode',
       run() {
-        const wc = Washes.create(makeEl('div'));
+        const wc = Washes.compat1(Washes.create(makeEl('div')), { warn: false });
         wc.transparent(true);
         wc.paintAt(320, 260, 14, 0, 0.9);
         wc._debug_simStep(25);
@@ -810,7 +810,7 @@ function runActiveRect(libPath) {
   const Washes = loadLibWithHelpers(libPath, EQUIV_INJECT);
   console.log('\n=== Active-rect behavior ===');
 
-  const wc = Washes.create(makeEl('div'));
+  const wc = Washes.compat1(Washes.create(makeEl('div')), { warn: false });
   const { GW, GH } = wc._debug_grid();
 
   // Reality of init (documented by probe, 2026-07-12): create() sets the

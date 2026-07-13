@@ -5019,8 +5019,11 @@ function createSimCore(env) {
       // did; previously it only fired from host-size remeasures, while
       // its docs already promised "the grid was rebuilt".
       _emit("rescale", { scale: SCALE, gridWidth: GW, gridHeight: GH });
+      // v2.0.0 — the DOM mirror takes the on() name ('rescaled' → 'rescale',
+      // §3's one-casing rule). DOM events can't be shimmed by compat1;
+      // listeners migrate via the CHANGELOG table.
       targetEl.dispatchEvent(
-        new CustomEvent("rescaled", {
+        new CustomEvent("rescale", {
           detail: { scale: SCALE, gridWidth: GW, gridHeight: GH },
         }),
       );
@@ -13142,7 +13145,8 @@ function _ensureTextureNoise(mode) {
         setActiveRectFull();
         if (typeof useGPU !== "undefined" && useGPU && gpuAvailable) gpuRender(); else render(true);
         _emit("palettechange", { custom: !!_customPigments });
-        targetEl.dispatchEvent(new CustomEvent("paletteChange", { detail: { custom: !!_customPigments } }));
+        // v2.0.0 — all-lowercase DOM mirror (was camelCase 'paletteChange').
+        targetEl.dispatchEvent(new CustomEvent("palettechange", { detail: { custom: !!_customPigments } }));
         // v1.12.1 — also fire 'pigmentchange' so hosts that already refresh
         // their swatches on pigment events (the standard wiring) pick up the
         // new pigment appearance without needing to know about palette().
@@ -14033,7 +14037,195 @@ function _ensureTextureNoise(mode) {
       }
     }
     _tryAutoGpu();
-    return api;
+
+    // =====================================================================
+    // API 2.0 — the v2 surface (docs/API_2_0_DESIGN.md; engine 2.0.0).
+    //
+    // The internal `api` object above keeps every v1 code path — nothing
+    // in the physics or the v1 method bodies moved, so bit-exactness is
+    // by construction. What leaves createInstance is a programmatically
+    // built v2 view over it: renames applied, value-returning setters
+    // chain-wrapped, unit changes adapted, retired names omitted.
+    // Washes.compat1() reaches the internal object through a hidden
+    // symbol and rebuilds the v1 surface from the SAME implementations,
+    // so compat is exact — never a lossy unit re-conversion.
+    // =====================================================================
+
+    // v1 names with no v2 spelling — compat1-only. Grid/px-space twins
+    // (normalized became THE space; cells live in wc.grid), the retired
+    // run-state pair, set/get pairs, and spelling retirees.
+    const _V2_RETIRED = new Set([
+      "paintAt", "paintNorm", "strokeTo", "strokeToNorm",
+      "addVelocity", "addVelocityNorm", "stirNorm", "rewetNorm", "dryNorm",
+      "liftNorm", "blotNorm", "sampleNorm", "splashNorm", "maskNorm",
+      "unmaskNorm", "maskRect", "unmaskRect", "toGrid", "toClient",
+      "pauseDrying", "keepSimulating", "runUntilDry", "exportPNG",
+      "setAnimation", "getAnimation", "setBackground", "isBackgroundRunning",
+      "setVisualization", "getVisualization", "brushModes",
+      // The v0.97 ink layer never landed on this branch: `ink` /
+      // `inkActive` are undeclared, so clearInk() throws, the getters
+      // throw until first set, and the setters write accidental globals
+      // nothing reads. Dropped from v2; compat keeps the (equally
+      // non-functional) v1 behavior.
+      "inkPaintLoad", "inkWaterLoad", "clearInk",
+    ]);
+
+    // v1 value-returning setters that chain in v2 (§4 — the single most
+    // mechanical break; zero-arg getter forms are unchanged). brushSize /
+    // scale / remeasure / brushMode are handled specially below.
+    const _V2_CHAIN = new Set([
+      "pressure", "flow", "usePointerPressure", "continuousFlow",
+      "evaporation", "autoPerf", "edgeMode", "edgeFade", "velocityClamp",
+      "gouacheMode", "advectionMode", "edgeDarkening", "maskTint",
+      "wetnessHeatmap", "webgl", "webglSmokeTest", "webglGpuTextureTest",
+      "webglGpuWetTextureTest", "webglGpuVelocityTextureTest",
+      "gpuSimBrushOnlyTest", "gpuSimAdvectionOnlyTest",
+      "gpuSimVelocityOnlyTest", "gpuSimWetDiffusionOnlyTest",
+      "gpuSimTransferOnlyTest", "webglDebugTint", "transparent",
+      "background", "fadeHalfLife", "autoDryBackground", "canvasScale",
+      "quality", "dryness",
+      "dryPaperReject", "dryAnisotropy", "dryBrushSkip", "mobile",
+      "cursorPreview", "perf",
+    ]);
+
+    const v2 = {};
+    const _wrapV2 = (fn, name) =>
+      function (...args) {
+        if (_V2_CHAIN.has(name) && args.length > 0) {
+          fn.apply(api, args);
+          return v2;
+        }
+        const r = fn.apply(api, args);
+        return r === api ? v2 : r; // never leak the internal object
+      };
+
+    for (const k of Object.keys(api)) {
+      if (_V2_RETIRED.has(k)) continue;
+      if (k === "grid") continue; // fresh v2 namespace built below
+      const val = api[k];
+      if (typeof val === "function") v2[k] = _wrapV2(val, k);
+      else Object.defineProperty(v2, k, { enumerable: true, get: () => api[k] });
+    }
+
+    // --- §1: normalized primaries — the *Norm implementations take the
+    //     one-way-per-concept names (overwriting the grid-space copies
+    //     the loop made where v1 shared the name).
+    v2.paint  = _wrapV2(api.paintNorm, "paint");
+    v2.stroke = _wrapV2(api.strokeToNorm, "stroke");
+    v2.stir   = _wrapV2(api.stirNorm, "stir");
+    v2.rewet  = _wrapV2(api.rewetNorm, "rewet"); // no-args = full soak, as v1
+    v2.dry    = _wrapV2(api.dryNorm, "dry");     // no-args = full dry, as v1
+    v2.lift   = _wrapV2(api.liftNorm, "lift");
+    v2.blot   = _wrapV2(api.blotNorm, "blot");
+    v2.sample = _wrapV2(api.sampleNorm, "sample");
+    v2.splash = _wrapV2(api.splashNorm, "splash");
+    v2.mask   = _wrapV2(api.maskNorm, "mask");
+    v2.unmask = _wrapV2(api.unmaskNorm, "unmask");
+    v2.line = function (nx0, ny0, nx1, ny1, opts) {
+      api.penUp();
+      api.strokeToNorm(nx0, ny0, opts);
+      api.strokeToNorm(nx1, ny1, opts);
+      return v2;
+    };
+
+    // --- §1: brushSize speaks the radius convention every other v2 radius
+    //     uses — a fraction of the smaller display side. v1's display-px
+    //     DIAMETER channel stays available (exactly) through compat1.
+    v2.brushSize = function (fraction) {
+      const rect = api.displayRect();
+      const minSide = Math.min(rect.width, rect.height);
+      if (fraction === undefined)
+        return minSide > 0 ? api.brushSize() / 2 / minSide : 0;
+      api.brushSize(2 * fraction * minSide);
+      return v2;
+    };
+
+    // --- Principle 3: preserve-by-default. v1 scale() wiped unless
+    //     { preserve }; v1 remeasure() always wiped. v2 inverts both:
+    //     pass { wipe: true } to start over. (The automatic host-resize
+    //     rebuild keeps its v1 behavior for now — changing it needs
+    //     browser QA on resample quality; queued with the 2.1 fixes.)
+    v2.scale = function (n, opts) {
+      if (n === undefined) return api.scale();
+      api.scale(n, { preserve: !(opts && opts.wipe) });
+      return v2;
+    };
+    v2.remeasure = function (opts) {
+      if (opts && opts.wipe) {
+        api.remeasure();
+        return v2;
+      }
+      rebuildScale(SCALE, true);
+      _builtForW = instanceWindow.innerWidth;
+      _builtForH = instanceWindow.innerHeight;
+      return v2;
+    };
+
+    // --- §4: 'dry' stops meaning four things — the brush-mode alias
+    //     (it aliased 'crayon') completes its v0.98 deprecation.
+    v2.brushMode = function (v) {
+      if (v === undefined) return api.brushMode();
+      if (v === "dry")
+        throw new Error(
+          "brushMode('dry') was a deprecated alias for 'crayon' and was " +
+            "dropped in washes 2.0 (compat1 still accepts it)",
+        );
+      api.brushMode(v);
+      return v2;
+    };
+
+    // --- §4: set/get pairs become getter/setter overloads.
+    v2.animation = function (name, opts) {
+      if (name === undefined) return api.getAnimation();
+      api.setAnimation(name, opts);
+      return v2;
+    };
+    v2.visualization = function (name, opts) {
+      if (name === undefined) return api.getVisualization();
+      api.setVisualization(name, opts);
+      return v2;
+    };
+    // setBackground couldn't become background(v?) — that name already
+    // means the CSS backdrop — so the ambient-wash animation gets an
+    // honest one: backgroundAnimation(name?) + backgroundAnimationRunning().
+    v2.backgroundAnimation = function (name) {
+      if (name === undefined)
+        return typeof timeWash !== "undefined" && timeWash ? timeWash.preset : null;
+      api.setBackground(name);
+      return v2;
+    };
+    v2.backgroundAnimationRunning = function () {
+      return api.isBackgroundRunning();
+    };
+
+    // --- §1: the cell-space home. A fresh object (never the internal
+    //     one — grid.paint must chain to v2, not leak `api`), carrying
+    //     the display bridges that replace toGrid/toClient.
+    Object.defineProperty(v2, "grid", {
+      enumerable: true,
+      value: {
+        get width() { return GW; },
+        get height() { return GH; },
+        paint(gx, gy, gridRadius, pigmentIdx, strength) {
+          api.paintAt(gx, gy, gridRadius, pigmentIdx, strength);
+          return v2;
+        },
+        toNorm(gx, gy) { return { nx: gx / GW, ny: gy / GH }; },
+        fromNorm(nx, ny) { return { gx: nx * GW, gy: ny * GH }; },
+        size() { return { gridWidth: GW, gridHeight: GH }; },
+        fromDisplay(displayX, displayY) {
+          const g = api.toGrid(displayX, displayY);
+          return { gx: g.x, gy: g.y };
+        },
+        toDisplay(gx, gy) { return api.toClient(gx, gy); },
+      },
+    });
+
+    // The hidden bridge compat1() uses. Non-enumerable, symbol-keyed:
+    // invisible to Object.keys / the api-surface reflection / JSON.
+    Object.defineProperty(v2, Symbol.for("washes.v1internal"), { value: api });
+
+    return v2;
   } // end createInstance
 
   // v0.86 — Polyfill `window` reference for non-browser contexts (Node
@@ -14070,38 +14262,162 @@ function _ensureTextureNoise(mode) {
     },
     // v1.4 — the 109-method surface, tiered. Start at core; everything in
     // tuning has a sensible default; debug is for diagnosing, not composing.
+    // v2.0.0 — COMPLETE (§4): all 118 instance members, exactly once each,
+    // enforced by the api-surface test. destroy and exportImage moved out
+    // of debug (they're core lifecycle, not diagnostics).
     tiers: {
-      core: ["paintNorm", "paintAt", "strokeTo", "strokeToNorm", "line", "penUp",
-        "addVelocity", "addVelocityNorm", "stir", "stirNorm",
-        "rewet", "rewetNorm", "dry", "dryNorm", "lift", "liftNorm",
-        "flood", "blot", "blotNorm", "pour", "endPour",
-        "pigment", "brushMode", "brushSize", "paperColor",
-        "maskNorm", "removeMask", "reset", "clearPaint", "splash", "splashNorm",
-        "grid", "on", "once", "onFrame", "state", "sample", "sampleNorm", "coverage"],
-      tuning: ["autoPerf", "perfLevel", "flow", "evaporation", "waterLoad", "paintLoad", "gravityVector",
-        "gravityStrength", "gravityDirection", "edgeMode", "edgeDarkening",
-        "fadePainting", "fadeHalfLife", "pauseDrying", "drying", "keepSimulating",
-        "runUntilDry", "run", "setAnimation", "setBackground", "setVisualization",
-        "applyPreset", "getPreset", "saveState", "loadState",
-        "scale", "canvasScale", "quality",
-        "usePointerPressure", "continuousFlow", "transparent", "gouacheMode"],
-      debug: ["diagnose", "remeasure", "perf", "perfMetrics", "webgl",
-        "webglAvailable", "webglDebugTint", "wetnessHeatmap", "gpuSim",
-        "gpuSimContext", "advectionMode", "advectionLastSubsteps",
-        "velocityClamp", "exportPNG", "exportImage", "destroy"],
+      core: ["target", "canvas", "grid", "paint", "stroke", "line", "penUp",
+        "stir", "rewet", "dry", "lift", "blot", "flood", "pour", "endPour",
+        "splash", "splashPresets", "pigment", "pigments", "palette",
+        "brushMode", "brushSize", "pressure", "paperColor",
+        "mask", "unmask", "maskPath", "maskImage", "maskInvert", "maskTint",
+        "removeMask", "reset", "clearPaint", "sample", "coverage", "state",
+        "on", "once", "onFrame", "paintText", "paintImage", "traceSVG",
+        "cancelSVGTrace", "buildPigmentSwatches", "exportImage",
+        "saveState", "loadState", "getPreset", "applyPreset",
+        "pause", "resume", "paused", "run", "drying", "destroy"],
+      tuning: ["flow", "evaporation", "waterLoad", "paintLoad",
+        "gravityVector", "gravityStrength", "gravityDirection",
+        "edgeMode", "edgeDarkening", "edgeFade",
+        "fadePainting", "fadeHalfLife", "autoDryBackground",
+        "paperWetness", "paperWetnessPresets", "velocityClamp",
+        "gouacheMode", "gouacheLerpAmount",
+        "animation", "visualization", "backgroundAnimation",
+        "backgroundAnimationRunning", "sketchMode", "obliterate",
+        "dryness", "dryPaperReject", "dryAnisotropy", "dryBrushSkip",
+        "usePointerPressure", "continuousFlow", "cursorPreview",
+        "mobile", "mobileDetected", "transparent", "background",
+        "rainbowColor", "scale", "canvasScale", "quality",
+        "autoPerf", "perfLevel", "remeasure", "displayRect"],
+      debug: ["diagnose", "perf", "perfMetrics", "webgl", "webglAvailable",
+        "webglDebugTint", "webglSmokeTest", "webglGpuTextureTest",
+        "webglGpuWetTextureTest", "webglGpuVelocityTextureTest",
+        "gpuSim", "gpuSimContext", "gpuSimBrushOnlyTest",
+        "gpuSimAdvectionOnlyTest", "gpuSimVelocityOnlyTest",
+        "gpuSimWetDiffusionOnlyTest", "gpuSimTransferOnlyTest",
+        "advectionMode", "advectionLastSubsteps", "wetnessHeatmap"],
     },
-    // v1.25 — API 2.0 compat scaffolding. In 2.0 this wraps a v2 instance
-    // in the full v1 surface (old names, old units, value-returning
-    // setters), warning once per distinct call site, and lives until 3.0.
-    // Today the instance IS the v1 surface, so this is a documented
-    // passthrough — pages wrap now, and the 2.0 flip can't break them.
-    compat1(instance) {
-      if (!instance || typeof instance !== "object")
-        throw new Error("compat1(instance): expected a Washes instance");
-      return instance;
+    // v2.0.0 — the real v1 adapter (scaffolded as a passthrough in 1.25).
+    // Wraps a v2 instance in the complete v1 surface: old names, old
+    // units, value-returning setters. It reaches the instance's INTERNAL
+    // implementation object through a hidden symbol, so every v1 call
+    // runs the exact v1 code path — bit-exact by construction, never a
+    // lossy unit re-conversion. Warns once per v1-only member name with
+    // its migration hint. Lives until 3.0.
+    compat1(instance, opts) {
+      const V1I = Symbol.for("washes.v1internal");
+      const internal = instance && instance[V1I];
+      if (!internal)
+        throw new Error(
+          "compat1(instance): expected a Washes 2.x instance (create() / createHeadless())",
+        );
+      const CACHE = Symbol.for("washes.compat1cache");
+      if (internal[CACHE]) return internal[CACHE];
+      const _warnEnabled = !(opts && opts.warn === false);
+
+      // v1-only or v1-units members → migration hint. Names absent here
+      // pass through silently (they mean the same thing in v2).
+      const HINTS = {
+        paintAt: "grid.paint(gx, gy, r, …)",
+        paintNorm: "paint(nx, ny, nr, …)",
+        strokeTo: "stroke(nx, ny, opts) — normalized",
+        strokeToNorm: "stroke(nx, ny, opts)",
+        addVelocity: "stir(nx, ny, vx, vy, nr) — normalized",
+        addVelocityNorm: "stir(nx, ny, vx, vy, nr)",
+        stirNorm: "stir(nx, ny, vx, vy, nr)",
+        rewetNorm: "rewet(nx, ny, nr)",
+        dryNorm: "dry(nx, ny, nr)",
+        liftNorm: "lift(nx, ny, nr, fraction)",
+        blotNorm: "blot(nx, ny, nr, strength)",
+        sampleNorm: "sample(nx, ny)",
+        splashNorm: "splash(coords, preset, opts)",
+        maskNorm: "mask(nx, ny, nw, nh, radii)",
+        unmaskNorm: "unmask(nx, ny, nw, nh, radii)",
+        maskRect: "mask(nx, ny, nw, nh, radii) — normalized",
+        unmaskRect: "unmask(nx, ny, nw, nh, radii) — normalized",
+        toGrid: "grid.fromDisplay(x, y)",
+        toClient: "grid.toDisplay(gx, gy)",
+        pauseDrying: "drying(false)",
+        keepSimulating: "run('always')",
+        runUntilDry: "run('until-dry')",
+        exportPNG: "exportImage(opts)",
+        setAnimation: "animation(name, opts)",
+        getAnimation: "animation()",
+        setBackground: "backgroundAnimation(name)",
+        isBackgroundRunning: "backgroundAnimationRunning()",
+        setVisualization: "visualization(name, opts)",
+        getVisualization: "visualization()",
+        brushModes: "the static Washes.brushModes",
+        inkPaintLoad: "no replacement — the ink layer never functioned (see CHANGELOG 2.0.0)",
+        inkWaterLoad: "no replacement — the ink layer never functioned",
+        clearInk: "no replacement — the ink layer never functioned (it throws, as it always did)",
+        brushSize: "brushSize(fraction of the smaller side) — v2 units",
+        splash: "splash(coords, preset, opts) — normalized epicenters",
+        stir: "stir(nx, ny, vx, vy, nr) — normalized",
+        lift: "lift(nx, ny, nr, fraction) — normalized",
+        blot: "blot(nx, ny, nr, strength) — normalized",
+        sample: "sample(nx, ny) — normalized",
+        line: "line(nx0, ny0, nx1, ny1, opts) — normalized",
+        scale: "scale(n, { wipe }) — preserves by default in v2",
+        remeasure: "remeasure({ wipe }) — preserves by default in v2",
+      };
+      const warned = new Set();
+      const _warn = (name) => {
+        if (!_warnEnabled || warned.has(name) || !(name in HINTS)) return;
+        warned.add(name);
+        if (typeof console !== "undefined" && console.warn)
+          console.warn(
+            "washes compat1: '" + name + "' is v1 API — migrate to " +
+              HINTS[name] + " (full table: engine/CHANGELOG.md § 2.0.0)",
+          );
+      };
+
+      const compat = {};
+      for (const k of Object.keys(internal)) {
+        const val = internal[k];
+        if (typeof val === "function") {
+          compat[k] = function (...args) {
+            // rewet()/dry() with no args are unchanged in v2 — only the
+            // grid-coordinate region forms deserve the nudge.
+            if (!((k === "rewet" || k === "dry") && args.length === 0)) _warn(k);
+            const r = val.apply(internal, args);
+            return r === internal ? compat : r;
+          };
+        } else if (k === "grid") {
+          // The internal grid's methods return the internal object —
+          // wrap so nothing leaks; live width/height mirror the dims.
+          const g = internal.grid;
+          const cg = {
+            get width() { return g.width; },
+            get height() { return g.height; },
+          };
+          for (const gk of Object.keys(g)) {
+            if (typeof g[gk] !== "function") continue;
+            cg[gk] = function (...args) {
+              const r = g[gk].apply(g, args);
+              return r === internal ? compat : r;
+            };
+          }
+          compat.grid = cg;
+        } else {
+          Object.defineProperty(compat, k, {
+            enumerable: true,
+            get: () => internal[k],
+          });
+        }
+      }
+      Object.defineProperty(internal, CACHE, { value: compat });
+      return compat;
     },
     // v1.2 (item 7) — discoverable brush-mode names without an instance.
-    brushModes: ['wet', 'crayon', 'dry', 'dryBrush', 'salt', 'splatter'],
+    // v2.0.0 — 'dry' (a deprecated alias for 'crayon' since v0.98) is
+    // dropped from the list; compat1 instances still accept it.
+    brushModes: ['wet', 'crayon', 'dryBrush', 'salt', 'splatter'],
+    // v2.0.0 — the version string the d.ts always promised. (It was
+    // declared but never implemented — undefined at runtime through all
+    // of v1; the api-surface test only reflects the instance, so statics
+    // could lie.) Bump alongside package.json.
+    version: '2.0.0',
   };
   // v0.53 — Brand alias. `Washes` is the user-facing brand for the
   // library; `Watercolor` is preserved as the long-standing internal /

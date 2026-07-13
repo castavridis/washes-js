@@ -13,7 +13,7 @@ const wc = Washes.create(document.getElementById('canvas-host'), {
   gouacheMode: 'auto',
 });
 
-wc.splash([{ x: 200, y: 200, velocity: 40 }], 'deluge');
+wc.splash([{ x: 0.5, y: 0.5, velocity: 40 }], 'deluge');  // normalized coords (2.0)
 ```
 
 ## What it does
@@ -31,14 +31,14 @@ wc.splash([{ x: 200, y: 200, velocity: 40 }], 'deluge');
 ### Splash a deluge near a corner
 
 ```js
-wc.splash([{ x: 100, y: 100, velocity: 40 }], 'deluge');
+wc.splash([{ x: 0.15, y: 0.15, velocity: 40 }], 'deluge');
 ```
 
 ### Animate an SVG drawing
 
 ```js
 const svg = await fetch('/my-logo.svg').then(r => r.text());
-await wc.traceSVG(svg, { pigment: 'rose', speed: 600 });
+wc.traceSVG(svg, { pigment: 'rose', durationMs: 1500 });
 ```
 
 ### Open boundaries with radial gravity (paint falls off all edges)
@@ -52,13 +52,11 @@ wc.gravityStrength(0.10);  // moderate pull
 ### Chained configuration
 
 ```js
-// Methods that return `WashesInstance` are chainable. Setters that return
-// the new value (most of them) are not — pigment(), splash(), removeMask(),
-// setBackground(), and the other "verb" methods chain; brushSize(), edgeMode(),
-// gravityStrength(), etc. return the value.
+// 2.0 — setters chain universally; zero-arg getters read.
 wc.pigment('blue')
-  .setBackground('sunset')
-  .splash([{ x: 100, y: 100 }], 'deluge');
+  .backgroundAnimation('sunset')
+  .brushSize(0.05)                    // fraction of the smaller side
+  .splash([{ x: 0.3, y: 0.3 }], 'deluge');
 ```
 
 ## TypeScript

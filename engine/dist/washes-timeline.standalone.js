@@ -23,7 +23,7 @@
  *
  *   const tl = new WashesTimeline(wc);          // wc = a Washes instance
  *   tl.stroke([[0.2,0.5],[0.8,0.5]], { duration: 900, easing: 'easeInOut',
- *                                      pigment: 'blue', nradius: 0.02, strength: 0.6 })
+ *                                      pigment: 'blue', nradius: 0.03, strength: 0.6 })
  *     .wait(150)
  *     .stroke(handlePts, { duration: 600, easing: 'easeOut', pigment: 'rose' })
  *     .play()
@@ -78,9 +78,14 @@ function makePathSampler(points) {
 
 class WashesTimeline {
   constructor(wc, opts) {
-    if (!wc || typeof wc.strokeToNorm !== "function")
-      throw new Error("WashesTimeline(wc): expected a Washes instance with strokeToNorm()");
+    // v2.0.0 — the engine renamed strokeToNorm to stroke; accept both so
+    // the sidecar drives v2 instances, compat1 wrappers, and old engines.
+    const strokeFn = wc && (typeof wc.stroke === "function" ? wc.stroke
+      : typeof wc.strokeToNorm === "function" ? wc.strokeToNorm : null);
+    if (!strokeFn)
+      throw new Error("WashesTimeline(wc): expected a Washes instance with stroke()/strokeToNorm()");
     this.wc = wc;
+    this._stroke = (nx, ny, opts) => strokeFn.call(wc, nx, ny, opts);
     this._steps = [];
     this._reduced = !!(opts && opts.reducedMotion) ||
       (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -102,7 +107,7 @@ class WashesTimeline {
       easing: resolveEasing(opts.easing),
       strokeOpts: {
         pigment: opts.pigment,
-        nradius: opts.nradius == null ? 0.02 : +opts.nradius,
+        nradius: opts.nradius == null ? 0.03 : +opts.nradius,  // v2.0.0 — aligned with the engine default
         strength: opts.strength == null ? 0.6 : +opts.strength,
         spacing: opts.spacing,
       },
@@ -164,14 +169,14 @@ class WashesTimeline {
           // paint the whole path immediately
           for (let k = 0; k < step.points.length; k++) {
             const p = step.points[k];
-            try { wc.strokeToNorm(p[0], p[1], step.strokeOpts); } catch (_) {}
+            try { this._stroke(p[0], p[1], step.strokeOpts); } catch (_) {}
           }
           finishStroke(); si++; stepStart = null; continue;
         }
         const u = Math.min(1, elapsed / step.duration);
         const e = step.easing(u);
         const pos = sampler.at(e);
-        try { wc.strokeToNorm(pos[0], pos[1], step.strokeOpts); penActive = true; } catch (_) {}
+        try { this._stroke(pos[0], pos[1], step.strokeOpts); penActive = true; } catch (_) {}
         if (u >= 1) { finishStroke(); si++; stepStart = null; continue; }
         return;   // mid-stroke, wait for next frame
       }
@@ -185,9 +190,9 @@ class WashesTimeline {
     catch (e) { this._cleanup("error", e); }
 
     // Nudge the sim awake so frames flow even on an idle canvas.
-    try { wc.strokeToNorm(this._steps[0] && this._steps[0].points ? this._steps[0].points[0][0] : 0.5,
-                          this._steps[0] && this._steps[0].points ? this._steps[0].points[0][1] : 0.5,
-                          { pigment: "water", strength: 0 }); wc.penUp(); } catch (_) {}
+    try { this._stroke(this._steps[0] && this._steps[0].points ? this._steps[0].points[0][0] : 0.5,
+                       this._steps[0] && this._steps[0].points ? this._steps[0].points[0][1] : 0.5,
+                       { pigment: "water", strength: 0 }); wc.penUp(); } catch (_) {}
 
     return this._promise;
   }

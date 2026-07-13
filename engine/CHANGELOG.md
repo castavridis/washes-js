@@ -2,6 +2,98 @@
 
 All notable changes to **washes** are documented here. Dates are ISO 8601.
 
+## [2.0.0] — 2026-07-13
+
+**The API 2.0 rename batch** (tranche 2 of the plan; design:
+`docs/API_2_0_DESIGN.md`). One way per concept: normalized 0..1 is THE
+coordinate space, setters chain universally, get/set pairs unified,
+preserve-by-default, one run policy, all-lowercase events. **Every field
+of every painting is bit-identical to 1.25** — the golden suites (249
+checks) run the entire v1 surface through `compat1()` against the same
+implementations and stay bit-exact; nothing in the physics moved.
+
+**Architecture:** the internal implementation object keeps every v1 code
+path; `create()` returns a programmatically built v2 view over it, and
+`Washes.compat1()` rebuilds the complete v1 surface (143 members, frozen
+in `tests/v1-surface.snapshot.json`) from the SAME implementations via a
+hidden symbol — old units and old return conventions are exact, never
+re-converted. compat1 warns once per v1-only name with its migration
+hint (`{ warn: false }` silences) and lives until 3.0.
+
+### Migration table
+
+Coordinates (normalized 0..1; radii as fraction of the smaller side):
+
+| v1 | v2 |
+| --- | --- |
+| `paintNorm(nx, ny, nr, …)` | `paint(nx, ny, nr, …)` |
+| `paintAt(gx, gy, r, …)` | `grid.paint(gx, gy, r, …)` |
+| `strokeToNorm(nx, ny, o)` / `strokeTo(gx, gy, o)` | `stroke(nx, ny, o)` |
+| `line(gx0, gy0, gx1, gy1, o)` | `line(nx0, ny0, nx1, ny1, o)` — now normalized |
+| `stirNorm` / `stir(grid)` / `addVelocity(Norm)` | `stir(nx, ny, vx, vy, nr)` |
+| `rewetNorm` / `rewet(gx, gy, r)` | `rewet(nx, ny, nr)` (no-arg full soak unchanged) |
+| `dryNorm` / `dry(gx, gy, r)` | `dry(nx, ny, nr)` (no-arg full dry unchanged) |
+| `liftNorm` / `lift(gx, gy, r, f)` | `lift(nx, ny, nr, f)` |
+| `blotNorm` / `blot(gx, gy, r, s)` | `blot(nx, ny, nr, s)` |
+| `sampleNorm` / `sample(gx, gy)` | `sample(nx, ny)` |
+| `splashNorm` / `splash(grid coords)` | `splash(normalized coords)` |
+| `maskNorm` / `unmaskNorm` | `mask` / `unmask` |
+| `maskRect` / `unmaskRect` (display px) | `mask` / `unmask` (normalized) |
+| `toGrid(x, y)` → `{x, y}` | `grid.fromDisplay(x, y)` → `{gx, gy}` |
+| `toClient(gx, gy)` | `grid.toDisplay(gx, gy)` |
+| `brushSize(px diameter)` | `brushSize(fraction of smaller side)` |
+
+Run state, conventions, events:
+
+| v1 | v2 |
+| --- | --- |
+| `keepSimulating(true)` | `run('always')` |
+| `runUntilDry(true)` | `run('until-dry')` |
+| `pauseDrying(v)` | `drying(!v)` |
+| `setAnimation(n, o)` / `getAnimation()` | `animation(n, o)` / `animation()` |
+| `setVisualization(n, o)` / `getVisualization()` | `visualization(n, o)` / `visualization()` |
+| `setBackground(n)` / `isBackgroundRunning()` | `backgroundAnimation(n)` / `backgroundAnimationRunning()` (couldn't unify into `background(v?)` — that's the CSS backdrop) |
+| `exportPNG(o)` | `exportImage(o)` (same overloads — it always encoded JPEG too) |
+| `brushModes()` (instance) | the static `Washes.brushModes` |
+| `brushMode('dry')` | `brushMode('crayon')` (the v0.98 alias completes its deprecation; v2 throws) |
+| ~40 value-returning setters | all setters return `this`; zero-arg getters unchanged |
+| `scale(n)` wiped, `{preserve}` opted out | `scale(n)` preserves, `{wipe: true}` opts in |
+| `remeasure()` wiped | `remeasure()` preserves, `{wipe: true}` opts in (the *automatic* host-resize rebuild keeps wiping for now — browser QA on resample quality is queued with 2.1) |
+| DOM `rescaled` event | DOM `rescale` (mirror of `on('rescale')`) |
+| DOM `paletteChange` event | DOM `palettechange` |
+
+DOM CustomEvents cannot be shimmed by compat1 — the two renamed
+listeners migrate by hand; the other five mirrors were already
+lowercase and are unchanged.
+
+### Added
+- `Washes.version` — the d.ts had declared it since v1.4; it was
+  `undefined` at runtime the whole time (the api-surface test reflects
+  the instance, so statics could lie). Now real.
+- The tiers table is **complete and typed** — all 118 v2 members,
+  exactly once each, enforced by the api-surface test. `destroy` and
+  `exportImage` moved out of *debug*.
+- `WashesV1Compat` type + `compat1(instance, { warn })` signature.
+- The timeline sidecar drives v2, compat, and pre-2.0 instances alike
+  (feature-detects `stroke`/`strokeToNorm`) and its `nradius` default
+  aligns with the engine's (0.03, was 0.02).
+
+### Removed
+- **The v0.97 ink layer** (`inkPaintLoad`, `inkWaterLoad`, `clearInk`)
+  — it never functioned: its backing arrays were never declared, so
+  `clearInk()` threw ReferenceError, the getters threw until first set,
+  and the setters wrote accidental globals nothing read. compat1 keeps
+  the members (faithfully non-functional); v2 drops them. No
+  replacement.
+
+### Fixed
+- `AnimationOptions`/`VisualizationOptions` declared `speed`/
+  `amplitude`/`opacity` options the runtime never read, and omitted
+  `replace` — the only option it does. (The d.ts-fiction hunt that
+  started in 1.23 closes out with the full-surface rewrite: every one
+  of the 118 v2 declarations was checked against the runtime this
+  release.)
+
 ## [1.25.0] — 2026-07-13
 
 **API 2.0 tranche 1 of the rename batch — the additive beachhead.** The

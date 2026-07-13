@@ -159,11 +159,25 @@ packaging, and GPU paths. Line references are into `engine/src/washes.js` /
 > SplashOptions d.ts fictions (grid coords not px; six phantom options,
 > five undeclared real ones).
 >
-> **Open work, in priority order:** ① API 2.0 **tranche 2 — the flip →
-> 2.0.0** (spec: design doc §§1–4 + sequencing item 4; compat1 becomes
-> the real v1 adapter; goldens bit-exact throughout); then tranche 3
-> (2.0.x): migrate pages off compat1 natively; ② first real-browser QA
-> pass on Pages — the 27
+> **P2 slice 5 (branch `engine-review-v2-t2` → engine 2.0.0): the flip.**
+> The rename batch landed: normalized-as-default (paint/stroke/line/stir/
+> rewet/dry/lift/blot/sample/splash/mask/unmask), brushSize(fraction),
+> chain-everywhere setters, get/set unification (animation/visualization/
+> backgroundAnimation), run()/drying() primary, exportImage, 'dry' alias
+> dropped, DOM mirrors lowercase, preserve-by-default scale()/remeasure(),
+> tiers complete+typed (118 members, api-surface-enforced), Washes.version
+> real. Architecture: internal object keeps every v1 code path; create()
+> returns a built v2 view; compat1() rebuilds the v1 surface (143-member
+> snapshot) from the SAME implementations via hidden symbol — the golden
+> suites run the whole v1 surface through compat1 and stay bit-exact
+> (249 checks). Removed: the never-functional v0.97 ink layer. Timeline
+> sidecar feature-detects stroke/strokeToNorm; nradius default 0.03.
+> Migration table: engine/CHANGELOG.md § 2.0.0.
+>
+> **Open work, in priority order:** ① API 2.0 **tranche 3** (2.0.x):
+> migrate pages off compat1 natively (playground first — its console
+> shows the compat migration warnings as a to-do list); ② first
+> real-browser QA pass on Pages — the 27
 > live-engine pages, the hero, the CI Playwright job's first run, GPU
 > render validation (unblocks GPU-by-default + the falloff² parity fix);
 > ③ worker frame-loop integration in the browser (render-latency model);

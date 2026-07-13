@@ -24,7 +24,7 @@ marked shipped.*
    WebGL2, zero-size hosts, worker unavailability → warn once and fall
    back.
 
-## 1. Coordinates: normalized becomes THE space — wc.grid + splashNorm SHIPPED (1.25, additive)
+## 1. Coordinates: normalized becomes THE space — SHIPPED (2.0.0)
 
 v1 has five unit systems; brush size alone uses three across siblings.
 
@@ -44,7 +44,7 @@ v1 has five unit systems; brush size alone uses three across siblings.
 - `splash` gains the normalized form it always lacked; the timeline
   sidecar's `nradius` default aligns with the engine's (0.03).
 
-## 2. Run state: one policy + pause — run()/drying() SHIPPED (1.25, additive)
+## 2. Run state: one policy + pause — SHIPPED (2.0.0)
 
 v1: `pause/resume`, `pauseDrying`, `keepSimulating`, `runUntilDry`,
 auto-idle, the governor — five overlapping controls.
@@ -62,7 +62,7 @@ wc.drying(false)      // the pauseDrying knob, renamed to say what it does
 The governor stays where 1.6 put it: `quality('auto')` — a *quality*
 concern, not a run-state one.
 
-## 3. Events: one typed map, one casing — SHIPPED (1.24, additive half)
+## 3. Events: one typed map, one casing — SHIPPED (1.24 + 2.0.0)
 
 v1: `on()` takes lowercase names while seven undeclared DOM CustomEvents
 fire in mixed casing (`paletteChange` + `pigmentchange` was literally a
@@ -79,12 +79,12 @@ shipped bug, fixed in 1.12.1 by dual-firing).
 - `on()` returns the unsubscribe (already true); `once(name)` added,
   returning a Promise.
 
-*1.24 shipped: the typed `WashesEventMap`, `once()`, and all six DOM-only
-events emitting through `on()` under lowercase names. Still for 2.0: the
-DOM mirror renames (`rescaled` → `rescale`, `paletteChange` →
-`palettechange`) and declaring the mirrors in the d.ts.*
+*1.24 shipped the typed `WashesEventMap`, `once()`, and the six DOM-only
+events through `on()`; 2.0.0 renamed the DOM mirrors (`rescaled` →
+`rescale`, `paletteChange` → `palettechange`) and declared them in the
+d.ts. Done.*
 
-## 4. Conventions
+## 4. Conventions — SHIPPED (2.0.0)
 
 - **Setters chain, getters are zero-arg** — universally. The ~40 methods
   returning the value from their setter form switch to returning `this`
@@ -156,13 +156,14 @@ all four state planes).
      passthrough + frozen v1-surface snapshot + reflection test; all 18
      page call sites wrapped in `compat1()` so Pages can't break at any
      merge point.
-   - **tranche 2** — the flip, → 2.0.0: normalized-as-default renames,
-     `brushSize(fraction)`, chain-everywhere setters, get/set
-     unification, `'dry'` alias drop, `brushModes` static-only,
-     `exportPNG`/`pauseDrying`/`keepSimulating`/`runUntilDry`/grid-space
-     originals retire into the now-real compat1 adapter, DOM mirror
-     renames, typed tiers table, migration table in the CHANGELOG.
-     Goldens bit-exact throughout; pages already hold the adapter.
+   - (done) **tranche 2** — the flip, in 2.0.0: everything listed
+     landed; goldens stayed bit-exact by running the whole v1 surface
+     through compat1 (which reaches the unchanged internal
+     implementations via a hidden symbol — exact, not re-converted).
+     Extra finds en route: the never-functional v0.97 ink layer
+     (removed from v2), the fictional Washes.version static (made
+     real), fictional AnimationOptions/VisualizationOptions members
+     (fixed).
    - **tranche 3** — 2.0.x: migrate pages off compat1 natively
      (playground first), browser QA.
 5. sim-behavior fixes (browser QA) → 2.1
