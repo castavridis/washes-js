@@ -39,6 +39,8 @@ jobs:
         run: node tests/save-load.test.mjs
       - name: seeded determinism (create({seed}) replays bit-exact)
         run: node tests/seed.test.mjs
+      - name: unified events (on()/once() + DOM mirrors)
+        run: node tests/events.test.mjs
       - name: npm pack sanity (tarball assembles with declared files)
         run: npm pack --dry-run
       - name: standalone build (classic-script parse + global attach)

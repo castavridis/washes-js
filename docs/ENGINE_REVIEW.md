@@ -133,9 +133,22 @@ packaging, and GPU paths. Line references are into `engine/src/washes.js` /
 > the default path and every golden are unchanged. Roadmap feature 5
 > (seeded reproducibility) closes; API 2.0 sequencing item 2 done.
 >
-> **Open work, in priority order:** ① the five API 2.0 taste decisions
-> (design doc tail) → then its additive sequence (event map + once()
-> 1.24, rename batch 2.0); ② first real-browser QA pass on Pages — the 27
+> **P2 slice 3 (branch `engine-review-events` → engine 1.24.0):** the
+> maintainer decided all five API 2.0 taste questions (normalized-as-
+> default + `wc.grid`, all-lowercase events, exportPNG→exportImage,
+> compat shim until 3.0, `run('auto'|'until-dry'|'always')` — recorded in
+> the design doc). The casing decision unblocked the event slice: the six
+> DOM-only CustomEvents now emit through `on()` under lowercase names,
+> `once(name)` returns a Promise, and `WashesEventMap` types the whole
+> surface (`tests/events.test.mjs`, in CI). Fixed en route: `on('rescale')`
+> now fires on every rebuild as documented (was remeasure-only), and the
+> governor off-switch emitted stale pre-v1.8 `level:"high"` (+ the
+> `PerfLevel` type still declared v1.5's names). DOM events untouched —
+> mirror renames land with the 2.0 batch.
+>
+> **Open work, in priority order:** ① the API 2.0 rename/convention batch
+> + compat shim → **2.0.0** (all decisions in hand; the design doc is the
+> spec); ② first real-browser QA pass on Pages — the 27
 > live-engine pages, the hero, the CI Playwright job's first run, GPU
 > render validation (unblocks GPU-by-default + the falloff² parity fix);
 > ③ worker frame-loop integration in the browser (render-latency model);

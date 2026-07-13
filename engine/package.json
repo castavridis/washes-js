@@ -1,6 +1,6 @@
 {
   "name": "washes",
-  "version": "1.23.0",
+  "version": "1.24.0",
   "description": "An interactive watercolor simulation for the browser, built on Curtis et al.'s 1997 SIGGRAPH paper. Three-layer fluid + pigment + paper model with Kubelka-Munk compositing, with an optional WebGL2 GPU backend.",
   "type": "module",
   "main": "./src/index.js",
@@ -100,7 +100,9 @@
     "test:sim-core": "node tests/sim-core-standalone.test.mjs",
     "test:worker": "node tests/worker-backend.test.mjs",
     "test:save-load": "node tests/save-load.test.mjs",
-    "test:seed": "node tests/seed.test.mjs"
+    "test:seed": "node tests/seed.test.mjs",
+    "test:events": "node tests/events.test.mjs",
+    "test:events": "node tests/events.test.mjs"
   },
   "sideEffects": [
     "./src/washes.js",

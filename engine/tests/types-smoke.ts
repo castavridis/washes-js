@@ -109,6 +109,25 @@ wc.background(null);
 const bg: string = wc.background();
 
 // --- v0.90: pause / resume ---
+// --- v1.24: typed event map + once() ---
+import type { WashesEventMap, PerfLevel } from '../src/washes';
+
+const unIdle = wc.on('idle', (d) => console.log(d.totalWetness));
+unIdle();
+wc.on('perflevel', (d) => {
+  const lvl: PerfLevel = d.level;
+  console.log(lvl, d.scale, d.gridWidth);
+});
+wc.on('palettechange', (d) => console.log(d.custom));
+wc.on('gouachechange', (d) => console.log(d.enabled, d.lerpAmount));
+async function eventExample() {
+  const rescale: WashesEventMap['rescale'] = await wc.once('rescale');
+  console.log(rescale.scale, rescale.gridWidth, rescale.gridHeight);
+  const preset = await wc.once('presetapplied');
+  copy.applyPreset(preset.preset);
+}
+eventExample();
+
 import type { PausedState } from '../src/washes';
 
 wc.pause();

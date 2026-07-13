@@ -1196,6 +1196,19 @@ function initGpuSim(gl, GW, GH) {
       };
     }
 
+    // v1.4 — the on()/once() listener registry, one per instance. Hoisted
+    // to the top of the closure (v1.24) so _emit is callable from anywhere
+    // below — rebuildScale in particular runs from several depths and must
+    // never race a mid-closure `const` into its temporal dead zone.
+    const _evCbs = Object.create(null);
+    function _emit(name, detail) {
+      const l = _evCbs[name];
+      if (!l || !l.length) return;
+      for (const cb of l.slice()) {
+        try { cb(detail || {}); } catch (e) { console.error("washes on('" + name + "') listener threw", e); }
+      }
+    }
+
     // ----- Canvas + render-canvas setup, per instance -----
     // The display canvas mounts inside targetEl. Its size is
     // determined by targetEl's bounding rect at creation time;
@@ -5001,6 +5014,11 @@ function createSimCore(env) {
       render();
       // v2 — dispatch a 'rescaled' event so the host UI can react
       // (e.g. rebuild pigment swatches that depend on the new paper).
+      // v1.24 — on('rescale') fires here too, so it covers EVERY rebuild
+      // (remeasure, scale(), governor shifts) like the DOM event always
+      // did; previously it only fired from host-size remeasures, while
+      // its docs already promised "the grid was rebuilt".
+      _emit("rescale", { scale: SCALE, gridWidth: GW, gridHeight: GH });
       targetEl.dispatchEvent(
         new CustomEvent("rescaled", {
           detail: { scale: SCALE, gridWidth: GW, gridHeight: GH },
@@ -5689,6 +5707,7 @@ function createSimCore(env) {
       // No wet, no suspended pigment, no pressure → no dynamics anywhere.
       setActiveRectEmpty();
       render();
+      _emit("driedinstantly", {});
       targetEl.dispatchEvent(new CustomEvent("driedinstantly"));
           _gpuResync();
     }
@@ -11290,10 +11309,10 @@ function _ensureTextureNoise(mode) {
     let _builtForW = 0, _builtForH = 0; // set post-init below
     function _hostDegenerate() { return _builtForW < 8 || _builtForH < 8; }
     function _remeasureNow() {
+      // rebuildScale emits 'rescale' itself (v1.24) — no second emit here.
       rebuildScale(SCALE);
       _builtForW = instanceWindow.innerWidth;
       _builtForH = instanceWindow.innerHeight;
-      _emit("rescale", { gridWidth: GW, gridHeight: GH });
     }
     function _startHostWatch() {
       _builtForW = instanceWindow.innerWidth;
@@ -11319,14 +11338,6 @@ function _ensureTextureNoise(mode) {
           if (instanceWindow.innerWidth >= 8 && instanceWindow.innerHeight >= 8) { _remeasureNow(); return; }
           if (++_tries < 900) requestAnimationFrame(_waitSize);
         })();
-      }
-    }
-    const _evCbs = Object.create(null);
-    function _emit(name, detail) {
-      const l = _evCbs[name];
-      if (!l || !l.length) return;
-      for (const cb of l.slice()) {
-        try { cb(detail || {}); } catch (e) { console.error("washes on('" + name + "') listener threw", e); }
       }
     }
     let _wasIdleForEvents = false;
@@ -12295,6 +12306,7 @@ function _ensureTextureNoise(mode) {
         if (_gouacheMode === "auto") {
           _recomputeLerpedPigments(_paperDarkness());
           setActiveRectFull();
+          _emit("gouachechange", { enabled: _gouacheMode, lerpAmount: _gouacheLerpT });
           targetEl.dispatchEvent(
             new CustomEvent("gouachechange", {
               detail: { enabled: _gouacheMode, lerpAmount: _gouacheLerpT },
@@ -13044,6 +13056,7 @@ function _ensureTextureNoise(mode) {
       cursorPreview(v) {
         if (v === undefined) return _cursorPreview;
         _cursorPreview = !!v;
+        _emit("cursorpreviewchange", { enabled: _cursorPreview });
         targetEl.dispatchEvent(
           new CustomEvent("cursorpreviewchange", {
             detail: { enabled: _cursorPreview },
@@ -13097,6 +13110,7 @@ function _ensureTextureNoise(mode) {
         _applyActivePigments();
         setActiveRectFull();
         if (typeof useGPU !== "undefined" && useGPU && gpuAvailable) gpuRender(); else render(true);
+        _emit("palettechange", { custom: !!_customPigments });
         targetEl.dispatchEvent(new CustomEvent("paletteChange", { detail: { custom: !!_customPigments } }));
         // v1.12.1 — also fire 'pigmentchange' so hosts that already refresh
         // their swatches on pigment events (the standard wiring) pick up the
@@ -13148,6 +13162,7 @@ function _ensureTextureNoise(mode) {
         } else {
           render(true);
         }
+        _emit("gouachechange", { enabled: _gouacheMode, lerpAmount: _gouacheLerpT });
         targetEl.dispatchEvent(
           new CustomEvent("gouachechange", {
             detail: { enabled: _gouacheMode, lerpAmount: _gouacheLerpT },
@@ -13487,13 +13502,16 @@ function _ensureTextureNoise(mode) {
           if (!on && _autoPerf && _perfLevelIdx !== 0) {
             _perfLevelIdx = 0;
             rebuildScale(_perfBaseScale, true);
-            _emit("perflevel", { level: "high", scale: SCALE, gridWidth: GW, gridHeight: GH });
+            // v1.24 — was "high", a stale pre-v1.8 level name; the levels
+            // have been full/half/quarter since the v1.8 rename and this
+            // was the one emission that never got the memo.
+            _emit("perflevel", { level: "full", scale: SCALE, gridWidth: GW, gridHeight: GH });
           }
           _autoPerf = on;
         }
         return _autoPerf;
       },
-      // v1.5 — current governor level name ('high' | 'medium' | 'low').
+      // v1.5 — current governor level name ('full' | 'half' | 'quarter').
       perfLevel() { return _PERF_LEVELS[_perfLevelIdx].name; },
 
       // v1.4 — unified lifecycle events. Returns an unsubscribe function.
@@ -13501,7 +13519,14 @@ function _ensureTextureNoise(mode) {
       //   wc.on('active', cb)  — sim woke up
       //   wc.on('dry', cb)     — settled with essentially no wetness left
       //                          (fires once per wet episode)
-      //   wc.on('rescale', cb) — grid rebuilt ({gridWidth, gridHeight})
+      //   wc.on('rescale', cb) — grid rebuilt ({scale, gridWidth, gridHeight})
+      //   wc.on('perflevel', cb) — governor shifted ({level, scale, ...})
+      // v1.24 — the events that only existed as DOM CustomEvents now come
+      // through here too (all-lowercase, the API 2.0 casing):
+      //   'palettechange' ({custom}), 'gouachechange' ({enabled,
+      //   lerpAmount}), 'cursorpreviewchange' ({enabled}), 'presetapplied'
+      //   ({preset}), 'driedinstantly' ({}). The DOM CustomEvents keep
+      //   firing unchanged (they become declared mirrors in 2.0).
       on(name, cb) {
         if (typeof name !== "string" || typeof cb !== "function")
           throw new Error("on(name, callback): expected a string and a function");
@@ -13512,6 +13537,23 @@ function _ensureTextureNoise(mode) {
           const i = l.indexOf(cb);
           if (i >= 0) l.splice(i, 1);
         };
+      },
+
+      // v1.24 — Promise form for one-shot listening: the next firing of
+      // `name` resolves the promise with the event detail, then the
+      // listener is gone. `await wc.once('idle')` reads as intended.
+      // No reject path — lifecycle events aren't errors; a never-firing
+      // event is a promise that never settles, same as the DOM's
+      // { once: true } addEventListener contract.
+      once(name) {
+        if (typeof name !== "string")
+          throw new Error("once(name): expected an event-name string");
+        return new Promise((resolve) => {
+          const un = api.on(name, (detail) => {
+            un();
+            resolve(detail);
+          });
+        });
       },
 
       // v1.4 — re-measure the host and rebuild the grid at its current size.
@@ -13838,6 +13880,7 @@ function _ensureTextureNoise(mode) {
           );
         // v0.57 — advection mode. Idempotent; safe to skip if absent.
         if (p.advectionMode !== undefined) api.advectionMode(p.advectionMode);
+        _emit("presetapplied", { preset: p });
         targetEl.dispatchEvent(
           new CustomEvent("presetapplied", { detail: { preset: p } }),
         );

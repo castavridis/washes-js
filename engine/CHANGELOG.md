@@ -2,6 +2,52 @@
 
 All notable changes to **washes** are documented here. Dates are ISO 8601.
 
+## [1.24.0] — 2026-07-13
+
+P2 slice 3, API 2.0 sequencing item 3 (additive half): one event system.
+The maintainer ruled on the five design-doc taste questions — normalized-
+as-default with `wc.grid`, all-lowercase event names, `exportPNG` →
+`exportImage`, compat shim until 3.0, `run('auto' | 'until-dry' |
+'always')` — which unblocked this slice (casing) and scopes the 2.0
+rename batch.
+
+### Added
+- **Every event now comes through `on()`.** The six events that
+  previously fired only as DOM CustomEvents — `palettechange`,
+  `gouachechange`, `cursorpreviewchange`, `presetapplied`,
+  `driedinstantly`, and rebuilds from `scale()` — are emitted through
+  the unified listener under all-lowercase names (the 2.0 casing
+  decision), with the same detail payloads. The DOM CustomEvents keep
+  firing byte-for-byte as before, v1 spellings included (`rescaled`,
+  `paletteChange`, the 1.12.1 `pigmentchange` dual-fire); they become
+  *declared mirrors* in the 2.0 batch.
+- **`once(name)`** — Promise form of `on()`: resolves with the next
+  event's detail, then unsubscribes. Never rejects (lifecycle events
+  aren't errors).
+- **`WashesEventMap`** — the full typed name → detail map in the
+  d.ts; `on()` and `once()` are generic over it, so listener callbacks
+  are typed end-to-end. `WashesEventName` is now `keyof WashesEventMap`.
+- `tests/events.test.mjs` — unification, detail payloads, DOM-mirror
+  parity, once() one-shot semantics, and both fixes below. In CI.
+
+### Fixed
+- **`on('rescale')` fires on every grid rebuild** — `scale()` calls and
+  governor shifts included — as its documentation always claimed. It
+  previously fired only from host-size remeasures, while the DOM
+  `rescaled` event covered all rebuilds; the two now fire 1:1 with the
+  same `{scale, gridWidth, gridHeight}` detail (the `on()` detail gains
+  `scale`, additive).
+- **The governor's off-switch emitted `perflevel` with `level: "high"`**
+  — a pre-v1.8 level name that has been impossible everywhere else since
+  the full/half/quarter rename. It now emits `"full"`. Likewise the
+  declared `PerfLevel` type still read `'high' | 'medium' | 'low'`
+  (v1.5's names) — three releases stale against the runtime; now
+  `'full' | 'half' | 'quarter'`.
+- The `_evCbs` listener registry moved to the top of the instance
+  closure: `rebuildScale` now emits, and a mid-closure `const` registry
+  would sit in its temporal dead zone for any future init-time rebuild
+  path.
+
 ## [1.23.0] — 2026-07-13
 
 P2 continues down the API 2.0 sequencing: determinism reaches the host.

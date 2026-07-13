@@ -62,7 +62,7 @@ wc.drying(false)      // the pauseDrying knob, renamed to say what it does
 The governor stays where 1.6 put it: `quality('auto')` — a *quality*
 concern, not a run-state one.
 
-## 3. Events: one typed map, one casing
+## 3. Events: one typed map, one casing — SHIPPED (1.24, additive half)
 
 v1: `on()` takes lowercase names while seven undeclared DOM CustomEvents
 fire in mixed casing (`paletteChange` + `pigmentchange` was literally a
@@ -78,6 +78,11 @@ shipped bug, fixed in 1.12.1 by dual-firing).
   "mirror".
 - `on()` returns the unsubscribe (already true); `once(name)` added,
   returning a Promise.
+
+*1.24 shipped: the typed `WashesEventMap`, `once()`, and all six DOM-only
+events emitting through `on()` under lowercase names. Still for 2.0: the
+DOM mirror renames (`rescaled` → `rescale`, `paletteChange` →
+`palettechange`) and declaring the mirrors in the d.ts.*
 
 ## 4. Conventions
 
@@ -142,20 +147,21 @@ all four state planes).
 
 1. (done) serialization — additive, in 1.22
 2. (done) `seed` — additive, in 1.23
-3. event map + `once` — additive (new names first, old kept), 1.24
+3. (done) event map + `once` — additive (new names first, old kept), in
+   1.24 (DOM CustomEvents untouched; they become declared lowercase
+   mirrors in the 2.0 batch)
 4. the rename/convention batch + compat shim → **2.0.0**
 5. sim-behavior fixes (browser QA) → 2.1
 
-## Decisions needed (your taste)
+## Decisions needed (your taste) — ALL DECIDED 2026-07-13
 
-1. **Normalized-as-default**: comfortable retiring grid-space from the
-   primary names (`paint` = normalized), with `wc.grid.*` as the explicit
-   cell-space home? Or keep `paintNorm` naming and just deprecate grid
-   versions?
-2. **Event casing**: all-lowercase (`palettechange`) vs camelCase
-   (`paletteChange`) — one must win everywhere, including the DOM mirrors.
-3. **`exportPNG` → `exportImage`**: worth the rename, or keep the name and
-   just document the JPEG option?
-4. **Compat shim lifetime**: two minors, or until 3.0?
-5. **`run()` policy strings**: `'auto' | 'until-dry' | 'always'` — happy
-   with these names?
+1. **Normalized-as-default**: ✅ **move forward** — `paint` becomes
+   normalized, grid-space retires to `wc.grid.*`.
+2. **Event casing**: ✅ **all-lowercase** (`palettechange`), everywhere
+   including the DOM mirrors. (Landed for `on()`/`once()` in 1.24; the DOM
+   mirror renames wait for the 2.0 batch.)
+3. **`exportPNG` → `exportImage`**: ✅ **do the rename** (in the 2.0
+   batch, covered by the compat shim).
+4. **Compat shim lifetime**: ✅ **until 3.0**.
+5. **`run()` policy strings**: ✅ **`'auto' | 'until-dry' | 'always'`**
+   as proposed.

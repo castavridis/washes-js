@@ -546,11 +546,42 @@ export type FrameCallback = (dtMs: number, elapsedMs: number, instance: WashesIn
 /** Unsubscribe handle returned by {@link WashesInstance.onFrame}. (v1.2) */
 export type Unsubscribe = () => void;
 
-/** v1.4 — lifecycle event names accepted by {@link WashesInstance.on}. */
-export type WashesEventName = 'idle' | 'active' | 'dry' | 'rescale' | 'perflevel';
+/**
+ * v1.24 — the full typed event map for {@link WashesInstance.on} /
+ * {@link WashesInstance.once}: event name → detail payload. All-lowercase,
+ * no exceptions (the API 2.0 casing decision). Events marked *mirror* also
+ * fire as DOM CustomEvents on the host element with the same detail (the
+ * DOM names keep their v1 spellings — `rescaled`, `paletteChange` — until
+ * the 2.0 rename batch).
+ */
+export interface WashesEventMap {
+  /** The sim settled (auto-idle). */
+  idle: { totalWetness: number };
+  /** The sim woke from idle. */
+  active: Record<string, never>;
+  /** Settled with essentially no wetness left; fires once per wet episode. */
+  dry: { totalWetness: number };
+  /** The grid was rebuilt — host remeasure, `scale()`, or a governor shift. Mirror: `rescaled`. */
+  rescale: { scale: number; gridWidth: number; gridHeight: number };
+  /** The auto performance governor shifted resolution. */
+  perflevel: { level: PerfLevel; scale: number; gridWidth: number; gridHeight: number };
+  /** `palette()` changed the pigment set. Mirror: `paletteChange` (sic — v1 casing). */
+  palettechange: { custom: boolean };
+  /** Gouache mode toggled or its auto-LERP recomputed. Mirror: `gouachechange`. */
+  gouachechange: { enabled: GouacheMode; lerpAmount: number };
+  /** The floating cursor preview was enabled/disabled. Mirror: `cursorpreviewchange`. */
+  cursorpreviewchange: { enabled: boolean };
+  /** `applyPreset()` finished. Mirror: `presetapplied`. */
+  presetapplied: { preset: Preset };
+  /** `dry()` force-dried the whole sheet. Mirror: `driedinstantly`. */
+  driedinstantly: Record<string, never>;
+}
 
-/** v1.5 — governor levels. */
-export type PerfLevel = 'high' | 'medium' | 'low';
+/** v1.4 — lifecycle event names accepted by {@link WashesInstance.on}. */
+export type WashesEventName = keyof WashesEventMap;
+
+/** v1.5 — governor levels (approximate cell count relative to base; renamed from high/medium/low in v1.8). */
+export type PerfLevel = 'full' | 'half' | 'quarter';
 
 /** v1.4 — report returned by {@link WashesInstance.diagnose}. */
 export interface DiagnoseReport {
@@ -777,11 +808,18 @@ export interface WashesInstance {
 
   /**
    * v1.4 — subscribe to lifecycle events. Returns an unsubscribe function.
-   * 'idle': the sim settled ({totalWetness}); 'active': it woke; 'dry': it
-   * settled with essentially no wetness left (once per wet episode);
-   * 'rescale': the grid was rebuilt ({gridWidth, gridHeight}).
+   * v1.24 — fully typed via {@link WashesEventMap}, which also gained the
+   * events that previously fired only as DOM CustomEvents.
    */
-  on(name: WashesEventName, cb: (detail: any) => void): Unsubscribe;
+  on<K extends WashesEventName>(name: K, cb: (detail: WashesEventMap[K]) => void): Unsubscribe;
+
+  /**
+   * v1.24 — Promise form of {@link WashesInstance.on} for one-shot
+   * listening: resolves with the detail of the next `name` event, then
+   * unsubscribes. Never rejects — an event that never fires is a promise
+   * that never settles.
+   */
+  once<K extends WashesEventName>(name: K): Promise<WashesEventMap[K]>;
 
   /**
    * v1.5 — auto performance throttler. When enabled, the engine watches
