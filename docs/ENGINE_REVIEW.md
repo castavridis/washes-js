@@ -43,6 +43,19 @@ packaging, and GPU paths. Line references are into `engine/src/washes.js` /
 > open in P1: the module extraction (#6 proper, including the
 > environment-free core that retires the interim shim) and the worker sim
 > (#8).
+>
+> **P1 slice 3 (branch `engine-review-p1-slice3` → engine 1.16.0):** the
+> migration plan's Phase 0 seam is production code — the frame loop steps
+> the sim through `_simBackend` (CPU adapter over simStep/paintAt/state
+> codec), faithfulness proven by the harness `backend` pattern
+> (field-identical stepping, stamp equivalence, bit-exact state
+> round-trip). Worker/GPU backends now have a socket to plug into.
+> `paintAt`'s optional pigment/strength foot-guns fixed (the strength half
+> was silent NaN poisoning, found by the new regression check). Packaging:
+> standalone build ships in the tarball, `prepublishOnly` gates on the
+> full battery, CI verifies `npm pack`. Remaining in P1: the module
+> extraction proper (#6) and the worker backend (#8) — both now
+> materially easier behind the seam.
 
 ---
 

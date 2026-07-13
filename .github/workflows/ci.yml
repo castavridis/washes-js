@@ -29,6 +29,8 @@ jobs:
         run: node scripts/sync-gpu.cjs --check
       - name: bare-Node headless (no DOM shim)
         run: node tests/headless-bare.test.mjs
+      - name: npm pack sanity (tarball assembles with declared files)
+        run: npm pack --dry-run
       - name: standalone build (classic-script parse + global attach)
         run: node scripts/build-standalone.cjs
       - name: types (tsc --strict on declarations + smoke)

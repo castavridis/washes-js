@@ -2,6 +2,41 @@
 
 All notable changes to **washes** are documented here. Dates are ISO 8601.
 
+## [1.16.0] — 2026-07-12
+
+P1 slice 3: the backend seam from the migration plan is now production
+code, and `paintAt`'s optional parameters are actually optional.
+
+### Added
+- **The sim backend seam (MIGRATION.md Phase 0, realized).** The frame
+  loop steps the sim through `_simBackend` — a CPU adapter implementing
+  the scaffold's `SimBackend` contract (`step` / `stampBrush` /
+  `uploadState` / `downloadState` / `getTextures` / `destroy`) as thin
+  pass-throughs over existing code, with a new `_unpackSimState` inverse
+  of the state codec (rebuilds mask flags/rect and re-arms the rect
+  tracker). A worker or GPU backend can now slot in behind the same
+  interface. Faithfulness is proven the way the scaffold proved its
+  adapter: the harness `backend` pattern shows seam-driven stepping is
+  field-identical to direct `simStep` driving, a stamp through
+  `stampBrush` equals the same `paintAt` call, and state round-trips
+  bit-exactly; the equivalence and render goldens are untouched.
+
+### Fixed
+- **`paintAt` optionals no longer bite.** `pigment` resolves exactly as
+  `paintNorm` and the pointer path do (undefined → current brush ink,
+  names → indices, unknown names fail loud) — it previously threw on
+  `g[undefined]`. And `strength` now defaults to 0.5 (paintNorm's
+  default) — an omitted strength previously poisoned the deposit with
+  silent NaNs, caught by the new regression check while fixing the
+  pigment half. Closes the 1.13.0 Known item.
+
+### Packaging
+- `dist/washes.standalone.js` ships in the npm tarball (CDN script-tag
+  consumers via unpkg/jsdelivr get the classic build), and
+  `prepublishOnly` gates publishing behind sync-check, a fresh
+  standalone build, and the full test battery. CI verifies
+  `npm pack --dry-run`.
+
 ## [1.15.0] — 2026-07-12
 
 P1 slice 2: the GPU dual-copy is now generated, not hand-maintained, and
