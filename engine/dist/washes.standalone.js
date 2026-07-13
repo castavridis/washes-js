@@ -13675,6 +13675,45 @@ function _ensureTextureNoise(mode) {
       // can bump the version and applyPreset can migrate forward; v1
       // presets will continue to apply correctly to forward-compatible
       // lib versions (unknown fields are silently ignored).
+      // v1.22 — painting serialization (API 2.0 design §5, shipped early
+      // because the SimStateArrays codec already crosses every seam). The
+      // PAINTING round-trips bit-exactly; settings stay a separate concern
+      // (getPreset/applyPreset) — pair the two for a full document. The
+      // returned arrays are plain Float32Arrays: IndexedDB stores them
+      // natively and postMessage transfers them; string encodings are the
+      // host's business.
+      saveState() {
+        const s = _packGpuState();
+        return {
+          format: "washes-state@1",
+          GW: GW,
+          GH: GH,
+          fluid: s.fluid,
+          pigment: s.pigment,
+          deposit: s.deposit,
+          paper: s.paper,
+        };
+      },
+      // Restores a saveState() snapshot. Grid dims must match the live
+      // instance (create with size, or scale first) — resample-on-load is
+      // future work and silently distorting a painting is worse than
+      // asking. Rebuilds mask bookkeeping, wakes the sim, and resyncs the
+      // GPU path when active.
+      loadState(snap) {
+        if (!snap || snap.format !== "washes-state@1")
+          throw new Error(
+            'loadState: expected a saveState() snapshot (format "washes-state@1")'
+          );
+        if (snap.GW !== GW || snap.GH !== GH)
+          throw new Error(
+            `loadState: snapshot grid ${snap.GW}×${snap.GH} does not match ` +
+            `the live grid ${GW}×${GH} — create the instance with a matching ` +
+            "size (or resample externally); resample-on-load is future work"
+          );
+        _unpackSimState(snap);
+        if (useGpuSim && gpuSimHandle) _gpuResync();
+        return api;
+      },
       getPreset() {
         // Derive evaporation multiplier from the stored rate.
         // setEvaporationMult does evapRate = 0.9988^mult, so:
@@ -13873,7 +13912,8 @@ function _ensureTextureNoise(mode) {
         "gravityStrength", "gravityDirection", "edgeMode", "edgeDarkening",
         "fadePainting", "fadeHalfLife", "pauseDrying", "keepSimulating",
         "runUntilDry", "setAnimation", "setBackground", "setVisualization",
-        "applyPreset", "getPreset", "scale", "canvasScale", "quality",
+        "applyPreset", "getPreset", "saveState", "loadState",
+        "scale", "canvasScale", "quality",
         "usePointerPressure", "continuousFlow", "transparent", "gouacheMode"],
       debug: ["diagnose", "remeasure", "perf", "perfMetrics", "webgl",
         "webglAvailable", "webglDebugTint", "wetnessHeatmap", "gpuSim",

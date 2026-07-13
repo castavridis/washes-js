@@ -2,6 +2,33 @@
 
 All notable changes to **washes** are documented here. Dates are ISO 8601.
 
+## [1.22.0] — 2026-07-13
+
+P2 opens: the API 2.0 design proposal is on paper, and its first item —
+painting serialization — ships now because it became nearly free.
+
+### Added
+- **`saveState()` / `loadState(snapshot)`.** The painting itself —
+  fluid, pigment, deposit, paper as interleaved Float32Arrays (the same
+  SimStateArrays codec the GPU and worker seams use) — round-trips
+  **bit-exactly**, verified per plane. Settings stay a separate concern
+  (`getPreset`/`applyPreset`); pair the two for a full document.
+  Loading rebuilds mask bookkeeping, wakes the sim, and resyncs the GPU
+  path when active. Loud edges: a non-snapshot argument, and grid-dims
+  mismatch (resample-on-load is future work; silently distorting a
+  painting is worse than asking).
+- **`docs/API_2_0_DESIGN.md`** — the proposal for the 2.0 batch:
+  normalized-canonical coordinates with a `wc.grid` namespace, one
+  run-state policy + `pause()`, a typed all-lowercase event map,
+  chain-everywhere setters, preserve-by-default destructive ops,
+  `create({ seed })`, the compat-shim migration story, and the
+  sequencing. Ends with the decisions that need the maintainer's taste.
+
+### Fixed
+- The test DOM shim no longer clobbers the global `URL` constructor
+  (it replaced it with a stub object; it now augments the real one) —
+  found when the new save-load test tried `new URL(...)` under the shim.
+
 ## [1.21.0] — 2026-07-13
 
 P1 slice 8: texture brushes cross the worker boundary — every brush mode

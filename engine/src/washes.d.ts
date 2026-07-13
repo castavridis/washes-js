@@ -16,6 +16,21 @@
 // Core types
 // =============================================================================
 
+/** A painting snapshot from saveState() (v1.22). */
+export interface WashesStateSnapshot {
+  format: 'washes-state@1';
+  GW: number;
+  GH: number;
+  /** (u, v, pressure, wet) interleaved, length GW*GH*4 */
+  fluid: Float32Array;
+  /** (g0, g1, g2, 0) interleaved */
+  pigment: Float32Array;
+  /** (d0, d1, d2, mask) interleaved */
+  deposit: Float32Array;
+  /** (paperHeight, 0, 0, 0) interleaved */
+  paper: Float32Array;
+}
+
 /** Pigment slot index. 0 = quinacridone rose, 1 = hansa yellow, 2 = cerulean blue. */
 export type PigmentIndex = 0 | 1 | 2;
 
@@ -1220,6 +1235,22 @@ export interface WashesInstance {
   getPreset(): Preset;
   /** Apply a previously-saved preset. */
   applyPreset(preset: Preset): WashesInstance;
+
+  /**
+   * v1.22 — snapshot the PAINTING itself (fluid, pigment, deposit, paper as
+   * interleaved Float32Arrays; the same SimStateArrays codec the GPU and
+   * worker seams use). Round-trips bit-exactly through loadState().
+   * Settings are a separate concern — pair with getPreset() for a full
+   * document. IndexedDB stores the arrays natively; postMessage transfers
+   * them; string encodings are the host's business.
+   */
+  saveState(): WashesStateSnapshot;
+  /**
+   * v1.22 — restore a saveState() snapshot. Grid dims must match the live
+   * instance (throws otherwise — resample-on-load is future work). Rebuilds
+   * mask bookkeeping, wakes the sim, resyncs the GPU path when active.
+   */
+  loadState(snapshot: WashesStateSnapshot): WashesInstance;
 
   /**
    * Lightweight state snapshot for debugging or UI display. NOT a full

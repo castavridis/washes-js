@@ -35,6 +35,8 @@ jobs:
         run: node tests/sim-core-standalone.test.mjs
       - name: worker backend (bit-exact parity vs in-process core)
         run: node tests/worker-backend.test.mjs
+      - name: save/load state (bit-exact painting round-trip)
+        run: node tests/save-load.test.mjs
       - name: npm pack sanity (tarball assembles with declared files)
         run: npm pack --dry-run
       - name: standalone build (classic-script parse + global attach)

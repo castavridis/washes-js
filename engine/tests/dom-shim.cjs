@@ -118,7 +118,10 @@ function installMockDOM() {
   global.requestAnimationFrame = () => 0;
   global.cancelAnimationFrame = () => {};
   global.URLSearchParams = URLSearchParams;
-  global.URL = { createObjectURL: () => 'blob:fake', revokeObjectURL: () => {} };
+  // Augment — never replace — the real URL: clobbering the constructor
+  // breaks everything else in the process (`new URL(...)` in tests).
+  if (typeof global.URL.createObjectURL !== 'function') global.URL.createObjectURL = () => 'blob:fake';
+  if (typeof global.URL.revokeObjectURL !== 'function') global.URL.revokeObjectURL = () => {};
   global.Blob = function () {};
   global.DOMParser = function () {
     return { parseFromString: () => ({ querySelector: () => null, querySelectorAll: () => [] }) };
