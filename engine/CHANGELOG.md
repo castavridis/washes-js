@@ -2,6 +2,34 @@
 
 All notable changes to **washes** are documented here. Dates are ISO 8601.
 
+## [2.3.0] — 2026-07-14
+
+**Opaque canvas mode.** The display context has always been created with
+default (alpha-enabled) attributes, so the compositor alpha-blends the
+whole canvas layer against the page every frame — even when every pixel
+is opaque paper. Hosts that never use transparency can now say so and
+get a genuinely opaque layer.
+
+### Added
+- **`{ opaque: true }` create option** — the display 2d context is
+  created with `{ alpha: false }`. The engine supplies its own backdrop:
+  the sheet is filled with `paperColor` at create (no black flash while
+  boot or deferred paper generation runs) and on every render, so
+  sub-255 alpha from the pixel loop (edge fade, mask tint) blends
+  against paper instead of black. `paperColor()` changes are picked up
+  on the next fill.
+- `tests/opaque-canvas.test.mjs` — proves the `{ alpha: false }` context
+  request, the transparency guards below, and the option conflict rule.
+
+### Changed
+- While opaque, the transparent-canvas features are refused with a
+  console warning — nothing can show through an `{ alpha: false }`
+  layer: `transparent(true)` is a warned no-op, and `background(...)`
+  (which silently enables transparent mode) is refused; clearing with
+  `background(null)` still works. Passing `{ transparent: true }`
+  together with `{ opaque: true }` resolves to opaque, with the same
+  warning.
+
 ## [2.2.0] — 2026-07-13
 
 **The loader: `createAsync()` + the `'ready'` event.** "It takes a moment

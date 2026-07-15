@@ -479,6 +479,15 @@ export interface CreateOptions {
   /** v1.12 — start in transparent-canvas mode (paper-thin areas show the page behind). */
   transparent?: boolean;
   /**
+   * v2.3 — opaque canvas mode: the display context is created with
+   * `{ alpha: false }`, so the compositor treats the layer as fully opaque
+   * (no per-frame alpha blending against the page). The engine paints its
+   * own `paperColor` backdrop under the pigment. Mutually exclusive with
+   * `transparent`; while opaque, `transparent(true)` and `background()`
+   * are refused with a console warning. Default `false`.
+   */
+  opaque?: boolean;
+  /**
    * v1.4 — explicit host size in CSS pixels, overriding measurement. Use for
    * headless/test hosts or hosts created before layout. Without this, a host
    * that measures ~0 at create() gets the minimum grid and is rebuilt

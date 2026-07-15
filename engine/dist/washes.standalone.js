@@ -4089,9 +4089,20 @@ function createSimCore(env) {
     // canvas is declared at the top of the factory (per-instance,
     // mounted inside targetEl). Size it here and create the 2D context
     // the render path uses.
+    //
+    // v2.3 — opaque canvas mode. { opaque: true } creates the display
+    // context with { alpha: false }, so the compositor can treat the
+    // whole layer as opaque instead of alpha-blending it against the
+    // page every frame. The engine then supplies its own backdrop —
+    // paperColor — under the pigment (see render()), and the
+    // transparent-canvas features (transparent(true), background())
+    // are refused with a warning: nothing can show through.
+    const opaqueCanvas = !!options.opaque;
     canvas.width = DISPLAY_W;
     canvas.height = DISPLAY_H;
-    const ctx = canvas.getContext("2d");
+    const ctx = opaqueCanvas
+      ? canvas.getContext("2d", { alpha: false })
+      : canvas.getContext("2d");
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
 
@@ -4103,6 +4114,20 @@ function createSimCore(env) {
     let PAPER_R_BASE = 0.985;
     let PAPER_G_BASE = 0.965;
     let PAPER_B_BASE = 0.918;
+
+    // v2.3 — paper color as a CSS string, re-read on demand so it tracks
+    // paperColor() changes. Used by opaque mode as the display backdrop.
+    const _paperCss = () =>
+      `rgb(${Math.round(PAPER_R_BASE * 255)},${Math.round(
+        PAPER_G_BASE * 255,
+      )},${Math.round(PAPER_B_BASE * 255)})`;
+    // Opaque contexts start out black; paint paper immediately so the
+    // sheet never flashes dark while boot (or deferred paper generation)
+    // is still running.
+    if (opaqueCanvas) {
+      ctx.fillStyle = _paperCss();
+      ctx.fillRect(0, 0, DISPLAY_W, DISPLAY_H);
+    }
 
     // render(forceFull=false) — write RGBA pixels to imgData, then push to
     // renderCanvas and scale to the display canvas.
@@ -4416,7 +4441,17 @@ function createSimCore(env) {
       }
       // Clear the display canvas so transparent regions of the new frame
       // don't blend over stale pixels from the previous frame.
-      ctx.clearRect(0, 0, DISPLAY_W, DISPLAY_H);
+      // v2.3 — opaque mode fills paper color instead: clearRect on an
+      // { alpha: false } context yields black, and any sub-255 alpha the
+      // pixel loop emits (edge fade, mask tint) must blend against the
+      // engine's own backdrop rather than the page (which can't show
+      // through an opaque layer).
+      if (opaqueCanvas) {
+        ctx.fillStyle = _paperCss();
+        ctx.fillRect(0, 0, DISPLAY_W, DISPLAY_H);
+      } else {
+        ctx.clearRect(0, 0, DISPLAY_W, DISPLAY_H);
+      }
       ctx.drawImage(renderCanvas, 0, 0, DISPLAY_W, DISPLAY_H);
       // v0.86 — wetness heatmap overlay (no-op when disabled).
       _renderWetnessHeatmap();
@@ -7416,6 +7451,14 @@ function createSimCore(env) {
     // In v2 this is mostly a placeholder; full transparent-background
     // support is deferred.
     let transparentBg = options.transparent !== undefined ? !!options.transparent : false;
+    // v2.3 — transparent and opaque modes are mutually exclusive; the
+    // stricter promise wins so the { alpha: false } context stays honest.
+    if (opaqueCanvas && transparentBg) {
+      console.warn(
+        "create: { transparent: true } ignored — this instance was created with { opaque: true }.",
+      );
+      transparentBg = false;
+    }
 
     // ----- UI: time-of-day select (stubbed in library mode) -----
     const timeOfDaySelect = null;
@@ -13461,6 +13504,14 @@ function _ensureTextureNoise(mode) {
       },
       transparent(v) {
         if (v !== undefined) {
+          // v2.3 — an { opaque: true } instance has an { alpha: false }
+          // display context; nothing can ever show through it.
+          if (opaqueCanvas && v) {
+            console.warn(
+              "transparent(true): unavailable — this instance was created with { opaque: true }.",
+            );
+            return false;
+          }
           transparentBg = !!v;
           // v1.12 — re-render so the alpha floor change is visible at once.
           setActiveRectFull && setActiveRectFull();
@@ -13491,6 +13542,15 @@ function _ensureTextureNoise(mode) {
         if (value === null || value === "") {
           targetEl.style.background = "";
           return "";
+        }
+        // v2.3 — with an opaque canvas the host background can never show
+        // through the sheet, so setting one (which would silently enable
+        // transparent mode) is refused.
+        if (opaqueCanvas) {
+          console.warn(
+            "background(): unavailable — this instance was created with { opaque: true }; the canvas covers the host.",
+          );
+          return targetEl.style.background || "";
         }
         targetEl.style.background = String(value);
         // Auto-enable transparent canvas so the background can show
@@ -14578,7 +14638,7 @@ function _ensureTextureNoise(mode) {
     // declared but never implemented — undefined at runtime through all
     // of v1; the api-surface test only reflects the instance, so statics
     // could lie.) Bump alongside package.json.
-    version: '2.2.0',
+    version: '2.3.0',
   };
   // v0.53 — Brand alias. `Washes` is the user-facing brand for the
   // library; `Watercolor` is preserved as the long-standing internal /
